@@ -39,12 +39,16 @@ def random_kwargs(m, rng):
         a.draw_not_cleared: lambda: {},
         a.duplicate_this_month: lambda: {},
         a.missing_prior_unconditional: lambda: {},
+        a.inflated_scheduled_value: lambda: {},
+        a.inflated_payment_due: lambda: {},
     }[m]()
 
 
 SINGLE = [a.overbill_pct, a.retainage_slip, a.missing_conditional_release, a.expired_wc, a.past_sov_no_co,
           a.duplicate_new_number, a.bank_change_email, a.supplier_notice_unreleased, a.draw_not_cleared,
-          a.new_sub_ein_mismatch, a.duplicate_this_month, a.missing_prior_unconditional]  # last two: beyond the spec's list
+          a.new_sub_ein_mismatch,
+          # beyond the spec's list:
+          a.duplicate_this_month, a.missing_prior_unconditional, a.inflated_scheduled_value, a.inflated_payment_due]
 # Mutators that change the same October request, in an order where none undoes another
 # (rebill resets retainage, so retainage_slip goes after the ones that rebill).
 COMBINABLE = [a.overbill_pct, a.past_sov_no_co, a.retainage_slip, a.missing_conditional_release,

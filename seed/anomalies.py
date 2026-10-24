@@ -175,6 +175,49 @@ def duplicate_this_month(data, sub_id, rng):
     return data, label(dup, "duplicate_this_month", "rule_12")
 
 
+def inflated_scheduled_value(data, sub_id, rng, extra_points=None):
+    """Bill more of the contract than the video shows, but print a bigger scheduled value on the
+    G703 so the claimed % still matches the video. Rule 13 must use the contract's SOV, not the
+    sub's. None if no line has room."""
+    data = copy(data)
+    req = oct_request(data, sub_id)
+    site = data["site_evidence"][find(data["site_evidence"], f"site_{req.job_id}_{THIS_MONTH}")]
+    extra = Decimal(extra_points if extra_points is not None else rng.randint(15, 35))
+    line = min(req.lines, key=lambda l: l.pct_complete)
+    seen = site.estimates[line.item_no]
+    if seen <= 0 or seen + extra > 100:
+        return None
+    total = money(line.scheduled_value * (seen + extra) / 100)  # dollars actually billed
+    fake_sv = money(total * 100 / seen)                       # the SOV printed so total / fake_sv == seen%
+    lines = [l.model_copy(update=dict(
+                scheduled_value=fake_sv, total_to_date=total, pct_complete=seen,
+                this_period=total - l.previous_applications - l.stored_materials,
+                balance_to_finish=fake_sv - total, retainage=money(total * RETAINAGE)))
+             if l.item_no == line.item_no else l for l in req.lines]
+    completed, retainage = sum(l.total_to_date for l in lines), sum(l.retainage for l in lines)
+    g = req.g702
+    req = req.model_copy(update=dict(lines=lines, g702=g.model_copy(update=dict(
+        original_contract_sum=sum(l.scheduled_value for l in lines),
+        contract_sum_to_date=sum(l.scheduled_value for l in lines),
+        total_completed_stored=completed, retainage=retainage,
+        total_earned_less_retainage=completed - retainage,
+        current_payment_due=completed - retainage - g.less_previous_certificates))))
+    put_request(data, req)
+    return data, label(req, "inflated_scheduled_value", "rule_13")
+
+
+def inflated_payment_due(data, sub_id, rng, factor=None):
+    """Every line honest; only the G702 'current payment due' is raised. That is the number that
+    gets paid, so the kernel must recompute it. Rule 01 (cumulative billing)."""
+    data = copy(data)
+    req = oct_request(data, sub_id)
+    factor = Decimal(str(factor if factor is not None else rng.choice([1.1, 1.25, 1.5, 2])))
+    due = money(req.g702.current_payment_due * factor)
+    req = req.model_copy(update={"g702": req.g702.model_copy(update={"current_payment_due": due})})
+    put_request(data, req)
+    return data, label(req, "inflated_payment_due", "rule_01")
+
+
 def missing_prior_unconditional(data, sub_id, rng):
     """Last month's payment cleared but its unconditional waiver never came in. Rule 5."""
     data = copy(data)

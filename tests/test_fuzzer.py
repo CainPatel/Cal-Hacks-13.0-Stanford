@@ -19,7 +19,7 @@ def test_cases_are_mutated_and_cover_every_type():
             assert label.expected_action == Action.hold and label.rules
             assert all(data != w for w in worlds.values())  # something actually changed
             seen.update(label.anomaly.split("+"))
-    assert len(seen) == 13  # every anomaly type, incl. both bank-change variants
+    assert len(seen) == 15  # every anomaly type, incl. both bank-change variants
 
 
 def test_scorecard_with_hold_everything_kernel(monkeypatch):
