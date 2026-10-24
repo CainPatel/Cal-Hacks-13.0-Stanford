@@ -17,3 +17,6 @@ node_modules/
 # device keys (approval key private key lives in ~/.drawkey, never here)
 .drawkey/
 wifi_secrets.h
+
+# design review captures (regenerated)
+.impeccable/review/

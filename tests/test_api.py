@@ -1,28 +1,12 @@
 """The dashboard's API over a real (temporary) event log."""
-from decimal import Decimal
 
 import pytest
 from fastapi.testclient import TestClient
 
-import pipeline
 from api import main
 from events.replay import load_seed
 from seed.anomalies import with_demo
 from seed.generate import generate
-from shared.schema import Action, Decision, RuleResult
-
-DEMO_HOLDS = {"pr_sub_01_6", "pr_sub_03_6", "pr_sub_04_6"}
-
-
-def fake_kernel(state, rid):
-    """Holds the demo stories, escalates over $25K, releases the rest, like the real kernel would."""
-    req = next(r for r in state["pay_requests"] if r.id == rid)
-    if rid in DEMO_HOLDS:
-        return Decision(request_id=rid, action=Action.hold, next_action="Ask the sub.", results=[
-            RuleResult(rule="07_lower_tier_released", passed=False, evidence={},
-                       message="Westside Ready-Mix filed a notice to owner and hasn't released.")])
-    action = Action.escalate if req.g702.current_payment_due > Decimal(25000) else Action.release
-    return Decision(request_id=rid, action=action, results=[])
 
 
 @pytest.fixture
@@ -32,7 +16,7 @@ def client(tmp_path, monkeypatch):
     monkeypatch.setattr(main, "DB", db)
     monkeypatch.setattr(main, "SCORECARD", tmp_path / "scorecard.json")
     monkeypatch.setattr(main, "CALIBRATION", tmp_path / "calibration.json")
-    monkeypatch.setattr(pipeline, "decide", fake_kernel)
+    # the real kernel (all 15 rules): it holds the three demo stories on its own
     return TestClient(main.app)
 
 
@@ -43,8 +27,8 @@ def test_list_before_and_after_replay(client):
     rows = {r["id"]: r for r in client.get("/requests").json()}
     statuses = [r["status"] for r in rows.values()]
     assert statuses.count("on_hold") == 3 and statuses.count("ready") == 10 and statuses.count("needs_ok") == 2
-    assert rows["pr_sub_01_6"]["sentence"] == "On hold: Westside Ready-Mix filed a notice to owner and hasn't released."
-    assert rows["pr_sub_10_6"]["sentence"].startswith("Needs your OK: $") and "Cascade Mechanical" in rows["pr_sub_10_6"]["sentence"]
+    assert rows["pr_sub_01_6"]["sentence"] == "On hold: 1 supplier(s) filed a notice to owner and haven't released."
+    assert rows["pr_sub_10_6"]["sentence"] == "Needs your OK because it's over the auto-release limit."
     assert client.post("/replay").json() == {"new_decisions": 0}
 
 
@@ -53,7 +37,8 @@ def test_request_detail_shows_video_next_to_claim(client):
     d = client.get("/requests/pr_sub_03_6").json()
     line = next(l for l in d["lines"] if l["item_no"] == "09-20")
     assert (line["pct_complete"], line["video_pct"]) == ("70", "45")
-    assert d["checklist"][0]["passed"] is False and d["trace"]["action"] == "hold"
+    assert any(c["rule"] == "13_progress_plausible" and not c["passed"] for c in d["checklist"])
+    assert d["trace"]["action"] == "hold"
     assert client.get("/requests/nope").status_code == 404
 
 
@@ -77,3 +62,46 @@ def test_attack_console(client):
 def test_scorecard_missing(client):
     assert client.get("/scorecard").status_code == 404
     assert client.get("/calibration").status_code == 404
+
+
+def test_escalation_reason_and_vendor(client):
+    client.post("/replay")
+    rows = {r["id"]: r for r in client.get("/requests").json()}
+    assert rows["pr_sub_10_6"]["reason"] == "it's over the auto-release limit"
+    assert rows["pr_sub_10_6"]["sentence"] == "Needs your OK because it's over the auto-release limit."
+    assert client.get("/requests/pr_sub_01_6").json()["vendor"]["email_domain"] == "coastalconcrete.com"
+
+
+def test_approve_flow(client, monkeypatch, tmp_path):
+    """Escalated request -> device signs -> executor pays; a refusal comes back in words."""
+    import time as _time
+    from cryptography.hazmat.primitives import hashes, serialization
+    from cryptography.hazmat.primitives.asymmetric import ec
+    from cryptography.hazmat.primitives.asymmetric.utils import decode_dss_signature
+    from kernel import executor
+
+    client.post("/replay")
+    assert client.post("/requests/pr_sub_02_6/approve").status_code == 409  # ready, not escalated
+    priv = ec.generate_private_key(ec.SECP256R1())
+    pub = priv.public_key().public_bytes(serialization.Encoding.X962, serialization.PublicFormat.UncompressedPoint).hex()
+    monkeypatch.setenv("DEVICE_URL", "http://drawkey.test:8001")
+    monkeypatch.setattr("kernel.contract.load_contract", lambda: {"auto_release_limit_usd": 25000, "esp32_pubkey": pub})
+
+    def device(url, payload, amount=None):
+        p = payload if amount is None else {**payload, "amount": amount}
+        r, s = decode_dss_signature(priv.sign(executor.canonical_payload_bytes(p), ec.ECDSA(hashes.SHA256())))
+        return executor.SignedApproval(payload=p, sig_hex=r.to_bytes(32, "big").hex() + s.to_bytes(32, "big").hex(), nonce=p["nonce"])
+
+    paid = []
+    monkeypatch.setattr(executor, "_nessie_pay", lambda req, amt: paid.append(amt) or {"request_id": req.id, "amount": str(amt)})
+    monkeypatch.setattr(executor, "request_device_approval", device)
+    # real kernel decides pr_sub_10_6 escalates (over limit); fake kernel in this fixture does too
+    out = client.post("/requests/pr_sub_10_6/approve").json()
+    assert out["paid"] is True and len(paid) == 1
+    monkeypatch.setattr(executor, "request_device_approval", lambda url, p: device(url, p, amount="1.00"))
+    out = client.post("/requests/pr_sub_15_6/approve").json()
+    assert out["paid"] is False and "signed amount" in out["reason"] and len(paid) == 1
+
+
+def test_event_stream_from_now(client):
+    assert client.get("/events", params={"after": -1, "follow": False}).text == ""

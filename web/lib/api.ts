@@ -1,0 +1,123 @@
+// Client for the Draw API (api/main.py). Every figure on screen comes from here; nothing is invented.
+
+export const API_URL = (process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000").replace(/\/$/, "");
+
+export type Status = "ready" | "needs_ok" | "on_hold" | "not_checked";
+
+export type RequestRow = {
+  id: string;
+  sub_id: string;
+  sub: string;
+  job_id: string;
+  job: string;
+  amount: string;
+  period_end: string;
+  status: Status;
+  sentence: string;
+  reason: string | null;
+  next_action: string | null;
+};
+
+export type RuleResult = { rule: string; passed: boolean; evidence: Record<string, unknown>; message: string };
+
+export type Line = {
+  item_no: string;
+  description: string;
+  scheduled_value: string;
+  this_period: string;
+  total_to_date: string;
+  pct_complete: string;
+  retainage: string;
+  video_pct: string | null;
+};
+
+export type RequestDetail = RequestRow & {
+  checklist: { rule: string; passed: boolean; message: string }[];
+  lines: Line[];
+  site_evidence: { date: string; frames: string[] } | null;
+  bank_account: string;
+  vendor: { legal_name: string; email_domain: string };
+  source_doc: string;
+  trace: { action: string; results: RuleResult[]; next_action: string | null } | null;
+};
+
+export type SweepPoint = {
+  limit: number;
+  button_presses_per_job_month: number;
+  auto_released_share: number;
+  attacks_auto_paid: number;
+  dollars_auto_paid: string;
+};
+
+export type Scorecard = {
+  kernel: string;
+  cases: number;
+  mutated: number;
+  clean: number;
+  wrongful_if_every_button_approved: number;
+  rule_catch_rate: number | null;
+  wrongful_releases: number;
+  false_hold_rate: number | null;
+  dollars_protected: string;
+  dollars_delayed: string;
+  button_presses_per_job_month: number;
+  auto_released_share: number;
+  by_anomaly: Record<string, { n: number; caught: number; wrongful: number; right_rule: number }>;
+  limit_sweep: SweepPoint[];
+  misses: { case: number; request_id: string; anomaly: string | null; action: string; amount: string }[];
+};
+
+export type AttackResult = {
+  label: { request_id: string; anomaly: string; rules: string[] };
+  decision: { action: string; results: RuleResult[] };
+  amount: string;
+  caught: boolean;
+  caught_by_rules: boolean;
+};
+
+export class ApiError extends Error {
+  constructor(public status: number, message: string) {
+    super(message);
+  }
+}
+
+async function call<T>(path: string, init?: RequestInit): Promise<T> {
+  let res: Response;
+  try {
+    res = await fetch(`${API_URL}${path}`, { cache: "no-store", ...init });
+  } catch {
+    throw new ApiError(0, `Can't reach the Draw server at ${API_URL}. Is it running (make api)?`);
+  }
+  const body = await res.json().catch(() => ({}));
+  if (!res.ok) throw new ApiError(res.status, typeof body.detail === "string" ? body.detail : `Request failed (${res.status}).`);
+  return body as T;
+}
+
+export const api = {
+  requests: (month: number) => call<RequestRow[]>(`/requests?month=${month}`),
+  request: (id: string) => call<RequestDetail>(`/requests/${encodeURIComponent(id)}`),
+  approve: (id: string) =>
+    call<{ paid: boolean; rejected: boolean; reason?: string }>(`/requests/${encodeURIComponent(id)}/approve`, { method: "POST" }),
+  replay: (through: number) => call<{ new_decisions: number }>(`/replay?through=${through}`, { method: "POST" }),
+  scorecard: () => call<Scorecard>("/scorecard"),
+  attacks: () => call<{ name: string; about: string }[]>("/attacks"),
+  attack: (name: string, target: string) =>
+    call<AttackResult>("/attacks", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ name, target }) }),
+  describe: (text: string) =>
+    call<{ plan: { attack: string; target: string; explanation: string }; result?: null } & Partial<AttackResult>>("/attacks/describe", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ text }),
+    }),
+};
+
+const usd = new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" });
+const usd0 = new Intl.NumberFormat("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 0 });
+export const money = (v: string | number) => usd.format(Number(v));
+export const moneyShort = (v: string | number) => usd0.format(Number(v));
+
+export const MONTHS = ["May", "June", "July", "August", "September", "October"]; // month 1..6 of 2026
+export const monthName = (m: number) => `${MONTHS[m - 1]} 2026`;
+
+// Rule ids are "13_progress_plausible": a person reads the words.
+export const ruleNumber = (rule: string) => rule.slice(0, 2);
