@@ -243,3 +243,21 @@ def test_fallback_unparseable_output_is_a_fallback_error():
 
     with pytest.raises(fallback.FallbackError, match="did not parse"):
         fallback.ask({}, QUESTIONS, client=Truncated())
+
+
+def test_progress_facts_use_the_contracts_scheduled_value():
+    """A sub that prints a bigger scheduled value so its % matches the video is still billing past the
+    video: the facts Jev sees must say so (calibration: Jev was 0/40 on this attack before)."""
+    import random
+
+    import pipeline
+    from judgment.facts import progress_facts
+    from seed import anomalies as a
+    from seed.generate import generate
+
+    data, label = a.inflated_scheduled_value(generate(), "sub_02", random.Random(1), extra_points=25)
+    ks, req = pipeline.kernel_state(data, label.request_id, pipeline.default_contract())
+    f = progress_facts(ks, req)
+    assert f["lines_billed_above_video_beyond_tolerance"], f
+    inflated = next(l for l in f["lines"] if l["item_no"] in f["lines_billed_above_video_beyond_tolerance"])
+    assert inflated["gap_exceeds_tolerance"] and inflated["percent_column_disagrees_with_billed"]
