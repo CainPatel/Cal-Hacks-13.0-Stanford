@@ -5,7 +5,7 @@ except through replay and the attack console, which only append.
 
 GET  /requests?month=6     one month's pay requests with a plain-English status
 GET  /requests/{id}        one request: checklist, lines with video estimates, trace
-GET  /events?after=0       Server-Sent Events from the log (follow=false to just dump)
+GET  /events?after=0       Server-Sent Events from the log (after=-1: from now on; follow=false to just dump)
 GET  /scorecard            data/scorecard.json from `make fuzz`
 GET  /calibration          data/calibration.json from `python -m fuzzer.calibration`
 GET  /attacks              what the attack console offers
@@ -139,6 +139,9 @@ def get_request(request_id: str):
 @app.get("/events")
 async def stream(request: Request, after: int = 0, follow: bool = True):
     after = int(request.headers.get("last-event-id", after))  # browsers resume where they left off
+    if after < 0:  # "from now on": a dashboard opening shouldn't replay the whole history
+        rows = events.read(path=DB)
+        after = rows[-1].seq if rows else 0
 
     async def gen():
         last = after

@@ -1,4 +1,4 @@
-.PHONY: seed test fuzz events replay api synthetic demo benchmark keys hooks device device-test
+.PHONY: seed test fuzz events replay api web synthetic demo benchmark keys hooks device device-test
 PY = .venv/bin/python
 
 # Keys from .env (gitignored) reach every command below; missing .env is fine.
@@ -32,6 +32,10 @@ replay:
 
 api:
 	$(PY) -m uvicorn api.main:app --reload --port $(PORT)
+
+# Dashboard on :3000; NEXT_PUBLIC_API_URL points it at the API (default http://localhost:8000)
+web:
+	cd web && npm install && npm run dev
 
 synthetic:
 	$(PY) -m synthetic --worlds $(W)

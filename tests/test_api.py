@@ -101,3 +101,7 @@ def test_approve_flow(client, monkeypatch, tmp_path):
     monkeypatch.setattr(executor, "request_device_approval", lambda url, p: device(url, p, amount="1.00"))
     out = client.post("/requests/pr_sub_15_6/approve").json()
     assert out["paid"] is False and "signed amount" in out["reason"] and len(paid) == 1
+
+
+def test_event_stream_from_now(client):
+    assert client.get("/events", params={"after": -1, "follow": False}).text == ""
