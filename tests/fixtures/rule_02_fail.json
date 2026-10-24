@@ -146,12 +146,24 @@
         "sub_id": "sub_01",
         "request_id": "pr_sub_01_3",
         "bank_account": "021000021:123456789"
+      },
+      {
+        "id": "draw_job_1_4",
+        "job_id": "job_1",
+        "kind": "owner_draw",
+        "amount": "15525.00",
+        "date": "2026-09-05",
+        "period_end": "2026-08-31",
+        "sub_id": null,
+        "request_id": null,
+        "bank_account": null
       }
     ],
     "emails": [],
     "site_evidence": null,
     "known_bank_account": "021000021:123456789",
-    "contract": {}
+    "contract": {},
+    "proposal": null
   },
   "request": {
     "id": "pr_sub_01_4",

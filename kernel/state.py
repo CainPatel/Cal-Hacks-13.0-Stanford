@@ -8,7 +8,7 @@ from pydantic import BaseModel, ConfigDict
 
 from shared.schema import (
     COI, ChangeOrder, Email, Job, LedgerEntry, LowerTierNotice, PayRequest,
-    Release, SiteEvidence, Subcontract, Vendor,
+    Proposal, Release, SiteEvidence, Subcontract, Vendor,
 )
 
 
@@ -34,6 +34,10 @@ class KernelState(BaseModel):
     known_bank_account: str | None = None
     # permissions contract, as loaded from config/contract.yaml
     contract: dict = {}
+    # judgment/judge.py's output for this request, if judgment has run. None means
+    # judgment hasn't been wired in yet (pipeline.py) or couldn't produce an answer --
+    # rule 15 treats either case as "nothing to check," not as a failure.
+    proposal: Proposal | None = None
 
     def prior_line(self, item_no: str) -> dict | None:
         """The most recent prior request's line for item_no, or None if this is the first."""

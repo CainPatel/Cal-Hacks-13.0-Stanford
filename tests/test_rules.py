@@ -10,7 +10,8 @@ from kernel.state import KernelState
 from shared.schema import PayRequest
 
 FIXTURES = Path(__file__).parent / "fixtures"
-RULE_NUMBERS = ["01", "02", "03", "04", "05", "06", "07"]
+RULE_NUMBERS = ["01", "02", "03", "04", "05", "06", "07", "08", "09", "10", "11", "12", "13", "14", "15"]
+ESCALATION_RULES = {"14", "15"}
 
 
 def load(name: str) -> tuple[KernelState, PayRequest]:
@@ -93,7 +94,7 @@ def test_runner_releases_on_all_pass():
 
 
 def test_runner_escalates_over_limit_with_yaml_loaded_contract():
-    """auto_release_limit_usd comes from yaml as an int/str, not a Decimal -- is_over_limit
+    """auto_release_limit_usd comes from yaml as an int/str, not a Decimal -- rule 14
     must not blow up comparing Decimal to that raw type."""
     from kernel.runner import decide
     from shared.schema import Action
@@ -109,6 +110,34 @@ def test_runner_holds_on_any_fail():
     from shared.schema import Action
 
     state, request = load("rule_02_fail.json")
+    decision = decide(state, request)
+    assert decision.action == Action.hold
+    assert decision.next_action
+
+
+@pytest.mark.parametrize("n", sorted(ESCALATION_RULES))
+def test_runner_escalates_not_holds_on_escalation_rule_failure(n):
+    """Rules 14 and 15 failing means "needs a physical sign-off," not "something's
+    wrong" -- the decision must be escalate, with no next_action (that's only for holds).
+    """
+    from kernel.runner import decide
+    from shared.schema import Action
+
+    state, request = load(f"rule_{n}_fail.json")
+    decision = decide(state, request)
+    assert decision.action == Action.escalate
+    assert decision.next_action is None
+
+
+def test_runner_holds_over_escalates_when_both_fail():
+    """A hard rule failure must win over an escalation-rule failure -- an over-limit
+    request that's also missing its release should be held, not escalated.
+    """
+    from kernel.runner import decide
+    from shared.schema import Action
+
+    state, request = load("rule_04_fail.json")
+    state = state.model_copy(update={"contract": {"auto_release_limit_usd": 5000}})
     decision = decide(state, request)
     assert decision.action == Action.hold
     assert decision.next_action

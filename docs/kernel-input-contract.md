@@ -1,4 +1,4 @@
-# Kernel input/output contract (rules 01-07)
+# Kernel input/output contract (rules 01-15, all shipped)
 
 Source of truth is [`shared/schema.py`](../shared/schema.py) and [`kernel/state.py`](../kernel/state.py); this table is a snapshot of it.
 
@@ -25,8 +25,21 @@ Source of truth is [`shared/schema.py`](../shared/schema.py) and [`kernel/state.
 | `Release.sub_id`, `.job_id`, `.kind`, `.through_date`, `.signed` | | mixed | extraction (lien waiver doc) | 04, 05 |
 | `COI.gl_expiry`, `.wc_expiry`, `.additional_insured` | | `date`/`date`/`bool` | extraction (insurance cert) | 06 |
 | `LowerTierNotice.sub_id`, `.job_id`, `.released` | | `str`/`str`/`bool` | extraction (notice-to-owner doc) | 07 |
-| `LedgerEntry.kind`, `.request_id`, `.sub_id` | | mixed | Nessie (not extraction) | 05 |
-| `KernelState.contract` | `auto_release_limit_usd` etc. | `dict` | `config/contract.yaml` | runner (not a rule) |
+| `LedgerEntry.kind`, `.request_id`, `.sub_id` | | mixed | Nessie (not extraction) | 05, 08 |
+| `LedgerEntry.job_id`, `.period_end` (kind=`owner_draw`) | | `str`/`date` | Nessie | 08 |
+| `Job.pay_when_paid` | | `bool` | contract admin | 08 |
+| `Vendor.crs_status` | | `str` | CRS sandbox | 09 |
+| `Vendor.bank_account` | | `str` | vendor onboarding; updated by a human after an out-of-band verified change | 10 |
+| `PayRequest.bank_account` | | `str` | extraction | 10 |
+| `Email.from_domain` | | `str` | extraction (mail) | 11 |
+| `Vendor.email_domain` | | `str` | vendor onboarding | 11 |
+| `PayRequest` (other submissions, `KernelState.all_requests`) | `.period_end`, `.lines[].total_to_date`, `.number` | mixed | extraction | 12 |
+| `SiteEvidence.estimates` | `{item_no: pct}` | `dict[str, Decimal]` | perception (video) | 13 |
+| `LineItem.pct_complete` | | `Decimal` | extraction | 13 |
+| `KernelState.contract` | `auto_release_limit_usd`, `escalation_confidence_threshold`, `progress_tolerance_points` | `dict` | `config/contract.yaml` | 06, 13, 14, 15 |
+| `Proposal.confidences` | `{question_id: float}` | `dict[str, float]` | judgment/judge.py | 15 |
+
+`KernelState.known_bank_account` (bank account of the last *successful payment*, not the vendor's account of record) isn't a rule input — it only drives `runner.py`'s separate escalation check: a verified bank change (rule 10 passes) still forces a physical tap if it differs from the account last actually paid.
 
 All objects are frozen, `extra="forbid"` pydantic models — unknown fields raise instead of being dropped; money is always `Decimal`; dates are `date`/`datetime`, not strings.
 
@@ -52,4 +65,4 @@ All objects are frozen, `extra="forbid"` pydantic models — unknown fields rais
 | `signature` | `str \| None` | filled in later by `kernel/executor.py`, not by `decide()` |
 | `executed_at` | `datetime \| None` | filled in later by `kernel/executor.py`, not by `decide()` |
 
-Decision logic: any `RuleResult.passed == False` → `hold`. All pass + over `auto_release_limit_usd` or new vendor or bank change → `escalate`. All pass otherwise → `release`.
+Decision logic: a failure in any rule *except* 14 (`within_spend_authority`) or 15 (`confidence_floor`) → `hold`. Otherwise, a failure in 14 or 15, or a new vendor (`Vendor.first_paid is None`), or a bank change vs. the last *paid* account (`known_bank_account`) → `escalate`. Everything else → `release`. Rules 14/15 failing never sets `next_action` — that field is for holds only.

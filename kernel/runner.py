@@ -2,11 +2,13 @@
 Pure function of (KernelState, PayRequest) -> Decision; no I/O. The caller (api/ or a
 script) is responsible for loading state and writing the Decision to events/.
 """
-from decimal import Decimal
-
 from kernel.rules import ALL_RULES
 from kernel.state import KernelState
 from shared.schema import Action, Decision, PayRequest, RuleResult
+
+# A failure here means "this needs the owner's physical sign-off," not "something is
+# wrong" -- so it routes to escalate instead of hold. Every other rule's failure holds.
+ESCALATION_RULES = {"14_within_spend_authority", "15_confidence_floor"}
 
 
 def is_new_vendor(state: KernelState) -> bool:
@@ -17,16 +19,9 @@ def is_bank_change(state: KernelState, request: PayRequest) -> bool:
     return state.known_bank_account is not None and request.bank_account != state.known_bank_account
 
 
-def is_over_limit(state: KernelState, request: PayRequest) -> bool:
-    limit = state.contract.get("auto_release_limit_usd")
-    if limit is None:
-        return False
-    return request.g702.current_payment_due > Decimal(str(limit))
-
-
 def next_action_for(results: list[RuleResult]) -> str | None:
     """One concrete thing the office manager can do about the first failing rule."""
-    failing = next((r for r in results if not r.passed), None)
+    failing = next((r for r in results if not r.passed and r.rule not in ESCALATION_RULES), None)
     if failing is None:
         return None
     return {
@@ -37,6 +32,7 @@ def next_action_for(results: list[RuleResult]) -> str | None:
         "05_prior_unconditional_received": "Request last month's unconditional waiver.",
         "06_insurance_current": "Request an updated certificate of insurance.",
         "07_lower_tier_released": "Ask the sub for their supplier's release.",
+        "08_owner_draw_funded": "Wait until the owner's draw for this period clears.",
         "09_vendor_verified": "Hold until vendor identity is verified.",
         "10_bank_details_unchanged": "Call the sub at the number on file to verify the new bank details.",
         "11_sender_domain_authentic": "Do not act on this email; call the sub directly to confirm.",
@@ -47,11 +43,12 @@ def next_action_for(results: list[RuleResult]) -> str | None:
 
 def decide(state: KernelState, request: PayRequest) -> Decision:
     results = [rule(state, request) for rule in ALL_RULES]
-    all_passed = all(r.passed for r in results)
+    hard_fails = [r for r in results if not r.passed and r.rule not in ESCALATION_RULES]
+    escalation_fails = [r for r in results if not r.passed and r.rule in ESCALATION_RULES]
 
-    if not all_passed:
+    if hard_fails:
         action = Action.hold
-    elif is_over_limit(state, request) or is_new_vendor(state) or is_bank_change(state, request):
+    elif escalation_fails or is_new_vendor(state) or is_bank_change(state, request):
         action = Action.escalate
     else:
         action = Action.release
