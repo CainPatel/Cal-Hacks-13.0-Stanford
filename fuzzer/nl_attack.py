@@ -94,7 +94,32 @@ def settings_for(p: AttackPlan) -> dict:
     if "expiry" in out:
         from datetime import date
         out["expiry"] = date.fromisoformat(out["expiry"])
+    if "rate" in out:  # pct is already an int on AttackPlan; only the free-text rate needs normalizing
+        out["rate"] = _fraction(out["rate"])
     return out
+
+
+def _number(text) -> str:
+    """'85', '85%', ' 85 % ' -> '85'. Anything else is a ValueError (the API answers 422)."""
+    from decimal import Decimal, InvalidOperation
+    cleaned = str(text).strip().rstrip("%").strip()
+    try:
+        Decimal(cleaned)
+    except InvalidOperation as e:
+        raise ValueError(f"not a number: {text!r}") from e
+    return cleaned
+
+
+def _fraction(text) -> str:
+    """A retainage rate as the mutator wants it, a fraction: '0%' -> '0', '5%' or '5' -> '0.05', '0.05' -> '0.05'."""
+    from decimal import Decimal
+    raw = str(text).strip()
+    value = Decimal(_number(raw))
+    if raw.endswith("%") or value > 1:
+        value /= 100
+    if not 0 <= value <= 1:
+        raise ValueError(f"retainage rate out of range: {text!r}")
+    return str(value.normalize()) if value else "0"
 
 
 def run(text: str, client: anthropic.Anthropic | None = None) -> dict:
