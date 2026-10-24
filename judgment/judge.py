@@ -171,6 +171,7 @@ def judge(state, request: PayRequest, *, ask_jev=jev.ask, ask_fallback=fallback.
             action=Action(answers[ACTION].value),
             confidences={qid: a.confidence for qid, a in answers.items()},
             reasons=reasons_for(answers, threshold, source),
+            answers={qid: a.value for qid, a in answers.items()},
         )
         return JudgmentResult(proposal, source, answers, facts, errors)
     return _unavailable(facts, errors)

@@ -3,7 +3,8 @@
 Replay and the fuzzer both call `decide(state, request_id)`, so the scorecard measures the
 real path. `state` is the whole world as known at decision time (events.log.state(), or
 seed.generate()); this module cuts out the slice one request needs (kernel.state.KernelState)
-and hands it to A's pure runner. When C's judgment lands it slots in here too.
+and hands it to A's pure runner. `judge_and_decide` runs C's judgment first and gives the
+kernel its Proposal (rule 15); `decide` alone skips the model, so the fuzzer stays offline.
 
 Until kernel/ exists, a stub that releases everything stands in, so any number it produces
 is obviously wrong rather than plausibly right.
@@ -56,11 +57,39 @@ def kernel_state(state: dict[str, list], request_id: str, contract: dict):
     ), req
 
 
-def decide(state: dict[str, list], request_id: str, contract: dict | None = None) -> Decision:
+def decide(state: dict[str, list], request_id: str, contract: dict | None = None, judge=None) -> Decision:
+    """The kernel's decision. Pass `judge` (e.g. judgment.judge) to put the model in the loop."""
+    if judge is not None:
+        return judge_and_decide(state, request_id, contract, judge)[0]
     if kernel_decide is None:
         return Decision(request_id=request_id, action=Action.release, results=[])
     ks, req = kernel_state(state, request_id, contract if contract is not None else default_contract())
     return kernel_decide(ks, req)
+
+
+def judge_and_decide(state: dict[str, list], request_id: str, contract: dict | None = None, judge=None):
+    """(Decision, JudgmentResult): judgment answers the five questions on the same slice the
+    kernel sees, then the kernel decides with that Proposal in hand. Judgment never raises;
+    if no model answers, its Proposal has zero confidence and rule 15 escalates."""
+    if kernel_decide is None:
+        raise RuntimeError("judge_and_decide needs kernel/")
+    if judge is None:
+        from judgment import judge
+    ks, req = kernel_state(state, request_id, contract if contract is not None else default_contract())
+    result = judge(ks, req)
+    return kernel_decide(ks.model_copy(update={"proposal": result.proposal}), req), result
+
+
+def judgment_event(result) -> dict:
+    """What the log keeps of a judgment: the state sent to the model and every answer (calibration needs both)."""
+    return {
+        "source": result.source,
+        "proposal": result.proposal.model_dump(mode="json"),
+        "answers": {q: {"value": a.value, "confidence": a.confidence, "probabilities": a.probabilities}
+                    for q, a in result.answers.items()},
+        "facts": result.facts,
+        "errors": result.errors,
+    }
 
 
 if kernel_decide is not None:
