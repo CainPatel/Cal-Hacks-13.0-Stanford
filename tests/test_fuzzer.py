@@ -1,6 +1,8 @@
 """The fuzzer's cases are real mutations and its scorecard math is right."""
 import random
 
+import pytest
+
 from fuzzer import run as f
 from shared.schema import Action, Decision
 
@@ -29,6 +31,8 @@ def test_scorecard_with_hold_everything_kernel(monkeypatch):
 
 
 def test_stub_kernel_is_obvious():
+    if "STUB" not in f.KERNEL:
+        pytest.skip("real kernel is installed")
     card = f.run(100)
     assert card["wrongful_releases"] == card["mutated"] and "STUB" in card["kernel"]
 
