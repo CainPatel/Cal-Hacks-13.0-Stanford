@@ -31,6 +31,7 @@ def client(tmp_path, monkeypatch):
     load_seed(with_demo(generate())[0], path=db)
     monkeypatch.setattr(main, "DB", db)
     monkeypatch.setattr(main, "SCORECARD", tmp_path / "scorecard.json")
+    monkeypatch.setattr(main, "CALIBRATION", tmp_path / "calibration.json")
     monkeypatch.setattr(pipeline, "decide", fake_kernel)
     return TestClient(main.app)
 
@@ -75,3 +76,4 @@ def test_attack_console(client):
 
 def test_scorecard_missing(client):
     assert client.get("/scorecard").status_code == 404
+    assert client.get("/calibration").status_code == 404
