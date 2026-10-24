@@ -54,7 +54,7 @@ All five go in one request; Jev's limit is 8 questions and 32 KiB.
 | env | default |
 |---|---|
 | `JEV_BASE_URL` | `https://ai-gateway.vercel.sh/typesafe` (Vercel AI Gateway) |
-| `AI_GATEWAY_API_KEY` / `JEV_API_KEY` | key for the gateway / for direct `thejevai.com` |
+| `JEV_API_KEY` (or `AI_GATEWAY_API_KEY`) | Jev key. Via the gateway either name works, with `AI_GATEWAY_API_KEY` taking precedence; direct `thejevai.com` reads `JEV_API_KEY` |
 | `JEV_MODEL` | `typesafe-ai/jev` via gateway, `typesafe/jev-1.14` direct |
 | `ANTHROPIC_API_KEY` | used by the fallback |
 | `JUDGMENT_FALLBACK_MODEL` / `JUDGMENT_FALLBACK_EFFORT` | `claude-opus-5-5` / `medium` |

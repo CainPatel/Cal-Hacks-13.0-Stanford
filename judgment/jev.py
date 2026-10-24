@@ -1,7 +1,7 @@
 """Minimal client for Jev's System One endpoint.
 
 Default route is Vercel AI Gateway (no waitlist): base URL
-https://ai-gateway.vercel.sh/typesafe, key in AI_GATEWAY_API_KEY, model
+https://ai-gateway.vercel.sh/typesafe, key in JEV_API_KEY (or AI_GATEWAY_API_KEY), model
 typesafe-ai/jev. Set JEV_BASE_URL=https://thejevai.com with JEV_API_KEY for
 direct access. Both serve the same request; the response envelopes differ and
 both are accepted.
@@ -40,9 +40,11 @@ def _config() -> tuple[str, str, str]:
     if not base.startswith("https://"):
         raise JevError("JEV_BASE_URL must be https")
     via_gateway = urllib.parse.urlsplit(base).hostname == "ai-gateway.vercel.sh"
-    key = os.environ.get("AI_GATEWAY_API_KEY" if via_gateway else "JEV_API_KEY")
+    # The team stores the key as JEV_API_KEY; via the gateway an AI_GATEWAY_API_KEY wins if both are set.
+    names = ("AI_GATEWAY_API_KEY", "JEV_API_KEY") if via_gateway else ("JEV_API_KEY",)
+    key = next((os.environ[n] for n in names if os.environ.get(n)), None)
     if not key:
-        raise JevError("no Jev API key configured")
+        raise JevError(f"no Jev API key configured (looked for {' or '.join(names)} for {base})")
     model = os.environ.get("JEV_MODEL", "typesafe-ai/jev" if via_gateway else "typesafe/jev-1.14")
     return f"{base}/v1/systemone", key, model
 
@@ -79,7 +81,8 @@ def ask(state: dict, questions: dict, *, opener=_OPENER.open, sleep=time.sleep) 
             return _answers(raw)
         except urllib.error.HTTPError as e:
             detail = (e.read() or b"")[:300].decode(errors="replace") if e.fp else ""
-            last = JevError(f"HTTP {e.code}: {detail}")
+            hint = f" (sent to {url}; is the key for this route?)" if e.code in (401, 403) else ""
+            last = JevError(f"HTTP {e.code}: {detail}{hint}")
             if e.code not in RETRY_STATUSES:
                 break
         except (OSError, http.client.HTTPException) as e:  # URLError, timeouts, resets, truncated reads
