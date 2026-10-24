@@ -46,6 +46,11 @@ JOBS = [
     ]),
 ]
 
+# Big trades bill six figures a month; the rest bill under the $25K auto-release limit,
+# so most of a month goes out without the button. Demo subs (01, 03, 04) are big.
+BIG_SUBS = {"Coastal Concrete Inc.", "Summit Drywall LLC", "Brightline Electric Inc.",
+            "Cascade Mechanical", "Airflow HVAC Inc."}
+
 SCOPES = {
     "concrete": ["Footings and foundations", "Slab on grade", "Elevated decks", "Site concrete"],
     "steel": ["Structural steel", "Metal deck", "Misc. metals and stairs"],
@@ -77,7 +82,7 @@ def generate(rng_seed: int = 13) -> dict[str, list]:
             sub_id = f"sub_{len(vendors) + 1:02d}"
             scopes = SCOPES[trade][: rng.randint(3, len(SCOPES[trade]))]
             sov = [SOVLine(item_no=f"{div}-{k}0", description=d,
-                           scheduled_value=money(rng.randrange(400, 4000) * 100))
+                           scheduled_value=money(rng.randrange(*(400, 4000) if name in BIG_SUBS else (250, 700)) * 100))
                    for k, d in enumerate(scopes, 1)]
             contracts.append(Subcontract(id=f"sc_{sub_id}", sub_id=sub_id, job_id=job_id,
                                          sov=sov, retainage_rate=RETAINAGE))

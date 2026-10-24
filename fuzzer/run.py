@@ -123,8 +123,12 @@ def score(rows) -> dict:
     return {
         "kernel": KERNEL,
         "cases": len(rows), "mutated": len(bad), "clean": len(clean),
+        # headline: what the rules alone stop, as if the owner approved every button press unread
+        "wrongful_if_every_button_approved": sum(r["action"] != "hold" for r in bad),
+        "rule_catch_rate": ratio(sum(r["action"] == "hold" for r in bad), len(bad)),
+        # with the button as a second layer: only auto-released attacks get through
         "wrongful_releases": sum(r["action"] == "release" for r in bad),
-        "escalated_mutated": sum(r["action"] == "escalate" for r in bad),  # waited on the button
+        "escalated_mutated": sum(r["action"] == "escalate" for r in bad),
         "catch_rate": ratio(sum(r["action"] != "release" for r in bad), len(bad)),
         "false_hold_rate": ratio(sum(r["action"] == "hold" for r in clean), len(clean)),
         "dollars_protected": str(sum(Decimal(r["amount"]) for r in bad if r["action"] != "release")),
@@ -134,6 +138,19 @@ def score(rows) -> dict:
         "misses": [r for r in rows if (r["anomaly"] and r["action"] == "release")
                    or (r["anomaly"] is None and r["action"] == "hold")][:50],
     }
+
+
+def button_load(worlds=WORLDS) -> dict:
+    """The human cost of the button: escalations on a normal, clean month, per job."""
+    actions = []
+    jobs = 0
+    for s in range(worlds):
+        world = generate(rng_seed=s)
+        jobs += len(world["jobs"])
+        actions += [decide(world, r.id).action for r in world["pay_requests"] if r.number == a.THIS_MONTH]
+    return {"button_presses_per_job_month": round(actions.count(Action.escalate) / jobs, 2),
+            "auto_released_share": round(actions.count(Action.release) / len(actions), 4),
+            "held_share_clean": round(actions.count(Action.hold) / len(actions), 4)}
 
 
 def run(n=500, rng_seed=0) -> dict:
@@ -147,7 +164,7 @@ def run(n=500, rng_seed=0) -> dict:
             "action": d.action.value, "failed_rules": [x.rule for x in d.results if not x.passed],
             "amount": str(amount(data, label.request_id)),
         })
-    return score(rows)
+    return {**score(rows), **button_load()}
 
 
 if __name__ == "__main__":
@@ -158,5 +175,9 @@ if __name__ == "__main__":
     out.write_text(json.dumps(card, indent=2))
     print(f"kernel: {card['kernel']}")
     print(f"{card['cases']} cases ({card['mutated']} mutated, {card['clean']} clean) -> {out}")
+    print(f"rules alone: {card['wrongful_if_every_button_approved']} attacks get through if every button press "
+          f"is approved (rule catch rate {card['rule_catch_rate']})")
+    print(f"button presses per job per month: {card['button_presses_per_job_month']} | "
+          f"auto-released share of a clean month: {card['auto_released_share']}")
     print(f"wrongful releases {card['wrongful_releases']} | catch rate {card['catch_rate']} | "
           f"false-hold rate {card['false_hold_rate']} | protected ${card['dollars_protected']}")

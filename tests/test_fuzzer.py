@@ -42,3 +42,12 @@ def test_attack_console():
     assert out["label"].anomaly == "bank_change_homoglyph" and out["label"].rules == ["rule_10", "rule_11"]
     assert out["decision"].request_id == out["label"].request_id
     assert set(f.ATTACKS) >= {"overbill_pct", "new_sub_ein_mismatch", "draw_not_cleared"}
+
+
+def test_rules_only_headline_ignores_the_button(monkeypatch):
+    monkeypatch.setattr(f, "decide", lambda state, rid: Decision(request_id=rid, action=Action.escalate, results=[]))
+    card = f.run(100)
+    assert card["wrongful_releases"] == 0  # the button stopped them...
+    assert card["wrongful_if_every_button_approved"] == card["mutated"]  # ...but no rule did
+    assert card["rule_catch_rate"] == 0.0
+    assert card["button_presses_per_job_month"] == 5.0  # every one of a job's 5 subs needed a tap
