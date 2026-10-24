@@ -1,4 +1,4 @@
-.PHONY: seed test fuzz events replay api synthetic demo benchmark
+.PHONY: seed test fuzz events replay api synthetic demo benchmark device device-test
 PY = .venv/bin/python
 N ?= 500
 M ?= 6
@@ -13,6 +13,12 @@ test:
 
 fuzz:
 	$(PY) -m fuzzer.run $(N)
+
+device:
+	DRAWKEY_MOCK=1 $(PY) -m uvicorn device.main:app --port 8001
+
+device-test:
+	$(PY) -m pytest -q device/test_device.py
 
 events:
 	$(PY) -m events load
