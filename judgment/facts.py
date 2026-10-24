@@ -317,8 +317,13 @@ def progress_facts(state, request: PayRequest) -> dict:
             "billed_minus_video_points": _pct(gap) if gap is not None else None,
             "gap_exceeds_tolerance": abs(gap) > tol if gap is not None and tol is not None else None,
         })
+    gaps = [(l["item_no"], Decimal(l["billed_minus_video_points"])) for l in lines if l["billed_minus_video_points"]]
     return {
         "tolerance_points": tolerance,
+        "lines_billed_above_video_beyond_tolerance": [i for i, g in gaps if tol is not None and g > tol],
+        "lines_billed_below_video_beyond_tolerance": [i for i, g in gaps if tol is not None and g < -tol],
+        "lines_compared_with_video": len(gaps),
+        "lines_without_video_estimate": len(lines) - len(gaps),
         "site_evidence_date": ev.date.isoformat() if ev else None,
         "days_from_video_to_period_end": _days(request.period_end, ev.date) if ev else None,
         "previous_paid_period_end": prev.period_end.isoformat() if prev else None,
@@ -421,7 +426,7 @@ def problems_found(f: dict) -> list[str]:
         out.append("an email comes from a domain imitating the vendor's")
     if v["identity_check"] != "verified":
         out.append("the vendor's identity isn't verified")
-    if any(line["gap_exceeds_tolerance"] for line in f["progress"]["lines"]):
+    if f["progress"]["lines_billed_above_video_beyond_tolerance"]:  # rule 13 holds over-billing, not under-billing
         out.append("claimed progress exceeds what the site video shows")
     if any(d["every_line_same_total_to_date"] or d["same_period"] for d in f["duplicates"]["earlier_requests"]):
         out.append("looks like a resubmission of an earlier request")

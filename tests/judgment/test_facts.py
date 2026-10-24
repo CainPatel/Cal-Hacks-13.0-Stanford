@@ -116,3 +116,13 @@ def test_problems_found_matches_the_kernel_on_every_case(seed, anomaly_cases):
         problems = compute_facts(*state_for(data, rid))["problems_found"]
         action = pipeline.decide(data, rid, contract=CONTRACT).action.value
         assert bool(problems) == (action == "hold"), (rid, action, problems)
+
+
+def test_over_billing_problem_means_a_line_above_the_video(seed, anomaly_cases):
+    """Rule 13 holds over-billing only; billing below the video (e.g. an old request resubmitted) is not it."""
+    sets = [(seed, r.id) for r in seed["pay_requests"] if r.number == THIS_MONTH]
+    sets += [(d, l.request_id) for d, l in anomaly_cases]
+    for data, rid in sets:
+        f = facts_for(data, rid)
+        flagged = "claimed progress exceeds what the site video shows" in f["problems_found"]
+        assert flagged == bool(f["progress"]["lines_billed_above_video_beyond_tolerance"]), rid

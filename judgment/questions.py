@@ -47,13 +47,18 @@ QUESTIONS: dict[str, dict] = {
     PROGRESS: {
         "type": "choice",
         "instructions": "Is the progress the sub claims plausible?"
-        " Use state.progress: claimed percent per line, the site-video estimate where one exists, last month's"
-        " percent, the gap in points against the contract's tolerance, and days elapsed. A line with no video"
-        " estimate can only be judged against its own history." + _FACTS_NOTE,
+        " Use state.progress. Gaps between the billed percent and the site video are already measured against the"
+        " contract's tolerance: lines_billed_above_video_beyond_tolerance and"
+        " lines_billed_below_video_beyond_tolerance list the lines outside it. A gap inside the tolerance, in either"
+        " direction, is ordinary estimating noise; billing somewhat less than the video shows is common and is not"
+        " understated. A line with no video estimate is judged only against its own monthly pace." + _FACTS_NOTE,
         "criteria": {
-            "plausible": "Claims are consistent with the site evidence and with the pace of prior months.",
-            "overstated": "The sub claims more completion than the evidence supports on at least one line.",
-            "understated": "The sub claims noticeably less than the evidence shows, with no overstated line.",
+            "plausible": "No line bills more than the video supports beyond the tolerance, and the monthly pace is"
+            " ordinary. Gaps inside the tolerance, either way, are plausible.",
+            "overstated": "At least one line bills more than the site video supports, beyond the tolerance, or jumps"
+            " far faster than its own history with no video to support it.",
+            "understated": "At least one line bills far less than the video shows, beyond the tolerance, and no line"
+            " is overstated.",
         },
     },
     DUPLICATE: {
