@@ -19,6 +19,7 @@ const LOOK: Record<Status, { icon: typeof Check | typeof Pause; className: strin
   needs_ok: { icon: CircleDot, className: "bg-hold-soft text-hold" },
   on_hold: { icon: Pause, className: "bg-hold-soft text-hold" },
   not_checked: { icon: CircleDashed, className: "bg-pending-soft text-pending" },
+  paid: { icon: Check, className: "bg-pass-soft text-pass" },
 };
 
 /** Status is said in words and an icon; color only repeats it. */

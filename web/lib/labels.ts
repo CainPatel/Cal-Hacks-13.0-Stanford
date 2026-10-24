@@ -39,6 +39,7 @@ export const STATUS_LABEL = {
   needs_ok: "Needs your OK",
   on_hold: "On hold",
   not_checked: "Not checked",
+  paid: "Paid",
 } as const;
 
 /** Rule messages come from code: "1 line(s)" -> "1 line", "$86835.60" -> "$86,835.60". */

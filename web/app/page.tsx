@@ -20,7 +20,7 @@ export default function Page() {
   );
 }
 
-const ORDER = { on_hold: 0, needs_ok: 1, not_checked: 2, ready: 3 } as const;
+const ORDER = { on_hold: 0, needs_ok: 1, not_checked: 2, ready: 3, paid: 4 } as const;
 
 function PayRequests() {
   const params = useSearchParams();
@@ -98,7 +98,7 @@ function PayRequests() {
         </div>
         <h1 id="month" className="mt-3 max-w-[26ch] text-[1.625rem] leading-tight font-semibold tracking-tight sm:text-lede">
           {rows && rows.length > 0 && !unchecked
-            ? `${count("ready")} of ${rows.length} pay requests are ready to pay. ${count("needs_ok")} ${count("needs_ok") === 1 ? "needs" : "need"} your OK and ${count("on_hold")} ${count("on_hold") === 1 ? "is" : "are"} on hold.`
+            ? `${count("ready")} of ${rows.length} pay requests are ready to pay. ${count("needs_ok")} ${count("needs_ok") === 1 ? "needs" : "need"} your OK and ${count("on_hold")} ${count("on_hold") === 1 ? "is" : "are"} on hold.${count("paid") ? ` ${count("paid")} already paid.` : ""}`
             : monthName(month)}
         </h1>
         {rows && rows.length > 0 && !unchecked && (

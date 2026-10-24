@@ -2,7 +2,7 @@
 
 export const API_URL = (process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000").replace(/\/$/, "");
 
-export type Status = "ready" | "needs_ok" | "on_hold" | "not_checked";
+export type Status = "ready" | "needs_ok" | "on_hold" | "not_checked" | "paid";
 
 export type RequestRow = {
   id: string;
