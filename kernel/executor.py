@@ -1,10 +1,14 @@
 """The only module allowed to call Nessie (CLAUDE.md hard rule #2). A payment executes
 only if every RuleResult passed AND (amount <= auto_release_limit OR a valid ESP32
-signature is present) -- hard rule #3. This module does the I/O the rest of kernel/ is
+signature is present) -- hard rule #3. Rules 14/15 failing (over the limit, unsure
+judgment) is what escalation means, so they may fail only when a valid signature is present;
+every escalation needs one, whatever the amount. The signature must cover this request's
+exact payee and amount, and each one pays once. This module does the I/O the rest of kernel/ is
 forbidden from doing: it is the trust boundary between a Decision and money moving.
 """
 import json
 import os
+import sys
 import time
 from dataclasses import dataclass
 from decimal import Decimal
@@ -16,7 +20,11 @@ from cryptography.hazmat.primitives.asymmetric import ec
 from cryptography.hazmat.primitives.asymmetric.utils import encode_dss_signature
 
 from events import log as events
+from kernel.rules import ALL_RULES
+from kernel.runner import ESCALATION_RULES
 from shared.schema import Action, Decision, PayRequest
+
+EXPECTED_RULES = {sys.modules[r.__module__].RULE for r in ALL_RULES}  # a Decision must carry all of them
 
 
 class ExecutionRefused(Exception):
@@ -65,14 +73,23 @@ def request_device_approval(device_url: str, payload: dict, timeout: float = 100
                            rejected=bool(data.get("rejected", False)))
 
 
-def _check_signature_gate(request: PayRequest, approval: SignedApproval, pubkey_hex: str,
+def _check_signature_gate(request: PayRequest, amount: Decimal, approval: SignedApproval, pubkey_hex: str,
                            used_nonces: set[str]) -> None:
-    if approval.nonce in used_nonces:
+    if approval.nonce in used_nonces or approval.payload.get("nonce") != approval.nonce:
         raise ExecutionRefused(f"nonce {approval.nonce} already used; signature replay rejected")
     if approval.payload.get("expires_at", 0) < time.time():
         raise ExecutionRefused("signature expired")
     if approval.payload.get("request_id") != request.id:
         raise ExecutionRefused("signature is for a different request_id")
+    # the owner approved what the device showed: that must be exactly what we pay, to whom
+    try:
+        signed_amount = Decimal(str(approval.payload.get("amount")))
+    except ArithmeticError:
+        raise ExecutionRefused("signed amount is not a number")
+    if signed_amount != amount:
+        raise ExecutionRefused(f"signed amount {signed_amount} is not the amount being paid ({amount})")
+    if approval.payload.get("payee") != request.sub_id:
+        raise ExecutionRefused("signature is for a different payee")
     body = canonical_payload_bytes(approval.payload)
     if not verify_signature(body, approval.sig_hex, pubkey_hex, rejected=approval.rejected):
         raise ExecutionRefused("signature does not verify against the registered device pubkey")
@@ -82,25 +99,39 @@ def _check_signature_gate(request: PayRequest, approval: SignedApproval, pubkey_
 
 def execute(decision: Decision, request: PayRequest, *, auto_release_limit_usd: Decimal,
             pubkey_hex: str | None = None, approval: SignedApproval | None = None,
-            used_nonces: set[str] | None = None) -> dict:
+            used_nonces: set[str] | None = None, log_path=events.DEFAULT_PATH) -> dict:
     """The single choke point money passes through. Raises ExecutionRefused and does not
     call Nessie unless every condition in hard rule #3 holds.
     """
-    if decision.action != Action.release and decision.action != Action.escalate:
+    if decision.request_id != request.id:
+        raise ExecutionRefused(f"decision is for {decision.request_id}, not {request.id}")
+    if decision.action not in (Action.release, Action.escalate):
         raise ExecutionRefused(f"decision is {decision.action}, not release/escalate")
-    if not all(r.passed for r in decision.results):
-        raise ExecutionRefused("not every rule passed")
+    present = {r.rule for r in decision.results}
+    if not EXPECTED_RULES <= present:
+        raise ExecutionRefused(f"decision is missing rules: {sorted(EXPECTED_RULES - present)}")
+    failed = {r.rule for r in decision.results if not r.passed}
+    if failed - ESCALATION_RULES:
+        raise ExecutionRefused(f"not every rule passed: {sorted(failed - ESCALATION_RULES)}")
 
-    amount = request.g702.current_payment_due
-    if amount > auto_release_limit_usd:
+    g = request.g702
+    lines_due = sum(l.total_to_date for l in request.lines) - sum(l.retainage for l in request.lines) \
+        - g.less_previous_certificates
+    if g.current_payment_due != lines_due:  # rule 01 checks the ledger; this guards the number we pay
+        raise ExecutionRefused(f"payment due {g.current_payment_due} doesn't match the lines ({lines_due})")
+    amount = g.current_payment_due
+
+    needs_signature = decision.action == Action.escalate or bool(failed) or amount > Decimal(str(auto_release_limit_usd))
+    if needs_signature:
         if approval is None or pubkey_hex is None:
-            raise ExecutionRefused("amount exceeds auto-release limit and no signed approval was given")
-        _check_signature_gate(request, approval, pubkey_hex, used_nonces or set())
+            raise ExecutionRefused("this payment needs the owner's signed approval and none was given")
+        used = set(used_nonces or ()) | {e.data.get("nonce") for e in events.read(kind="signature", path=log_path)}
+        _check_signature_gate(request, amount, approval, pubkey_hex, used)
         events.append("signature", {"sig": approval.sig_hex, "nonce": approval.nonce,
-                                     "payload": approval.payload}, request_id=request.id)
+                                     "payload": approval.payload}, request_id=request.id, path=log_path)
 
     result = _nessie_pay(request, amount)
-    events.append("execution", result, request_id=request.id)
+    events.append("execution", result, request_id=request.id, path=log_path)
     return result
 
 
@@ -112,7 +143,7 @@ def _nessie_pay(request: PayRequest, amount: Decimal) -> dict:
     if not api_key:
         raise ExecutionRefused("NESSIE_API_KEY is not set; refusing to simulate a payment")
     resp = requests.post(
-        "http://api.nessieisreal.com/payments",
+        "https://api.nessieisreal.com/payments",  # TLS: the key is in the query string
         params={"key": api_key},
         json={"payee_id": request.sub_id, "amount": str(amount),
               "description": f"Pay request {request.id}"},
