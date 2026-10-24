@@ -1,0 +1,225 @@
+# Who stands behind each vendor, for rule 09's CRS check (crs.verify_principal).
+# These are CRS's published SANDBOX test identities (SSNs in the never-issued 666 range), mapped onto the
+# demo company's vendors the way a GC keeps an owner on file from vendor onboarding. Not real people.
+# Owners verified by TU identity verification + Fraud Finder. Edit the persona to change an outcome.
+sub_01:
+  city: BERKELEY
+  dob: '1976-09-16'
+  email: grace.nakamura@example.com
+  first_name: GRACE
+  last_name: NAKAMURA
+  persona: P19
+  phone: '5550101019'
+  profile: Small-business owner
+  ssn: '666701019'
+  state: CA
+  street: 1850 SOLANO AVE
+  zip: '94707'
+sub_02:
+  city: SAN JOSE
+  dob: '1984-03-14'
+  email: margaret.okafor@example.com
+  first_name: MARGARET
+  last_name: OKAFOR
+  persona: P01
+  phone: '5550101001'
+  profile: Prime
+  ssn: '666701001'
+  state: CA
+  street: 1420 WILLOW CREEK DR
+  zip: '95125'
+sub_03:
+  city: AUSTIN
+  dob: '1972-11-02'
+  email: daniel.whitfield@example.com
+  first_name: DANIEL
+  last_name: WHITFIELD
+  persona: P02
+  phone: '5550101002'
+  profile: Super-prime mortgage holder
+  ssn: '666701002'
+  state: TX
+  street: 88 LAKESHORE BLVD
+  zip: '78746'
+sub_04:
+  city: DETROIT
+  dob: '1992-10-03'
+  email: lauren.kowalczyk@example.com
+  first_name: LAUREN
+  last_name: KOWALCZYK
+  persona: P10
+  phone: '5550101010'
+  profile: Old dismissed misdemeanor
+  ssn: '666701010'
+  state: MI
+  street: 1181 WOODWARD AVE
+  zip: '48226'
+sub_05:
+  city: BERKELEY
+  dob: '1976-09-16'
+  email: grace.nakamura@example.com
+  first_name: GRACE
+  last_name: NAKAMURA
+  persona: P19
+  phone: '5550101019'
+  profile: Small-business owner
+  ssn: '666701019'
+  state: CA
+  street: 1850 SOLANO AVE
+  zip: '94707'
+sub_06:
+  city: SAN JOSE
+  dob: '1984-03-14'
+  email: margaret.okafor@example.com
+  first_name: MARGARET
+  last_name: OKAFOR
+  persona: P01
+  phone: '5550101001'
+  profile: Prime
+  ssn: '666701001'
+  state: CA
+  street: 1420 WILLOW CREEK DR
+  zip: '95125'
+sub_07:
+  city: AUSTIN
+  dob: '1972-11-02'
+  email: daniel.whitfield@example.com
+  first_name: DANIEL
+  last_name: WHITFIELD
+  persona: P02
+  phone: '5550101002'
+  profile: Super-prime mortgage holder
+  ssn: '666701002'
+  state: TX
+  street: 88 LAKESHORE BLVD
+  zip: '78746'
+sub_08:
+  city: DETROIT
+  dob: '1992-10-03'
+  email: lauren.kowalczyk@example.com
+  first_name: LAUREN
+  last_name: KOWALCZYK
+  persona: P10
+  phone: '5550101010'
+  profile: Old dismissed misdemeanor
+  ssn: '666701010'
+  state: MI
+  street: 1181 WOODWARD AVE
+  zip: '48226'
+sub_09:
+  city: BERKELEY
+  dob: '1976-09-16'
+  email: grace.nakamura@example.com
+  first_name: GRACE
+  last_name: NAKAMURA
+  persona: P19
+  phone: '5550101019'
+  profile: Small-business owner
+  ssn: '666701019'
+  state: CA
+  street: 1850 SOLANO AVE
+  zip: '94707'
+sub_10:
+  city: SAN JOSE
+  dob: '1984-03-14'
+  email: margaret.okafor@example.com
+  first_name: MARGARET
+  last_name: OKAFOR
+  persona: P01
+  phone: '5550101001'
+  profile: Prime
+  ssn: '666701001'
+  state: CA
+  street: 1420 WILLOW CREEK DR
+  zip: '95125'
+sub_11:
+  city: AUSTIN
+  dob: '1972-11-02'
+  email: daniel.whitfield@example.com
+  first_name: DANIEL
+  last_name: WHITFIELD
+  persona: P02
+  phone: '5550101002'
+  profile: Super-prime mortgage holder
+  ssn: '666701002'
+  state: TX
+  street: 88 LAKESHORE BLVD
+  zip: '78746'
+sub_12:
+  city: DETROIT
+  dob: '1992-10-03'
+  email: lauren.kowalczyk@example.com
+  first_name: LAUREN
+  last_name: KOWALCZYK
+  persona: P10
+  phone: '5550101010'
+  profile: Old dismissed misdemeanor
+  ssn: '666701010'
+  state: MI
+  street: 1181 WOODWARD AVE
+  zip: '48226'
+sub_13:
+  city: BERKELEY
+  dob: '1976-09-16'
+  email: grace.nakamura@example.com
+  first_name: GRACE
+  last_name: NAKAMURA
+  persona: P19
+  phone: '5550101019'
+  profile: Small-business owner
+  ssn: '666701019'
+  state: CA
+  street: 1850 SOLANO AVE
+  zip: '94707'
+sub_14:
+  city: SAN JOSE
+  dob: '1984-03-14'
+  email: margaret.okafor@example.com
+  first_name: MARGARET
+  last_name: OKAFOR
+  persona: P01
+  phone: '5550101001'
+  profile: Prime
+  ssn: '666701001'
+  state: CA
+  street: 1420 WILLOW CREEK DR
+  zip: '95125'
+sub_15:
+  city: AUSTIN
+  dob: '1972-11-02'
+  email: daniel.whitfield@example.com
+  first_name: DANIEL
+  last_name: WHITFIELD
+  persona: P02
+  phone: '5550101002'
+  profile: Super-prime mortgage holder
+  ssn: '666701002'
+  state: TX
+  street: 88 LAKESHORE BLVD
+  zip: '78746'
+sub_new_job_1:
+  city: NEW YORK
+  dob: '1968-08-08'
+  email: v.anand.1968@example.com
+  first_name: VICTOR
+  last_name: ANAND
+  persona: P12
+  phone: '5550101012'
+  profile: Identity mismatch
+  ssn: '666701012'
+  state: NY
+  street: 55 WATER ST FL 20
+  zip: '10041'
+sub_new_job_3:
+  city: KNOXVILLE
+  dob: '1999-12-24'
+  email: kb.9921x@example.com
+  first_name: KAYLA
+  last_name: BRENNAN
+  persona: P13
+  phone: '5550101013'
+  profile: Synthetic identity / fraud
+  ssn: '666701013'
+  state: TN
+  street: 9021 KINGSTON PIKE
+  zip: '37923'

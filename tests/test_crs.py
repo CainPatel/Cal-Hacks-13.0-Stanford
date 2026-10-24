@@ -107,7 +107,7 @@ def test_no_credentials(monkeypatch):
 
 def test_check_vendor_sets_status_and_keeps_it_through_an_outage(monkeypatch):
     monkeypatch.setenv("CRS_API_KEY", "direct")
-    vendor = generate()["vendors"][0]
+    vendor = generate()["vendors"][0].model_copy(update={"id": "sub_unmapped"})  # no owner on file: business check
     updated, result, error = crs.check_vendor(vendor.model_copy(update={"crs_status": "unknown"}),
                                               http=FakeHTTP(body=biid(fein="false")))
     assert updated.crs_status == "mismatch" and result.status == "mismatch" and error is None
@@ -127,6 +127,7 @@ def test_verify_endpoint_records_a_changed_status(tmp_path, monkeypatch):
     load_seed(with_demo(generate())[0], path=db)
     monkeypatch.setattr(main, "DB", db)
     monkeypatch.setenv("CRS_API_KEY", "direct")
+    monkeypatch.setattr(crs, "principal_for", lambda vendor_id: None)  # force the business check for this test
     monkeypatch.setattr(crs.requests, "post", FakeHTTP(body=biid(ofac=[{"entityName": "FRONT CO"}])).post)
     r = TestClient(main.app).post("/vendors/sub_01/verify")
     assert r.status_code == 200 and r.json()["crs_status"] == "flagged"
@@ -134,3 +135,63 @@ def test_verify_endpoint_records_a_changed_status(tmp_path, monkeypatch):
     monkeypatch.setattr(crs.requests, "post", FakeHTTP(check=500).post)
     assert TestClient(main.app).post("/vendors/sub_01/verify").status_code == 502
     assert next(v for v in events.state(path=db)["vendors"] if v.id == "sub_01").crs_status == "flagged"
+
+
+# --- the person behind the vendor (TU identity verification + Fraud Finder) ---------------------------
+
+
+def idv(*codes, hit="HIT"):
+    msgs = [{"code": c, "text": "msg", "source": "INPUT"} for c in codes]
+    return {"fileNumber": "01", "addOnProducts": [{"idManagerVerification": {"searchStatus": hit, "messages": msgs}}]}
+
+
+def fraud(score):
+    return {"eam": {"date_first_seen": "2012-09-16"}, "risk": {"score": score}}
+
+
+@pytest.mark.parametrize("identity,risk,status", [
+    (idv(), fraud(9), "verified"),                       # P19: clean
+    (idv("2201", "2202", "2101"), fraud(9), "mismatch"),  # P12: SSN belongs to someone else, DOB off
+    (idv("2301", "2101"), fraud(9), "flagged"),           # P14: deceased
+    (idv(), fraud(88), "flagged"),                        # P13: synthetic identity
+    (idv("2101"), fraud(9), "unknown"),                   # address only: a person decides
+    (idv(), fraud(55), "unknown"),                        # middling fraud risk
+    (idv(hit="NO_HIT"), fraud(9), "unknown"),
+])
+def test_interpret_principal(identity, risk, status):
+    assert crs.interpret_principal(identity, risk).status == status
+
+
+def test_every_vendor_has_an_owner_on_file_and_the_fraud_cases_map_to_bad_personas():
+    from seed.anomalies import cases, with_demo
+    data = with_demo(generate())[0]
+    ids = {v.id for v in data["vendors"]} | {v.id for d, _ in cases() for v in d["vendors"]}
+    assert all(crs.principal_for(i) for i in ids)
+    assert crs.principal_for("sub_new_job_1")["persona"] == "P12" and crs.principal_for("sub_new_job_3")["persona"] == "P13"
+
+
+class ProductHTTP:
+    """Answers the two consumer products like the sandbox does for a given persona."""
+
+    def __init__(self, identity, risk):
+        self.calls, self.identity, self.risk = [], identity, risk
+
+    def post(self, url, json=None, headers=None, timeout=None):
+        self.calls.append(SimpleNamespace(url=url, json=json))
+        if url.endswith("/users/login"):
+            return SimpleNamespace(status_code=200, text="", json=lambda: {"token": "tok"})
+        body = self.identity if "identity-manager" in url else self.risk
+        return SimpleNamespace(status_code=200, text="", json=lambda: body)
+
+
+def test_check_vendor_uses_the_owner_when_one_is_on_file(monkeypatch):
+    monkeypatch.setenv("CRS_API_KEY", "direct")
+    vendor = generate()["vendors"][0]
+    http = ProductHTTP(idv("2201"), fraud(9))
+    updated, result, error = crs.check_vendor(vendor, http=http)
+    assert (updated.crs_status, error) == ("mismatch", None)
+    idv_call, ff_call = http.calls
+    owner = crs.principal_for(vendor.id)
+    assert idv_call.url.endswith("/transunion/identity-manager-verification/basic")
+    assert idv_call.json["ssn"] == str(owner["ssn"]) and idv_call.json["lastName"] == owner["last_name"]
+    assert ff_call.url.endswith("/fraud-finder/fraud-finder") and ff_call.json["email"] == owner["email"]

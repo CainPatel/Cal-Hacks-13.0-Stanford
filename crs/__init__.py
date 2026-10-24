@@ -1,7 +1,16 @@
 """Vendor identity checks against the CRS Credit API sandbox (rule 09's crs_status). Owner: C.
 
-One call per vendor: LexisNexis Business InstantID (POST /vfps/biid2) with the vendor's legal
-name and EIN, OFAC screening on. The answer becomes one of the statuses rule 09 knows:
+Two ways to check a vendor, tried in this order:
+
+1. The person behind it (verify_principal), for vendors with an owner on file in principals.yaml:
+   TransUnion identity verification on the owner's name, SSN, date of birth and address, plus
+   Fraud Finder on the owner's email and phone. Small subs are mostly owner-operated, so this is
+   the identity that matters, and both products are enabled on the team's sandbox account.
+2. The business itself (verify_business): LexisNexis Business InstantID (POST /vfps/biid2) with
+   the legal name and EIN, OFAC screening on. CRS has not enabled it for the team's account (401),
+   so it is used only for vendors without an owner on file.
+
+Either way the answer becomes one of the statuses rule 09 knows:
 
     flagged   any OFAC or global watchlist hit
     mismatch  CRS says the legal name or the EIN doesn't verify
@@ -17,8 +26,11 @@ a 401/403 on the check itself usually means Business InstantID isn't enabled for
 import os
 import re
 from dataclasses import dataclass, field
+from functools import cache
+from pathlib import Path
 
 import requests
+import yaml
 
 from shared.schema import Vendor
 
@@ -137,11 +149,98 @@ def verify_business(legal_name: str, ein: str, http=requests) -> CRSResult:
         raise CRSError("CRS answered with something other than JSON") from e
 
 
+# --- the person behind the vendor -----------------------------------------------------------
+
+PRINCIPALS = Path(__file__).parent / "principals.yaml"
+FRAUD_FLAGGED = 70  # Fraud Finder risk.score at or above this flags the vendor
+FRAUD_CLEAR = 40    # below this is clear; in between, a person decides (unknown)
+_IDENTITY_MISMATCH = {"2201", "2202"}  # SSN not associated with the name; date of birth doesn't match
+
+
+@cache
+def _principals() -> dict:
+    return yaml.safe_load(PRINCIPALS.read_text()) or {} if PRINCIPALS.exists() else {}
+
+
+def principal_for(vendor_id: str) -> dict | None:
+    return _principals().get(vendor_id)
+
+
+def _find(node, key: str):
+    """First value stored under `key` anywhere in a nested response."""
+    if isinstance(node, dict):
+        if key in node:
+            return node[key]
+        node = list(node.values())
+    if isinstance(node, list):
+        for child in node:
+            found = _find(child, key)
+            if found is not None:
+                return found
+    return None
+
+
+def interpret_principal(identity: dict, fraud: dict) -> CRSResult:
+    """Map TU identity verification + Fraud Finder onto rule 09's statuses. Pure."""
+    idv = _find(identity, "idManagerVerification") or {}
+    messages = [m for m in (idv.get("messages") or []) if isinstance(m, dict)]
+    codes = {str(m.get("code")) for m in messages}
+    risk = (fraud.get("risk") or {}) if isinstance(fraud, dict) else {}
+    score = risk.get("score")
+    evidence = {
+        "identity_search": idv.get("searchStatus"),
+        "identity_messages": [f"{m.get('code')}: {m.get('text')}" for m in messages],
+        "fraud_risk_score": score,
+        "email_first_seen": (fraud.get("eam") or {}).get("date_first_seen") if isinstance(fraud, dict) else None,
+    }
+    deceased = any(c.startswith("23") for c in codes)
+    if deceased or (isinstance(score, (int, float)) and score >= FRAUD_FLAGGED):
+        why = ["the owner's SSN belongs to a deceased person"] if deceased else []
+        if isinstance(score, (int, float)) and score >= FRAUD_FLAGGED:
+            why.append(f"fraud risk {score} of 100")
+        return CRSResult("flagged", why, evidence)
+    if codes & _IDENTITY_MISMATCH:
+        return CRSResult("mismatch", ["the owner's name, SSN or date of birth don't match"], evidence)
+    if idv.get("searchStatus") == "HIT" and not codes and isinstance(score, (int, float)) and score < FRAUD_CLEAR:
+        return CRSResult("verified", [f"owner identity verified, fraud risk {score} of 100"], evidence)
+    return CRSResult("unknown", ["the owner's identity didn't fully verify"
+                                 + (f" ({', '.join(sorted(codes))})" if codes else "")], evidence)
+
+
+def _post(http, path: str, body: dict, token: str) -> dict:
+    try:
+        resp = http.post(f"{_base()}{path}", json=body, headers={"Authorization": f"Bearer {token}"}, timeout=TIMEOUT_S)
+    except requests.exceptions.RequestException as e:
+        raise CRSError(f"CRS request did not complete: {e}") from e
+    if resp.status_code in (401, 403):
+        raise CRSError(f"CRS answered HTTP {resp.status_code} to {path}; the product may not be enabled for the account")
+    if resp.status_code >= 400:
+        raise CRSError(f"CRS answered HTTP {resp.status_code} to {path}: {resp.text[:200]}")
+    try:
+        return resp.json()
+    except ValueError as e:
+        raise CRSError(f"CRS answered {path} with something other than JSON") from e
+
+
+def verify_principal(p: dict, http=requests) -> CRSResult:
+    token = _login(http)
+    identity = _post(http, "/transunion/identity-manager-verification/basic", {
+        "firstName": p["first_name"], "lastName": p["last_name"], "ssn": str(p["ssn"]), "dob": str(p["dob"]),
+        "street1": p["street"], "city": p["city"], "state": p["state"], "zip": str(p["zip"])}, token)
+    fraud = _post(http, "/fraud-finder/fraud-finder", {
+        "firstName": p["first_name"], "lastName": p["last_name"], "phoneNumber": str(p["phone"]), "email": p["email"],
+        "address": {"addressLine1": p["street"], "city": p["city"], "state": p["state"], "postalCode": str(p["zip"])}},
+        token)
+    return interpret_principal(identity, fraud)
+
+
 def check_vendor(vendor: Vendor, http=requests) -> tuple[Vendor, CRSResult | None, str | None]:
     """(vendor with crs_status from CRS, the result, error). If the check itself fails, the vendor is
     returned unchanged: an outage shouldn't overwrite a status CRS already gave."""
+    principal = principal_for(vendor.id)
     try:
-        result = verify_business(vendor.legal_name, vendor.ein, http=http)
+        result = verify_principal(principal, http=http) if principal else \
+            verify_business(vendor.legal_name, vendor.ein, http=http)
     except CRSError as e:
         return vendor, None, str(e)
     return vendor.model_copy(update={"crs_status": result.status}), result, None
