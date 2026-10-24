@@ -378,3 +378,33 @@ def test_email_without_attachments_still_works(client, world, tmp_path):
     vendor, _ = _docs(world, tmp_path)
     r = post_email(client, _email_with(tmp_path, f"ap@{vendor.email_domain}", []))
     assert r.status_code == 200 and r.json()["attachments"] == []
+
+
+def _postmark(client, json, password="s3cret"):
+    import base64
+    auth = base64.b64encode(f"postmark:{password}".encode()).decode()
+    return client.post("/inbound/postmark", json=json, headers={"Authorization": f"Basic {auth}"})
+
+
+def test_postmark_inbound_files_attachments(client, world, tmp_path, monkeypatch):
+    import base64
+    monkeypatch.setenv("INBOUND_PASSWORD", "s3cret")
+    vendor, docs = _docs(world, tmp_path)
+    payload = {"MessageID": "abc", "From": f"ap@{vendor.email_domain}", "To": "draw@inbound.postmarkapp.com",
+               "Subject": "October pay app", "Date": "Sun, 25 Oct 2026 09:14:00 -0700", "TextBody": "Attached.",
+               "Attachments": [{"Name": p.name, "ContentType": "application/pdf",
+                                "Content": base64.b64encode(p.read_bytes()).decode()} for p in docs[:2]]}
+    r = _postmark(client, payload)
+    assert r.status_code == 200, r.text
+    assert [a["status"] for a in r.json()["attachments"]] == ["recorded", "recorded"]
+    retry = _postmark(client, payload)  # Postmark retries: 200, nothing filed twice
+    assert retry.status_code == 200 and {a["status"] for a in retry.json()["attachments"]} == {"duplicate"}
+    raw = _email_with(tmp_path, f"ap@{vendor.email_domain}", docs[2:3]).read_text()
+    assert _postmark(client, {"RawEmail": raw}).json()["attachments"][0]["status"] == "recorded"
+
+
+def test_postmark_inbound_needs_the_password(client, monkeypatch):
+    assert _postmark(client, {}).status_code == 503  # off with no password set
+    monkeypatch.setenv("INBOUND_PASSWORD", "s3cret")
+    assert _postmark(client, {}, password="guess").status_code == 403
+    assert client.post("/inbound/postmark", json={}).status_code == 403
