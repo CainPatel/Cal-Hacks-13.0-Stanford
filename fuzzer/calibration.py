@@ -24,14 +24,30 @@ RELEASE, BANK, PROGRESS, DUPLICATE, ACTION = (
     "release_form_correct", "bank_change_suspicious", "progress_plausible", "duplicate_likelihood", "proposed_action")
 
 
-def outcomes(answers: dict, label: Label) -> list[tuple[str, float, bool]]:
-    """(question, confidence, was it right) for each answer, judged against the case's label."""
+def progress_truth(facts: dict) -> str | None:
+    """What the measured video gaps say, from judgment's facts (lines past the contract tolerance)."""
+    p = (facts or {}).get("progress") or {}
+    if "lines_billed_above_video_beyond_tolerance" not in p:
+        return None
+    if p["lines_billed_above_video_beyond_tolerance"]:
+        return "overstated"
+    return "understated" if p["lines_billed_below_video_beyond_tolerance"] else "plausible"
+
+
+def outcomes(answers: dict, label: Label, facts: dict | None = None) -> list[tuple[str, float, bool]]:
+    """(question, confidence, was it right) for each answer, judged against the case's label.
+
+    With `facts` (what judgment sent the model), progress is judged against the measured video gaps
+    instead of the anomaly's name: a resubmitted old request bills below today's video, so
+    "understated" is the right answer there even though the label says "duplicate"."""
     an = label.anomaly or ""
+    measured = progress_truth(facts)
     truth = {
         RELEASE: lambda v: v == ("incomplete" if "missing_conditional_release" in an else "correct"),
         BANK: lambda v: (v >= 0.5) == ("bank_change" in an),
-        PROGRESS: lambda v: v == ("overstated" if any(k in an for k in ("overbill_pct", "past_sov", "inflated_scheduled_value"))
-                                  else "plausible"),
+        PROGRESS: (lambda v: v == measured) if measured else
+                  (lambda v: v == ("overstated" if any(k in an for k in ("overbill_pct", "past_sov", "inflated_scheduled_value"))
+                                   else "plausible")),
         DUPLICATE: lambda v: (v >= 0.5) == ("duplicate" in an),
         # the errors that cost money: releasing an attack, or holding an honest request.
         # Escalating a big clean payment to the button is correct, not a miss.
@@ -126,7 +142,7 @@ def collect(n: int, judge=None, rng_seed: int = 0) -> list[tuple[str, float, boo
         if result.source == "unavailable":
             failed += 1
             continue
-        points += outcomes(result.answers, label)
+        points += outcomes(result.answers, label, result.facts)
     if failed:
         print(f"{failed} of {n} cases got no answer from Jev and were skipped")
     return points

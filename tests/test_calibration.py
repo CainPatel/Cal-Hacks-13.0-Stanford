@@ -54,3 +54,14 @@ def test_report_splits_and_checks_holdout():
     pts = [("q", c, True if c >= 0.9 else rng.random() < 0.6) for c in (rng.uniform(0.5, 1) for _ in range(8000))]
     out = cal.report(pts)
     assert out["threshold"]["chosen"] and out["holdout"]["error_rate"] <= 0.01
+
+
+def test_progress_is_judged_against_the_measured_gaps_when_facts_are_given():
+    from types import SimpleNamespace
+    from shared.schema import Action, Label
+    resubmitted = Label(request_id="r", anomaly="duplicate_new_number", expected_action=Action.hold, rules=["rule_12"])
+    answers = {cal.PROGRESS: SimpleNamespace(value="understated", confidence=0.95)}
+    below = {"progress": {"lines_billed_above_video_beyond_tolerance": [],
+                          "lines_billed_below_video_beyond_tolerance": ["09-10"]}}
+    assert cal.outcomes(answers, resubmitted) == [(cal.PROGRESS, 0.95, False)]       # by the label's name
+    assert cal.outcomes(answers, resubmitted, below) == [(cal.PROGRESS, 0.95, True)]  # by what the video shows
