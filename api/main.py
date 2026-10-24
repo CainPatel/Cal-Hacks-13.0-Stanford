@@ -73,6 +73,22 @@ def log_not_configured(request: Request, exc: events.LogNotConfigured):
     return JSONResponse(status_code=503, content={"detail": str(exc)})
 
 
+def _jev_route() -> str:
+    from urllib.parse import urlsplit
+    from judgment.jev import GATEWAY_URL
+    return urlsplit(os.environ.get("JEV_BASE_URL", GATEWAY_URL)).hostname or "?"
+
+
+def _jev_ready() -> bool:
+    """Whether the key the active Jev route needs is set (TypeSafe, AI Gateway, or thejevai), never the key."""
+    from judgment.jev import JevError, _config
+    try:
+        _config()
+        return True
+    except JevError:
+        return False
+
+
 @app.get("/")
 def status():
     """What's configured on this deployment, as yes/no only (never a value), plus whether the log has data."""
@@ -85,7 +101,7 @@ def status():
     return {
         "service": "Draw API", "docs": "/docs", "event_log": log, "log_has_events": has_events,
         "configured": {
-            "anthropic_key": env("ANTHROPIC_API_KEY"), "jev_key": env("JEV_API_KEY", "AI_GATEWAY_API_KEY"),
+            "anthropic_key": env("ANTHROPIC_API_KEY"), "jev_key": _jev_ready(), "jev_route": _jev_route(),
             "nessie_key": env("NESSIE_API_KEY"), "blob_store": env("BLOB_STORE_ID", "BLOB_READ_WRITE_TOKEN"),
             "cors_origins": os.environ.get("CORS_ORIGINS", "http://localhost:3000 (default)"),
             "device_url": env("DEVICE_URL"),
