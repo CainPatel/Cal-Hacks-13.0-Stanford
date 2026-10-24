@@ -165,7 +165,7 @@ function PayRequests() {
                   return (
                     <li key={r.id}>
                       <Link
-                        href={href({ r: r.id })}
+                        href={href({ r: selected === r.id ? null : r.id })}
                         scroll={false}
                         aria-current={selected === r.id ? "true" : undefined}
                         className={cn(

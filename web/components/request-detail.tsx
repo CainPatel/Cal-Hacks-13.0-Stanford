@@ -69,8 +69,9 @@ export function RequestDetailPanel({ id, version, backHref }: { id: string; vers
 
   return (
     <article aria-labelledby="d-title" className="-mx-4 bg-sheet px-4 py-4 sm:-mx-8 sm:px-8 lg:mx-0 lg:rounded-lg lg:border lg:p-8">
-      <Link href={backHref} className="mb-3 inline-flex min-h-11 items-center text-primary underline underline-offset-[3px] lg:hidden">
-        Back to pay requests
+      <Link href={backHref} scroll={false} className="mb-3 inline-flex min-h-11 items-center rounded-sm text-primary underline underline-offset-[3px] outline-none focus-visible:ring-3 focus-visible:ring-ring/50">
+        <span className="lg:hidden">Back to pay requests</span>
+        <span className="hidden lg:inline">Close</span>
       </Link>
       <header className="flex flex-col gap-2">
         <div>

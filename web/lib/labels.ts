@@ -169,3 +169,25 @@ export const JEV_QUESTION: Record<string, string> = {
   duplicate_likelihood: "Is this a duplicate?",
   proposed_action: "What should happen?",
 };
+
+/**
+ * Jev's answers in words. Choice answers map by name; score answers (0-1, normalized from the
+ * question's five levels in judgment/questions.py) map to the nearest level, so no raw number shows.
+ */
+const CHOICE_ANSWER: Record<string, string> = {
+  correct: "Right form", wrong_type: "Wrong kind of release", incomplete: "Missing or incomplete",
+  plausible: "Looks right", overstated: "Billed more than the video shows", understated: "Billed less than the video shows",
+  release: "Pay it", hold: "Hold it", escalate: "Ask the owner",
+};
+const SCORE_LEVELS: Record<string, string[]> = {
+  bank_change_suspicious: ["No bank change", "Ordinary change", "Unusual: call to check", "Pushed or wrong sender", "Payment diversion"],
+  duplicate_likelihood: ["Clearly new", "Normal overlap", "Same period, different amounts", "Nearly identical", "Exact resubmission"],
+};
+export function jevAnswer(question: string, value: string | number | null): string {
+  if (value == null) return "No answer";
+  if (typeof value === "number") {
+    const levels = SCORE_LEVELS[question];
+    return levels ? levels[Math.min(levels.length - 1, Math.max(0, Math.round(value * (levels.length - 1))))] : "Answered";
+  }
+  return CHOICE_ANSWER[value] ?? value.replaceAll("_", " ");
+}
