@@ -9,6 +9,7 @@ evidence for the kernel, so they are reported and passed through.
 """
 
 import hashlib
+import math
 import re
 import uuid
 from dataclasses import dataclass, field
@@ -17,6 +18,7 @@ from decimal import Decimal
 from pathlib import Path
 
 import anthropic
+import numpy as np
 import pdfplumber
 import pdfplumber.utils.exceptions
 
@@ -158,34 +160,66 @@ def _is_letter_row(cells: list[str]) -> bool:
     return bool(filled) and all(_LETTER_CELL.match(c) for c in filled)
 
 
-def _visible_char(obj: dict) -> bool:
-    if obj.get("object_type") != "char":
-        return True
-    if obj.get("size", 12) < 3:
-        return False
-    color = obj.get("non_stroking_color")
-    if isinstance(color, (list, tuple)):
-        color = tuple(round(float(c), 3) for c in color)
-        if color in {(1.0,), (1.0, 1.0, 1.0), (0.0, 0.0, 0.0, 0.0)}:
-            return False
-    return True
+_INK_RESOLUTION = 144
+_INK_CONTRAST = 60  # grey levels between darkest and lightest pixel inside a glyph's box
+_MAX_HIDDEN_SHARE = 0.2
+
+
+def _char_key(c: dict) -> tuple:
+    return (c["text"], round(c["x0"], 2), round(c["top"], 2))
+
+
+def _inked_char_keys(page) -> tuple[set[tuple], int]:
+    """Keys of characters that actually show up when the page is rendered.
+
+    A text layer can hold characters a person never sees: invisible render
+    mode, white or near-white fill, zero alpha, or glyphs covered by a shape.
+    Rendering the page and looking for ink inside each glyph's box catches all
+    of these at once, so the parser reads what the GC sees on screen.
+    """
+    img = np.asarray(page.to_image(resolution=_INK_RESOLUTION).original.convert("L"), dtype=np.int16)
+    scale = _INK_RESOLUTION / 72
+    keep, hidden = set(), 0
+    for c in page.chars:
+        key = _char_key(c)
+        if c["text"].isspace():
+            keep.add(key)
+            continue
+        # Trim the box edges so ink bleeding in from a neighbouring glyph doesn't count.
+        dx, dy = (c["x1"] - c["x0"]) * 0.15, (c["bottom"] - c["top"]) * 0.1
+        x0, x1 = int((c["x0"] + dx) * scale), math.ceil((c["x1"] - dx) * scale)
+        y0, y1 = int((c["top"] + dy) * scale), math.ceil((c["bottom"] - dy) * scale)
+        crop = img[max(y0, 0):y1, max(x0, 0):x1]
+        if crop.size and int(crop.max()) - int(crop.min()) >= _INK_CONTRAST and c.get("size", 12) >= 3:
+            keep.add(key)
+        else:
+            hidden += 1
+    return keep, hidden
 
 
 _DATE_TOKEN = r"(\d{1,2}/\d{1,2}/\d{2,4}|\d{4}-\d{2}-\d{2}|[A-Z][a-z]{2,8}\.? \d{1,2}, \d{4})"
 _HEADER_PATTERNS = {
-    "application_no": re.compile(r"APPLICATION\s+NO\.?\s*:?\s*([A-Z0-9\-]+)", re.I),
+    "application_no": re.compile(r"APPLICATION\s+NO\.?\s*:?\s*([A-Z0-9\-]*\d[A-Z0-9\-]*)", re.I),
     "application_date": re.compile(r"APPLICATION\s+DATE\s*:?\s*" + _DATE_TOKEN, re.I),
     "period_to": re.compile(r"PERIOD\s+TO\s*:?\s*" + _DATE_TOKEN, re.I),
 }
+_ITEM_NO = re.compile(r"^[A-Za-z0-9](?:[A-Za-z0-9.\-/ ]{0,14}[A-Za-z0-9.])?$")
+_TOTAL_LABEL = re.compile(r"\b(SUB-?\s?)?TOTALS?\b", re.I)
+
+
+@dataclass
+class _SheetState:
+    mapping: dict[int, str] | None = None
+    ncols: int | None = None
+    closed: bool = False  # set once the grand total row is read
+    rows: list[RawRow] = field(default_factory=list)
+    totals: dict[str, str] | None = None
+    notes: list[Note] = field(default_factory=list)
 
 
 def _read_text_layer(path: Path) -> RawSheet:
-    notes: list[Note] = []
+    st = _SheetState()
     header_values: dict[str, set[str]] = {k: set() for k in _HEADER_PATTERNS}
-    rows: list[RawRow] = []
-    totals_rows: list[tuple[str, dict[str, str]]] = []
-    mapping: dict[int, str] | None = None
-    ncols: int | None = None
 
     with pdfplumber.open(path) as pdf:
         for page_no, page in enumerate(pdf.pages, start=1):
@@ -200,10 +234,13 @@ def _read_text_layer(path: Path) -> RawSheet:
                 # Text over a page-sized image is usually an OCR layer, which can misread digits.
                 raise _UseFallback(f"page {page_no} looks like a scan with an OCR text layer")
 
-            page = page.filter(_visible_char)
-            hidden = raw_chars - len(page.chars)
+            keep, hidden = _inked_char_keys(page)
             if hidden:
-                notes.append(Note("hidden_text", f"page {page_no}: ignored {hidden} invisible or tiny characters"))
+                printable = sum(1 for c in page.chars if not c["text"].isspace())
+                if hidden > _MAX_HIDDEN_SHARE * printable:
+                    raise _UseFallback(f"page {page_no}: text layer does not match the rendered page")
+                st.notes.append(Note("hidden_text", f"page {page_no}: ignored {hidden} characters that are not visible on the page"))
+                page = page.filter(lambda o: o.get("object_type") != "char" or _char_key(o) in keep)
 
             text = page.extract_text() or ""
             for key, pattern in _HEADER_PATTERNS.items():
@@ -211,86 +248,101 @@ def _read_text_layer(path: Path) -> RawSheet:
                 if m:
                     header_values[key].add(m.group(1).strip())
 
-            tables = page.extract_tables()
+            tables = [t for t in page.extract_tables() if t]
             if not tables:
-                tables = page.extract_tables({"vertical_strategy": "text", "horizontal_strategy": "text"})
-            for table in tables:
-                if not table:
-                    continue
+                tables = [t for t in page.extract_tables({"vertical_strategy": "text", "horizontal_strategy": "text"}) if t]
+            for index, table in enumerate(tables):
+                width = max(len(r) for r in table)
                 found = _find_header(table)
                 if found:
-                    mapping, skip = found
-                    ncols = max(len(r) for r in table)
+                    if st.closed:
+                        raise _UseFallback(f"page {page_no}: a second continuation sheet starts after the grand total")
+                    st.mapping, skip = found
+                    st.ncols = width
                     body = table[skip:]
-                elif mapping is not None and max(len(r) for r in table) == ncols:
-                    body = table  # continuation page without a repeated header
-                else:
+                elif st.mapping is None or width != st.ncols:
                     continue
-                _collect_rows(body, mapping, rows, totals_rows, notes, page_no)
+                elif st.closed:
+                    st.notes.append(Note("extra_table_ignored", f"page {page_no}: table after the grand total ignored"))
+                    continue
+                elif index == 0:
+                    body = table  # sheet continues onto this page without repeating its header
+                    st.notes.append(Note("continuation_table", f"page {page_no}: headerless table read as a continuation"))
+                else:
+                    # A same-width table mid-page could be a change-order log or anything else.
+                    raise _UseFallback(f"page {page_no}: unlabelled table with the sheet's column layout")
+                _collect_rows(body, st, page_no)
 
-    if mapping is None:
+    if st.mapping is None:
         raise _UseFallback("no G703 column header found in the text layer")
-    if not rows:
+    if not st.rows:
         raise _UseFallback("header found but no line items parsed")
-    if "stored_materials" not in mapping.values():
-        notes.append(Note("no_stored_column", "sheet has no stored-materials column; read as $0"))
+    if "stored_materials" not in st.mapping.values():
+        st.notes.append(Note("no_stored_column", "sheet has no stored-materials column; read as $0"))
 
     resolved = {}
     for key, values in header_values.items():
         if len(values) > 1:
-            notes.append(Note("header_mismatch", f"{key} differs between pages: {sorted(values)}"))
-        resolved[key] = sorted(values)[0] if values else ""
-
-    totals = None
-    if totals_rows:
-        grand = [t for label, t in totals_rows if "GRAND" in label]
-        totals = grand[-1] if grand else totals_rows[-1][1]
-        if len(totals_rows) > 1:
-            notes.append(Note("multiple_totals", f"{len(totals_rows)} total rows found; checking against the {'grand' if grand else 'last'} one"))
+            if key == "period_to":
+                # The billing period decides which releases and prior payments apply; never pick one.
+                raise ExtractionError(f"pages disagree on the billing period: {sorted(values)}")
+            st.notes.append(Note("header_mismatch", f"{key} differs between pages: {sorted(values)}"))
+        resolved[key] = next(iter(values)) if len(values) == 1 else ""
 
     return RawSheet(
         application_no=resolved["application_no"],
         application_date=resolved["application_date"],
         period_to=resolved["period_to"],
-        has_retainage_column="retainage" in mapping.values(),
-        rows=rows,
-        totals=totals,
-        notes=notes,
+        has_retainage_column="retainage" in st.mapping.values(),
+        rows=st.rows,
+        totals=st.totals,
+        notes=st.notes,
     )
 
 
-def _collect_rows(body, mapping, rows, totals_rows, notes, page_no) -> None:
-    value_keys = [k for k in mapping.values() if k not in ("item_no", "description")]
+def _collect_rows(body, st: _SheetState, page_no: int) -> None:
+    value_keys = [k for k in st.mapping.values() if k not in ("item_no", "description")]
+    table_start = len(st.rows)
     for raw in body:
-        cells = {key: (raw[i] or "").strip() if i < len(raw) else "" for i, key in mapping.items()}
+        if st.closed:
+            if any((c or "").strip() for c in raw):
+                st.notes.append(Note("after_total_ignored", f"page {page_no}: row after the grand total ignored"))
+            continue
+        cells = {key: (raw[i] or "").strip() if i < len(raw) else "" for i, key in st.mapping.items()}
         item = cells.get("item_no", "")
         desc = cells.get("description", "")
         values = {k: cells.get(k, "") for k in value_keys}
         no_values = all(v == "" for v in values.values())
-        label = f"{item} {desc}".upper()
+        label = f"{item} {desc}"
 
         if not item and not desc and no_values:
             continue
         if _is_letter_row(list(cells.values())) or (_find_header([list(cells.values())]) is not None):
             continue  # repeated header or the A..I column-letter row
-        if not item and "SUBTOTAL" in label:
-            notes.append(Note("subtotal_skipped", f"page {page_no}: skipped subtotal row {desc!r}"))
-            continue
-        if not item and "TOTAL" in label:
-            totals_rows.append((label, values))
+        if not no_values and _TOTAL_LABEL.search(label) and (not item or _TOTAL_LABEL.search(item)):
+            upper = label.upper()
+            if re.search(r"SUB-?\s?TOTAL", upper):
+                st.notes.append(Note("subtotal_skipped", f"page {page_no}: skipped subtotal row {label.strip()!r}"))
+            elif "PAGE" in upper or "CARRIED" in upper or "FORWARD" in upper:
+                st.notes.append(Note("page_total_skipped", f"page {page_no}: skipped page total row {label.strip()!r}"))
+            else:
+                st.totals = values
+                st.closed = True
             continue
         if not item and no_values:
-            if rows:
-                rows[-1].description = f"{rows[-1].description} {desc}".strip()
+            if len(st.rows) > table_start:
+                st.rows[-1].description = f"{st.rows[-1].description} {desc}".replace("\n", " ").strip()
             else:
-                notes.append(Note("orphan_text", f"page {page_no}: text before first line item ignored: {desc!r}"))
+                st.notes.append(Note("orphan_text", f"page {page_no}: text not attached to a line item: {desc!r}"))
             continue
         if not item:
             raise _UseFallback(f"page {page_no}: row with amounts but no item number ({desc!r})")
+        if not _ITEM_NO.match(item):
+            raise _UseFallback(f"page {page_no}: implausible item number {item!r}")
         if no_values:
-            notes.append(Note("section_heading", f"page {page_no}: skipped heading {item} {desc!r}", item))
+            st.notes.append(Note("section_heading", f"page {page_no}: skipped heading {item} {desc!r}", item))
             continue
-        rows.append(RawRow(item_no=item, description=desc.replace("\n", " "), cells=values))
+        st.rows.append(RawRow(item_no=item, description=desc.replace("\n", " "), cells=values))
 
 
 # --- Claude transcription ---------------------------------------------------
@@ -300,7 +352,12 @@ def _read_with_claude(pdf_bytes: bytes, client) -> RawSheet:
     t = llm.transcribe_g703(pdf_bytes, client)
     if not t.is_g703:
         raise NotAG703("document is not a G703 continuation sheet")
-    notes = [Note("unreadable_cell", f"model marked cell {c} as uncertain") for c in t.unreadable_cells]
+    if t.unreadable_cells:
+        # A guessed digit is worse than no answer: someone has to look at the paper.
+        raise ExtractionError(f"cells could not be read with certainty: {', '.join(t.unreadable_cells)}")
+    for r in t.rows:
+        if not _ITEM_NO.match(r.item_no.strip()) or _TOTAL_LABEL.search(r.item_no):
+            raise ExtractionError(f"transcribed row has an implausible item number: {r.item_no!r}")
 
     def cells(r) -> dict[str, str]:
         d = {k: getattr(r, k) for k in (*MONEY_COLUMNS, "pct_complete")}
@@ -315,7 +372,7 @@ def _read_with_claude(pdf_bytes: bytes, client) -> RawSheet:
         has_retainage_column=t.has_retainage_column,
         rows=[RawRow(r.item_no.strip(), r.description.strip(), cells(r)) for r in t.rows],
         totals=cells(t.totals_row) if t.totals_row else None,
-        notes=notes,
+        notes=[],
     )
 
 
@@ -460,6 +517,8 @@ def extract_pay_request(
         try:
             sheet = _read_with_claude(pdf_bytes, client)
             lines, parse_notes = _to_line_items(sheet)
+            if _looks_misaligned(lines):
+                raise ExtractionError("transcription fails D+E+F=G and C-G=H on most lines")
         except CellParseError as e:
             raise ExtractionError(f"transcription unusable: {e}") from e
         except (llm.PerceptionLLMError, anthropic.APIError) as e:

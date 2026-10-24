@@ -84,3 +84,19 @@ def test_parse_date(text, expected):
 def test_parse_date_rejects_day_first():
     with pytest.raises(CellParseError):
         parse_date("31/10/2026")
+
+
+@pytest.mark.parametrize("text", ["100 0", "1 250.00", "4,000.00 2,000.00"])
+def test_whitespace_between_digits_is_two_values(text):
+    with pytest.raises(CellParseError):
+        parse_money(text)
+
+
+def test_whitespace_between_digits_in_pct_rejected():
+    with pytest.raises(CellParseError):
+        parse_pct("6 0%")
+
+
+@pytest.mark.parametrize("text,expected", [("$ 500", "500"), ("( 500 )", "-500"), ("- 500", "-500")])
+def test_spaces_beside_symbols_allowed(text, expected):
+    assert parse_money(text) == Decimal(expected)

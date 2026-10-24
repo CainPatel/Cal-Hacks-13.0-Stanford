@@ -6,4 +6,4 @@ pillow>=13.0
 # tests and fixture generation
 pytest>=9.1
 reportlab>=5.1
-numpy>=2.0  # test video generation
+numpy>=2.0

@@ -197,10 +197,17 @@ def test_claude_refusal_is_an_extraction_error(tmp_path, fake_claude):
         extract(scanned, allow_llm_fallback=True, client=fake_claude(None, stop_reason="refusal"))
 
 
-def test_claude_uncertain_cells_are_noted(tmp_path, fake_claude):
+def test_claude_uncertain_cells_fail_instead_of_guessing(tmp_path, fake_claude):
     scanned = rasterize(build_g703(tmp_path / "a.pdf", standard_lines()), tmp_path / "scan.pdf")
-    r = extract(scanned, allow_llm_fallback=True, client=fake_claude(_transcription(unreadable_cells=["1:this_period"])))
-    assert "unreadable_cell" in codes(r)
+    with pytest.raises(ExtractionError, match="1:this_period"):
+        extract(scanned, allow_llm_fallback=True, client=fake_claude(_transcription(unreadable_cells=["1:this_period"])))
+
+
+def test_claude_row_labelled_total_rejected(tmp_path, fake_claude):
+    scanned = rasterize(build_g703(tmp_path / "a.pdf", standard_lines()), tmp_path / "scan.pdf")
+    bad = _transcription(rows=[_row("TOTAL", "", "1", "0", "0", "", "0", "0%", "1", "0")])
+    with pytest.raises(ExtractionError, match="item number"):
+        extract(scanned, allow_llm_fallback=True, client=fake_claude(bad))
 
 
 def test_continuation_page_without_repeated_header(tmp_path):
@@ -244,3 +251,96 @@ def test_ocr_layer_over_scan_is_not_trusted(tmp_path):
     c.save()
     with pytest.raises(ExtractionError, match="OCR"):
         extract(path)
+
+
+# --- Regressions from adversarial review ------------------------------------
+
+
+def test_total_label_in_item_column_is_not_a_line_item(tmp_path):
+    page_total = ["TOTAL", "this page", "435,000.00", "141,000.00", "54,000.00", "12,500.00", "207,500.00",
+                  "47.70%", "227,500.00", "20,750.00"]
+    r = extract(build_g703(tmp_path / "a.pdf", standard_lines(), extra_rows=[page_total]))
+    assert [li.item_no for li in r.pay_request.lines] == ["1", "2", "3", "4", "5"]
+
+
+def test_page_total_rows_are_skipped(tmp_path):
+    page_total = ["", "PAGE TOTAL", "435,000.00"]
+    r = extract(build_g703(tmp_path / "a.pdf", standard_lines(), extra_rows=[page_total]))
+    assert len(r.pay_request.lines) == 5 and "page_total_skipped" in codes(r)
+    assert "totals_mismatch" not in codes(r)  # compared against the grand total, not the page total
+
+
+def _target(tmp_path, text="4,000.00"):
+    """Locate a printed value on the clean sheet so an overlay can tamper right next to it."""
+    import pdfplumber
+
+    with pdfplumber.open(build_g703(tmp_path / "probe.pdf", standard_lines())) as pdf:
+        page = pdf.pages[0]
+        word = next(w for w in page.extract_words() if w["text"] == text)
+        return word["x0"], page.height - word["bottom"]
+
+
+@pytest.mark.parametrize("mode", ["render_mode_3", "white_box", "alpha_0", "near_white"])
+def test_hidden_digit_cannot_change_a_value(tmp_path, mode):
+    x, y = _target(tmp_path)
+    x, y = x - 4.0, y + 1.5
+
+    def overlay(c):
+        c.setFont("Helvetica", 7)
+        if mode == "render_mode_3":
+            t = c.beginText(x, y)
+            t.setFont("Helvetica", 7)
+            t.setTextRenderMode(3)
+            t.textOut("9")
+            c.drawText(t)
+        elif mode == "white_box":
+            c.drawString(x, y, "9")
+            c.setFillColorRGB(1, 1, 1)
+            c.rect(x - 0.5, y - 1, 4.5, 7, fill=1, stroke=0)
+        elif mode == "alpha_0":
+            c.setFillAlpha(0.0)
+            c.drawString(x, y, "9")
+        else:
+            c.setFillColorRGB(0.99, 0.99, 0.99)
+            c.drawString(x, y, "9")
+
+    r = extract(build_g703(tmp_path / "a.pdf", standard_lines(), overlay=overlay))
+    assert r.pay_request.lines[0].this_period == D("4000.00")
+    assert "hidden_text" in codes(r)
+
+
+def test_unrelated_table_after_grand_total_is_ignored(tmp_path):
+    lines = [Line(str(i), f"Line item {i}", D("1000"), D("100"), D("50")) for i in range(1, 4)]
+    path = build_g703(tmp_path / "a.pdf", lines)
+    # A change-order log with the same column count, after the sheet ends.
+    from reportlab.lib.pagesizes import landscape, letter
+    from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, PageBreak
+    import tests.perception.g703_builder as b
+
+    orig = b.SimpleDocTemplate.build
+
+    def build_with_log(self, flowables, **kw):
+        log = Table([["7", "Add 2 skylights (PENDING CO)", "25,000.00", "0.00", "0.00", "0.00", "25,000.00",
+                      "100.00%", "0.00", "2,500.00"]])
+        log.setStyle(TableStyle([("GRID", (0, 0), (-1, -1), 0.5, b.colors.black)]))
+        return orig(self, flowables + [PageBreak(), log], **kw)
+
+    b.SimpleDocTemplate.build = build_with_log
+    try:
+        build_g703(path, lines)
+    finally:
+        b.SimpleDocTemplate.build = orig
+    r = extract(path)
+    assert [li.item_no for li in r.pay_request.lines] == ["1", "2", "3"]
+
+
+def test_conflicting_period_across_pages_fails(tmp_path):
+    lines = [Line(str(i), f"Line item {i}", D("1000"), D("100"), D("50")) for i in range(1, 61)]
+    with pytest.raises(ExtractionError, match="billing period"):
+        extract(build_g703(tmp_path / "a.pdf", lines, period_to_later_pages="09/30/2026"))
+
+
+def test_continuation_text_does_not_cross_tables(tmp_path):
+    lines = [Line(str(i), f"Line item {i}", D("1000"), D("100"), D("50")) for i in range(1, 61)]
+    r = extract(build_g703(tmp_path / "a.pdf", lines))
+    assert all(li.description == f"Line item {li.item_no}" for li in r.pay_request.lines)

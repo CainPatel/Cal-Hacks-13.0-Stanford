@@ -61,8 +61,13 @@ def build_g703(
     extra_rows: list[list] | None = None,
     repeat_header: bool = True,
     grid: bool = True,
+    overlay=None,
+    period_to_later_pages: str | None = None,
 ) -> Path:
-    """extra_rows are inserted after the line items, before the grand total, as raw cell lists."""
+    """extra_rows are inserted after the line items, before the grand total, as raw cell lists.
+
+    overlay(canvas) draws extra marks on page 1 after the page header, for tampering tests.
+    """
     has_ret = retainage_rate is not None
     head1 = ["ITEM NO.", "DESCRIPTION OF WORK", "SCHEDULED VALUE", "WORK COMPLETED", "",
              "MATERIALS PRESENTLY STORED (NOT IN D OR E)", "TOTAL COMPLETED AND STORED TO DATE (D+E+F)",
@@ -111,13 +116,20 @@ def build_g703(
     ]))
 
     def header(canvas, doc):
+        period = period_to_later_pages if (period_to_later_pages and doc.page > 1) else period_to
+        canvas.saveState()
         canvas.setFont("Helvetica-Bold", 10)
         canvas.drawString(0.5 * inch, 7.9 * inch, "CONTINUATION SHEET  AIA DOCUMENT G703")
         canvas.setFont("Helvetica", 8)
         canvas.drawString(
             0.5 * inch, 7.65 * inch,
-            f"APPLICATION NO: {application_no}     APPLICATION DATE: 11/02/2026     PERIOD TO: {period_to}",
+            f"APPLICATION NO: {application_no}     APPLICATION DATE: 11/02/2026     PERIOD TO: {period}",
         )
+        canvas.restoreState()
+        if overlay and doc.page == 1:
+            canvas.saveState()
+            overlay(canvas)
+            canvas.restoreState()
 
     path.parent.mkdir(parents=True, exist_ok=True)
     doc = SimpleDocTemplate(str(path), pagesize=landscape(letter), topMargin=1.0 * inch,

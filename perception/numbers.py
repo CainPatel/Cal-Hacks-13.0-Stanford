@@ -32,11 +32,16 @@ _DASHES = {"-", "–", "—"}
 
 
 def _normalize(text: str) -> str:
-    # Collapse internal spaces ("$ 1,234.00", "( 500 )") but not newlines:
-    # a newline inside a numeric cell means two values were merged.
-    if "\n" in text.strip():
+    # Spaces are allowed only beside symbols ("$ 1,234.00", "( 500 )", "60 %").
+    # Whitespace between digits ("100 0") or a newline means two values were
+    # merged into one cell, which must fail rather than read as 1000.
+    raw = text.strip()
+    if "\n" in raw:
         raise CellParseError(f"cell holds more than one line: {text!r}")
-    return re.sub(r"\s+", "", text)
+    raw = re.sub(r"(?<=[$(\-])\s+|\s+(?=[)%$])", "", raw)
+    if re.search(r"\s", raw):
+        raise CellParseError(f"cell holds more than one value: {text!r}")
+    return raw
 
 
 def parse_money(text: str | None, *, blank_is_zero: bool = True) -> Decimal:
