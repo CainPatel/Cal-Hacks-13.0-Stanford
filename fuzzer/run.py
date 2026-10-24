@@ -2,32 +2,23 @@
 
     python -m fuzzer.run 500        # writes data/scorecard.json
 
-Kernel interface this expects from A:
-    kernel.runner.decide(state: dict[str, list], request_id: str) -> Decision
-where state is the same dict of model lists that seed.generate.generate() returns.
-Until that exists, a stub that releases everything stands in, so the scorecard is
-obviously wrong rather than plausibly right.
+Decisions go through pipeline.decide, the same path replay uses (see pipeline.py for
+the kernel interface and the stub that stands in until A's kernel exists).
 """
 import json
 import random
+import re
 import sys
 from collections import defaultdict
 from datetime import date, timedelta
 from decimal import Decimal
 from pathlib import Path
 
+import pipeline
+from pipeline import KERNEL, decide
 from seed import anomalies as a
 from seed.generate import generate
-from shared.schema import Action, Decision, Label
-
-try:
-    from kernel.runner import decide
-    KERNEL = "kernel.runner"
-except ImportError:
-    KERNEL = "STUB (releases everything; kernel/runner.py not built yet)"
-
-    def decide(state, request_id):
-        return Decision(request_id=request_id, action=Action.release, results=[])
+from shared.schema import Action, Label
 
 SUBS = [f"sub_{i:02d}" for i in range(1, 16)]
 WORLDS = 8           # distinct fake companies to mutate, so cases aren't all the same 15 requests
@@ -93,8 +84,30 @@ def make_cases(n, rng):
         n -= 1
 
 
+ATTACKS = {m.__name__: m for m in SINGLE}  # what the judge's attack console offers
+
+
+def attack(name: str, target: str, rng_seed: int | None = None, **kwargs) -> dict:
+    """Run one chosen attack on one sub (or job, for new_sub_ein_mismatch) through the pipeline.
+
+    For the attack console: returns the label (what should happen) and the decision (what did).
+    kwargs override the mutator's settings, e.g. attack("bank_change_email", "sub_04", homoglyph=True).
+    """
+    out = ATTACKS[name](generate(), target, random.Random(rng_seed), **kwargs)
+    if out is None:
+        raise ValueError(f"{name} doesn't apply to {target}")
+    data, label = out
+    return {"label": label, "decision": decide(data, label.request_id),
+            "amount": amount(data, label.request_id)}
+
+
 def amount(data, request_id) -> Decimal:
     return data["pay_requests"][a.find(data["pay_requests"], request_id)].g702.current_payment_due
+
+
+def rule_numbers(rules) -> set[str]:
+    """'rule_07' and '07_lower_tier_released' both mean rule 07."""
+    return {re.search(r"\d{2}", r).group() for r in rules}
 
 
 def score(rows) -> dict:
@@ -106,13 +119,17 @@ def score(rows) -> dict:
         t["n"] += 1
         t["caught"] += r["action"] != "release"
         t["wrongful"] += r["action"] == "release"
-        t["right_rule"] += set(r["expected_rules"]) <= set(r["failed_rules"])
+        t["right_rule"] += rule_numbers(r["expected_rules"]) <= rule_numbers(r["failed_rules"])
     ratio = lambda num, den: round(num / den, 4) if den else None
     return {
         "kernel": KERNEL,
         "cases": len(rows), "mutated": len(bad), "clean": len(clean),
+        # headline: what the rules alone stop, as if the owner approved every button press unread
+        "wrongful_if_every_button_approved": sum(r["action"] != "hold" for r in bad),
+        "rule_catch_rate": ratio(sum(r["action"] == "hold" for r in bad), len(bad)),
+        # with the button as a second layer: only auto-released attacks get through
         "wrongful_releases": sum(r["action"] == "release" for r in bad),
-        "escalated_mutated": sum(r["action"] == "escalate" for r in bad),  # waited on the button
+        "escalated_mutated": sum(r["action"] == "escalate" for r in bad),
         "catch_rate": ratio(sum(r["action"] != "release" for r in bad), len(bad)),
         "false_hold_rate": ratio(sum(r["action"] == "hold" for r in clean), len(clean)),
         "dollars_protected": str(sum(Decimal(r["amount"]) for r in bad if r["action"] != "release")),
@@ -124,10 +141,46 @@ def score(rows) -> dict:
     }
 
 
+def button_load(worlds=WORLDS) -> dict:
+    """The human cost of the button: escalations on a normal, clean month, per job."""
+    actions = []
+    jobs = 0
+    for s in range(worlds):
+        world = generate(rng_seed=s)
+        jobs += len(world["jobs"])
+        actions += [decide(world, r.id).action for r in world["pay_requests"] if r.number == a.THIS_MONTH]
+    return {"button_presses_per_job_month": round(actions.count(Action.escalate) / jobs, 2),
+            "auto_released_share": round(actions.count(Action.release) / len(actions), 4),
+            "held_share_clean": round(actions.count(Action.hold) / len(actions), 4)}
+
+
+LIMITS = [10000, 15000, 25000, 50000, 100000]
+
+
+def limit_sweep(cases, limits=LIMITS, worlds=WORLDS) -> list[dict]:
+    """The auto-release limit as a dial: owner's taps vs. attacks that would pay out automatically."""
+    base = getattr(pipeline, "default_contract", dict)()  # {} under the stub kernel
+    clean = [generate(rng_seed=s) for s in range(worlds)]
+    jobs = sum(len(w["jobs"]) for w in clean)
+    out = []
+    for limit in limits:
+        contract = {**base, "auto_release_limit_usd": limit}
+        actions = [decide(w, r.id, contract=contract).action
+                   for w in clean for r in w["pay_requests"] if r.number == a.THIS_MONTH]
+        leaked = [amount(d, l.request_id) for d, l in cases
+                  if l.anomaly and decide(d, l.request_id, contract=contract).action == Action.release]
+        out.append({"limit": limit,
+                    "button_presses_per_job_month": round(actions.count(Action.escalate) / jobs, 2),
+                    "auto_released_share": round(actions.count(Action.release) / len(actions), 4),
+                    "attacks_auto_paid": len(leaked), "dollars_auto_paid": str(sum(leaked))})
+    return out
+
+
 def run(n=500, rng_seed=0) -> dict:
     rng = random.Random(rng_seed)
     rows = []
-    for i, (data, label) in enumerate(make_cases(n, rng)):
+    cases = list(make_cases(n, rng))
+    for i, (data, label) in enumerate(cases):
         d = decide(data, label.request_id)
         rows.append({
             "case": i, "request_id": label.request_id, "anomaly": label.anomaly,
@@ -135,7 +188,7 @@ def run(n=500, rng_seed=0) -> dict:
             "action": d.action.value, "failed_rules": [x.rule for x in d.results if not x.passed],
             "amount": str(amount(data, label.request_id)),
         })
-    return score(rows)
+    return {**score(rows), **button_load(), "limit_sweep": limit_sweep(cases)}
 
 
 if __name__ == "__main__":
@@ -146,5 +199,13 @@ if __name__ == "__main__":
     out.write_text(json.dumps(card, indent=2))
     print(f"kernel: {card['kernel']}")
     print(f"{card['cases']} cases ({card['mutated']} mutated, {card['clean']} clean) -> {out}")
+    print(f"rules alone: {card['wrongful_if_every_button_approved']} attacks get through if every button press "
+          f"is approved (rule catch rate {card['rule_catch_rate']})")
+    print(f"button presses per job per month: {card['button_presses_per_job_month']} | "
+          f"auto-released share of a clean month: {card['auto_released_share']}")
+    for s in card["limit_sweep"]:
+        print(f"  limit ${s['limit']:>7,}: {s['button_presses_per_job_month']:.2f} taps/job/month, "
+              f"{s['auto_released_share']:.0%} of a clean month auto-paid, "
+              f"{s['attacks_auto_paid']} attacks auto-paid (${Decimal(s['dollars_auto_paid']):,.0f})")
     print(f"wrongful releases {card['wrongful_releases']} | catch rate {card['catch_rate']} | "
           f"false-hold rate {card['false_hold_rate']} | protected ${card['dollars_protected']}")

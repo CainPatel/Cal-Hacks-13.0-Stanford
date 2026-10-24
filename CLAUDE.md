@@ -22,7 +22,8 @@ synthetic/            seed rendered as PDF/XLSX/EML + truth (B)
 kernel/rules/         one file per rule, rule_01..rule_15   (A)
 kernel/runner.py      runs all rules, decides, writes trace (A)
 kernel/executor.py    Nessie call behind signature gate     (A)
-events/               SQLite append-only log + replay       (A)
+events/               SQLite append-only log + replay       (B)
+pipeline.py           the one decide path (replay + fuzzer) (B)
 perception/           Claude extraction + video estimate    (C)
 judgment/             Jev questions + fallback              (C)
 fuzzer/               mutators, runner, scorecard           (B)
@@ -39,6 +40,7 @@ Edit only your directory unless the owner says yes in chat. `shared/schema.py` c
 
 ```
 make seed        # regenerate seed data into data/seed.db
+make events      # load the seed into data/events.db as facts (refuses if the log exists)
 make test        # pytest, all rules against fixtures
 make synthetic   # render G703 PDF/XLSX, releases, COIs, emails + truth.json into data/synthetic
 make fuzz N=500  # run N mutated cases, write scorecard to data/scorecard.json
@@ -62,6 +64,11 @@ Run `make test` before every commit. If it fails, fix it or revert; don't commit
 - `Proposal`: action ∈ {release, hold, escalate}, confidences {question: float}, reasons[]
 - `RuleResult`: rule, passed: bool, evidence: dict, message: str (plain English, user-facing)
 - `Decision`: request_id, action, results[RuleResult], next_action, signature?, executed_at?
+- `Event`: seq, at (simulated business time), kind ∈ {fact, judgment, decision, signature, execution}, table? (facts only), data
+- `Label`: request_id, anomaly?, expected_action, rules[] (ground truth for seed/fuzz cases; never shown to the kernel)
+
+Kernel entry point (A builds it; replay and the fuzzer call it through `pipeline.py`):
+`kernel.runner.decide(state: dict[str, list], request_id: str) -> Decision`, where `state` is `EventLog.state(as_of=...)` (same shape as `seed.generate.generate()`). Ground-truth `Label`s are never in state.
 
 Cumulative billing: this month's payment = (total_to_date − retainage) − previously certified. Never trust the sub's `this_period`; recompute from the ledger.
 
