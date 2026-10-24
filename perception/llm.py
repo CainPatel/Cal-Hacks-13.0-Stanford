@@ -59,8 +59,9 @@ def _parse(client: anthropic.Anthropic, *, system: str, content: list, output_fo
         first = e.errors()[0]
         if first["type"] in ("json_invalid", "json_type"):
             raise PerceptionLLMError("Claude's answer was cut off before it finished") from e
-        where = ".".join(str(part) for part in first["loc"]) or "the answer"
-        raise PerceptionLLMError(f"Claude's answer did not match the expected shape ({first['type']} at {where})") from e
+        # field and pydantic's message only, never the input value: no document content reaches the screen
+        detail = "; ".join(f"{'.'.join(str(p) for p in err['loc'])}: {err['msg']}" for err in e.errors())
+        raise PerceptionLLMError(f"Claude's answer did not match the expected shape ({e.error_count()} errors): {detail}") from e
     except TypeError as e:  # what the SDK raises when no API key or other credential is configured
         if "authentication" not in str(e):
             raise
