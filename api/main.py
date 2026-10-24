@@ -662,7 +662,65 @@ def upload_email(file: UploadFile = File(...)):
         raise HTTPException(422, f"Couldn't read this email: {e}")
     seq = _append_new(state, "emails", result.record, result.record.sent_at)
     return {"email_id": result.record.id, "seq": seq, "method": result.method, "notes": _notes(result.notes),
-            "email": result.record.model_dump(mode="json")}
+            "email": result.record.model_dump(mode="json"),
+            "attachments": _email_attachments(path.read_bytes(), result.record)}
+
+
+def _email_attachments(eml: bytes, email) -> list[dict]:
+    """File each PDF attached to an email through the same handler as a direct upload. Which sub
+    sent it comes only from an exact match of the sender's domain; anything unsure goes to a person."""
+    from starlette.datastructures import UploadFile as StarletteUpload
+    from perception import attachments as att
+
+    found = att.pdf_attachments(eml)
+    if not found:
+        return []
+    state = events.state(path=DB)
+    vendor = att.sender_sub(state, email.from_domain)
+    job = att.only_job(state, vendor.id) if vendor else None
+    UPLOADS.mkdir(parents=True, exist_ok=True)
+    files = []
+    for name, data in found:
+        p = UPLOADS / f"att-{hashlib.sha256(data).hexdigest()}.pdf"
+        p.write_bytes(data)
+        files.append((name, p, att.classify(p)))
+    has_pay_app = any(k == "pay_app" for _, _, k in files)
+    g702 = next((p for _, p, k in files if k == "g702"), None)
+
+    def upload(path: Path, name: str):
+        f = StarletteUpload(file=path.open("rb"), filename=name)
+        f.draw_archived = True  # the email itself is archived; don't store each attachment twice
+        return f
+
+    out = []
+    for name, path, kind in files:
+        row = {"filename": name, "kind": kind}
+        if kind is None:
+            row |= {"status": "needs_person", "detail": "Couldn't tell what this document is from its title."}
+        elif kind == "g702" and has_pay_app:
+            row |= {"status": "used", "detail": "Read as the summary page of the pay application."}
+        elif kind == "g702":
+            row |= {"status": "needs_person", "detail": "A summary page (G702) came without its line items (G703)."}
+        elif vendor is None:
+            row |= {"status": "needs_person",
+                    "detail": f"The sender's domain ({email.from_domain}) isn't exactly any sub's on file, so this "
+                              "wasn't filed under anyone. If it looks like a sub's name, treat it as suspicious."}
+        elif kind in ("pay_app", "release") and job is None:
+            row |= {"status": "needs_person", "detail": f"{vendor.legal_name} works on more than one job; pick which."}
+        else:
+            try:
+                if kind == "pay_app":
+                    result = upload_pay_app(file=upload(path, name), sub_id=vendor.id, job_id=job,
+                                            g702=upload(g702, g702.name) if g702 else None)
+                elif kind == "release":
+                    result = upload_release(file=upload(path, name), sub_id=vendor.id, job_id=job)
+                else:
+                    result = upload_coi(file=upload(path, name), sub_id=vendor.id)
+                row |= {"status": "recorded", "sub_id": vendor.id, "sub": vendor.legal_name, "result": result}
+            except HTTPException as e:
+                row |= {"status": "duplicate" if e.status_code == 409 else "unreadable", "detail": e.detail}
+        out.append(row)
+    return out
 
 
 @app.post("/site-video")

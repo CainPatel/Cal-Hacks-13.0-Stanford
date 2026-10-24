@@ -317,3 +317,64 @@ def test_ingest_reads_a_client_upload_from_private_blob(client, world, tmp_path,
                                         "sub_id": req.sub_id, "job_id": req.job_id}).status_code == 422
     assert client.post("/ingest", json={"kind": "pay_app", "pathname": "uploads/payapp-x7Q2.pdf"}).status_code == 422
     assert client.post("/ingest", json={"kind": "tax_return", "pathname": "uploads/a.pdf"}).status_code == 422
+
+
+def _email_with(tmp_path, from_addr, attachments):
+    """An .eml like a sub would send: a short body plus PDF attachments."""
+    from email.message import EmailMessage
+    msg = EmailMessage()
+    msg["From"], msg["To"], msg["Subject"] = from_addr, "ap@ridgelinebuilders.com", "October pay app"
+    msg["Date"] = "Sun, 25 Oct 2026 09:14:00 -0700"
+    msg.set_content("Hi, attached is our October pay application with the conditional release and our COI.")
+    for path in attachments:
+        msg.add_attachment(path.read_bytes(), maintype="application", subtype="pdf", filename=path.name)
+    out = tmp_path / "mail.eml"
+    out.write_bytes(bytes(msg))
+    return out
+
+
+def _docs(world, tmp_path, sub_id="sub_02"):
+    from reportlab.pdfgen import canvas
+    req, g703 = rendered_pay_app(world, tmp_path, f"pr_{sub_id}_6")
+    vendor = next(v for v in world["vendors"] if v.id == sub_id)
+    job = next(j for j in world["jobs"] if j.id == req.job_id)
+    rel = next(r for r in world["releases"] if r.id == f"rel_c_{req.id}")
+    coi = next(c for c in world["cois"] if c.sub_id == sub_id)
+    render.release_pdf(rel, vendor, job, tmp_path / "release.pdf")
+    render.coi_pdf(coi, vendor, tmp_path / "coi.pdf")
+    c = canvas.Canvas(str(tmp_path / "invoice.pdf")); c.drawString(72, 720, "INVOICE #4471 for lunch"); c.save()
+    return vendor, [g703, tmp_path / "release.pdf", tmp_path / "coi.pdf", tmp_path / "invoice.pdf"]
+
+
+def post_email(client, path):
+    with open(path, "rb") as f:
+        return client.post("/emails", files={"file": ("mail.eml", f, "message/rfc822")})
+
+
+def test_email_attachments_are_filed_under_the_exact_sender(client, world, tmp_path):
+    vendor, docs = _docs(world, tmp_path)
+    r = post_email(client, _email_with(tmp_path, f"Accounting <ap@{vendor.email_domain}>", docs))
+    assert r.status_code == 200, r.text
+    rows = {a["filename"]: a for a in r.json()["attachments"]}
+    assert [rows[n]["kind"] for n in ("g703.pdf", "release.pdf", "coi.pdf", "invoice.pdf")] == ["pay_app", "release", "coi", None]
+    assert {n: rows[n]["status"] for n in rows} == {"g703.pdf": "recorded", "release.pdf": "recorded",
+                                                     "coi.pdf": "recorded", "invoice.pdf": "needs_person"}
+    state = events.state(path=main.DB)
+    pr_id = rows["g703.pdf"]["result"]["request_id"]
+    assert any(p.id == pr_id and p.sub_id == vendor.id for p in state["pay_requests"])
+
+
+def test_lookalike_sender_files_nothing(client, world, tmp_path):
+    from seed.anomalies import confusable
+    vendor, docs = _docs(world, tmp_path)
+    fake = confusable(vendor.email_domain)
+    r = post_email(client, _email_with(tmp_path, f"ap@{fake}", docs[:1]))
+    [row] = r.json()["attachments"]
+    assert row["kind"] == "pay_app" and row["status"] == "needs_person" and fake in row["detail"]
+    assert len(events.state(path=main.DB)["pay_requests"]) == len(world["pay_requests"])  # nothing filed
+
+
+def test_email_without_attachments_still_works(client, world, tmp_path):
+    vendor, _ = _docs(world, tmp_path)
+    r = post_email(client, _email_with(tmp_path, f"ap@{vendor.email_domain}", []))
+    assert r.status_code == 200 and r.json()["attachments"] == []
