@@ -190,3 +190,13 @@ def test_description_cannot_inject_into_the_prompt(tmp_path, fake_claude):
     payload = json.loads(sov_block.split("\n", 1)[1])
     assert len(payload) == 1 and "\n" not in payload[0]["description"]
     assert len(payload[0]["description"]) <= 120
+
+
+def test_frame_count_follows_length_within_bounds():
+    from perception.video import frames_for
+    assert [frames_for(s) for s in (5, 30, 60, 90, 120, 600)] == [10, 10, 20, 30, 30, 30]
+
+
+def test_sample_frames_defaults_to_length_based_count(tmp_path):
+    frames, _ = sample_frames(make_video(tmp_path / "v.mp4", seconds=60, fps=2, size=(64, 48)))
+    assert len(frames) == 20 and frames[0][0] < frames[-1][0]

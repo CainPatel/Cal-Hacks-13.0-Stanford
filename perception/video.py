@@ -22,7 +22,9 @@ from perception import llm
 from shared.schema import LineItem, SiteEvidence, SOVLine
 
 MAX_EDGE_PX = 1568  # larger images are downscaled by the API anyway
-DEFAULT_FRAMES = 10
+DEFAULT_FRAMES = 10  # the floor: short clips still get 10 looks
+SECONDS_PER_FRAME = 3  # a super crosses a room in ~10-20 s; one look every 3 s doesn't miss one
+MAX_FRAMES = 30  # caps Claude's cost and time on a long walkthrough (trim long footage instead)
 DEFAULT_MIN_CONFIDENCE = 0.5
 
 
@@ -77,9 +79,15 @@ def _to_jpeg(frame: av.VideoFrame) -> bytes:
     return buf.getvalue()
 
 
-def sample_frames(video_path: Path, n: int = DEFAULT_FRAMES) -> tuple[list[tuple[float, bytes]], date | None]:
-    """Return n frames evenly spaced across the video, plus its recorded date if present."""
-    if n < 1:
+def frames_for(duration: float) -> int:
+    """One frame every SECONDS_PER_FRAME, at least DEFAULT_FRAMES and at most MAX_FRAMES."""
+    return max(DEFAULT_FRAMES, min(MAX_FRAMES, round(duration / SECONDS_PER_FRAME)))
+
+
+def sample_frames(video_path: Path, n: int | None = None) -> tuple[list[tuple[float, bytes]], date | None]:
+    """Return n frames evenly spaced across the video (by default, frames_for its length), plus its
+    recorded date if present."""
+    if n is not None and n < 1:
         raise ValueError("n must be at least 1")
     try:
         container = av.open(str(video_path))
@@ -98,6 +106,7 @@ def sample_frames(video_path: Path, n: int = DEFAULT_FRAMES) -> tuple[list[tuple
             duration = container.duration / av.time_base
         if not duration or duration <= 0:
             raise VideoError("video has no usable duration")
+        n = n or frames_for(duration)
 
         # Frame times are absolute; streams cut from a longer recording (TS, drones, trims) don't start at 0.
         start = float(stream.start_time * stream.time_base) if stream.start_time is not None else 0.0
@@ -130,7 +139,7 @@ def build_site_evidence(
     upload_date: date,
     line_items: list[LineItem | SOVLine],
     frames_dir: str | Path,
-    n_frames: int = DEFAULT_FRAMES,
+    n_frames: int | None = None,
     min_confidence: float = DEFAULT_MIN_CONFIDENCE,
     client=None,
 ) -> EvidenceResult:
