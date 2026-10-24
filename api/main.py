@@ -17,10 +17,16 @@ POST /site-video           upload the super's walkthrough video (form: file, job
 POST /releases             upload a lien release PDF (form: file, sub_id, job_id) -> a releases fact
 POST /cois                 upload a certificate of insurance PDF (form: file, sub_id) -> a cois fact
 POST /emails               upload an email (.eml) the AP inbox received (form: file) -> an emails fact
+POST /requests/{id}/approve  send an escalated payment to the approval key; on a press, the executor pays
+
+Env: CORS_ORIGINS (comma-separated web origins, default http://localhost:3000), DEVICE_URL (approval key).
 """
 import asyncio
 import hashlib
 import json
+import os
+import secrets
+import time
 from datetime import date, datetime
 from decimal import Decimal
 from pathlib import Path
@@ -44,7 +50,9 @@ MAX_PDF_BYTES = 32 * 1024 * 1024
 MAX_VIDEO_BYTES = 500 * 1024 * 1024
 
 app = FastAPI(title="Draw")
-app.add_middleware(CORSMiddleware, allow_origins=["http://localhost:3000"], allow_methods=["*"], allow_headers=["*"])
+ORIGINS = [o.strip() for o in os.environ.get("CORS_ORIGINS", "http://localhost:3000").split(",") if o.strip()]
+app.add_middleware(CORSMiddleware, allow_origins=ORIGINS, allow_methods=["*"], allow_headers=["*"])
+ESCALATION_RULES = {"14_within_spend_authority", "15_confidence_floor"}  # kernel.runner's; failing them escalates
 
 STATUS = {Action.release: "ready", Action.escalate: "needs_ok", Action.hold: "on_hold"}
 
@@ -54,27 +62,45 @@ def decisions() -> dict[str, Decision]:
     return {e.request_id: Decision.model_validate(e.data) for e in events.read(kind="kernel_trace", path=DB)}
 
 
-def sentence(decision: Decision | None, vendor: str, amount: Decimal) -> str:
+def escalation_reason(req, state, decision: Decision) -> str:
+    """Why the owner's tap is needed, in words: over the limit, unsure review, new sub, new bank account."""
+    reasons = []
+    failed = {r.rule for r in decision.results if not r.passed}
+    if "14_within_spend_authority" in failed:
+        reasons.append("it's over the auto-release limit")
+    if "15_confidence_floor" in failed:
+        reasons.append("the automatic review wasn't sure")
+    payments = [e for e in state["ledger"] if e.kind == "sub_payment" and e.sub_id == req.sub_id]
+    if not payments:
+        reasons.append("it's the first payment to this sub")
+    elif req.bank_account != max(payments, key=lambda e: e.date).bank_account:
+        reasons.append("the bank account is new")
+    return " and ".join(reasons) or "the rules asked for a person to look"
+
+
+def sentence(decision: Decision | None, vendor: str, amount: Decimal, reason: str | None = None) -> str:
     """Every status is a sentence an office manager would say (CLAUDE.md UI copy rule)."""
     if decision is None:
         return "Not checked yet."
     if decision.action == Action.release:
         return "Ready to pay."
     if decision.action == Action.escalate:
-        return f"Needs your OK: ${amount:,.2f} to {vendor}."
-    failing = next((r for r in decision.results if not r.passed), None)
+        return f"Needs your OK because {reason}." if reason else f"Needs your OK: ${amount:,.2f} to {vendor}."
+    failing = next((r for r in decision.results if not r.passed and r.rule not in ESCALATION_RULES), None)
     return f"On hold: {failing.message}" if failing else "On hold."
 
 
 def row(req, state, decision):
     vendor = next(v.legal_name for v in state["vendors"] if v.id == req.sub_id)
     amount = req.g702.current_payment_due
+    reason = escalation_reason(req, state, decision) if decision and decision.action == Action.escalate else None
     return {
         "id": req.id, "sub_id": req.sub_id, "sub": vendor, "job_id": req.job_id,
         "job": next(j.name for j in state["jobs"] if j.id == req.job_id),
         "amount": str(amount), "period_end": str(req.period_end),
         "status": STATUS[decision.action] if decision else "not_checked",
-        "sentence": sentence(decision, vendor, amount),
+        "sentence": sentence(decision, vendor, amount, reason),
+        "reason": reason,
         "next_action": decision.next_action if decision else None,
     }
 
@@ -103,6 +129,8 @@ def get_request(request_id: str):
                   for l in req.lines],
         "site_evidence": site.model_dump(mode="json") if site else None,
         "bank_account": req.bank_account,
+        "vendor": next({"legal_name": v.legal_name, "email_domain": v.email_domain}
+                       for v in state["vendors"] if v.id == req.sub_id),
         "source_doc": req.source_doc,
         "trace": decision.model_dump(mode="json") if decision else None,  # behind "Show details"
     }
@@ -183,6 +211,38 @@ def describe_attack(body: DescribeIn):
     return {"plan": out["plan"], "label": r["label"].model_dump(mode="json"),
             "decision": r["decision"].model_dump(mode="json"), "amount": str(r["amount"]),
             "caught": r["decision"].action != Action.release, "caught_by_rules": r["decision"].action == Action.hold}
+
+
+@app.post("/requests/{request_id}/approve")
+def approve(request_id: str):
+    """Send an escalated payment to the approval key and wait for a button (up to ~90 s).
+    On approve the executor verifies the signature and pays; every refusal comes back as words."""
+    from kernel import executor
+    from kernel.contract import load_contract
+
+    state = events.state(path=DB)
+    req = next((r for r in state["pay_requests"] if r.id == request_id), None)
+    if req is None:
+        raise HTTPException(404, f"no pay request {request_id}")
+    decision = decisions().get(request_id)
+    if decision is None or decision.action != Action.escalate:
+        raise HTTPException(409, "Only a request that needs your OK goes to the approval key.")
+    contract = load_contract()
+    device, pubkey = os.environ.get("DEVICE_URL"), contract.get("esp32_pubkey")
+    if not device or not pubkey:
+        raise HTTPException(503, "The approval key isn't set up yet (DEVICE_URL and the key's public key in config/contract.yaml).")
+    payload = {"request_id": req.id, "payee": req.sub_id, "amount": str(req.g702.current_payment_due),
+               "job": req.job_id, "nonce": secrets.token_hex(8), "expires_at": int(time.time()) + 90}
+    try:
+        approval = executor.request_device_approval(device.rstrip("/"), payload)
+    except Exception as e:  # unreachable, timed out (408), or busy (409): nothing was paid
+        raise HTTPException(502, f"The approval key didn't answer: {type(e).__name__}. Nothing was paid.")
+    try:
+        result = executor.execute(decision, req, auto_release_limit_usd=Decimal(str(contract["auto_release_limit_usd"])),
+                                  pubkey_hex=pubkey, approval=approval, log_path=DB)
+    except executor.ExecutionRefused as e:
+        return {"paid": False, "rejected": approval.rejected, "reason": str(e)}
+    return {"paid": True, "rejected": False, "result": result}
 
 
 @app.post("/replay")
