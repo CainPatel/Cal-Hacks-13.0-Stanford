@@ -1,4 +1,5 @@
 import json
+from decimal import Decimal as D
 
 import pytest
 
@@ -82,6 +83,37 @@ def test_every_case_fits_jev_size_limit_and_is_json(seed, anomaly_cases):
     for data, request_id in sets:
         payload = json.dumps(facts_for(data, request_id))
         assert len(payload.encode()) <= MAX_STATE_BYTES
+
+
+def test_payment_due_figures_retainage_per_line_like_the_kernel():
+    """Rounding retainage once on the total would put the computed due a cent off the sub's G702."""
+    from types import SimpleNamespace
+    from judgment.facts import computed_payment_due
+    from shared.schema import LineItem
+    line = lambda n: LineItem(item_no=n, description="x", scheduled_value=D("1"), previous_applications=D("0"),  # noqa: E731
+                              this_period=D("0.05"), stored_materials=D("0"), total_to_date=D("0.05"),
+                              pct_complete=D("5"), balance_to_finish=D("0.95"), retainage=D("0.01"))
+    state = SimpleNamespace(subcontract=SimpleNamespace(retainage_rate=D("0.10")), ledger=[])
+    request = SimpleNamespace(lines=[line("1"), line("2")], sub_id="s", job_id="j", id="r")
+    assert computed_payment_due(state, request) == D("0.08")  # 0.10 billed, 0.01 + 0.01 held
+
+
+def test_a_long_schedule_of_values_lists_only_lines_with_something_to_judge(seed):
+    """A GC-sized sheet (150+ lines, most billing nothing yet) still fits Jev's limit, and says what it left out."""
+    from shared.schema import LineItem, SOVLine
+    request_id = next(r.id for r in seed["pay_requests"] if r.number == THIS_MONTH)
+    state, req = state_for(seed, request_id)
+    idle = [LineItem(item_no=f"9{i:03d}", description=f"Division {i} work not yet started", scheduled_value=D("10000"),
+                     previous_applications=D("0"), this_period=D("0"), stored_materials=D("0"), total_to_date=D("0"),
+                     pct_complete=D("0"), balance_to_finish=D("10000"), retainage=D("0")) for i in range(150)]
+    req = req.model_copy(update={"lines": req.lines + idle})
+    state.subcontract = state.subcontract.model_copy(update={"sov": state.subcontract.sov + [
+        SOVLine(item_no=l.item_no, description=l.description, scheduled_value=l.scheduled_value) for l in idle]})
+    facts = compute_facts(state, req)
+    progress = facts["progress"]
+    assert len(json.dumps(facts).encode()) <= MAX_STATE_BYTES
+    assert progress["lines_not_listed"]["count"] == 150
+    assert [l["item_no"] for l in progress["lines"]] == [l.item_no for l in req.lines[:-150]]
 
 
 def test_full_bank_account_numbers_never_leave(anomaly_cases):

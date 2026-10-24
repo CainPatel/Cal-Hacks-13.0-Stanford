@@ -12,7 +12,7 @@ import json
 import re
 import unicodedata
 from datetime import date, datetime, timezone
-from decimal import Decimal
+from decimal import ROUND_HALF_UP, Decimal
 
 from shared.schema import LedgerKind, PayRequest, ReleaseKind
 
@@ -159,9 +159,13 @@ def _paid_to_sub(state, request: PayRequest) -> Decimal:
 
 
 def computed_payment_due(state, request: PayRequest) -> Decimal:
-    """(Work billed to date - retainage at the contract rate) - what the ledger shows was already paid."""
+    """(Work billed to date - retainage at the contract rate) - what the ledger shows was already paid.
+    Retainage is figured per line and rounded half up, as on the G703's column I and in kernel rule 03;
+    rounding once on the total can differ by a cent on a long sheet."""
+    rate = state.subcontract.retainage_rate
     completed = sum((l.total_to_date for l in request.lines), Decimal("0"))
-    retainage = (completed * state.subcontract.retainage_rate).quantize(Decimal("0.01"))
+    retainage = sum(((l.total_to_date * rate).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP) for l in request.lines),
+                    Decimal("0"))
     return completed - retainage - _paid_to_sub(state, request)
 
 
@@ -440,6 +444,14 @@ def problems_found(f: dict) -> list[str]:
     return out
 
 
+def _worth_listing(line: dict) -> bool:
+    """A progress line with something to judge: seen on video, billing something new since the last
+    paid period, or with a % column that disagrees with its dollars."""
+    moved = (line["change_points"] not in (None, "0.00") if line["last_period_billed_pct"] is not None
+             else line["billed_pct"] not in (None, "0.00"))
+    return line["video_pct"] is not None or moved or line["percent_column_disagrees_with_billed"]
+
+
 def compute_facts(state, request: PayRequest) -> dict:
     facts = {
         "request": request_facts(state, request),
@@ -458,6 +470,15 @@ def compute_facts(state, request: PayRequest) -> dict:
             break
         for e in facts["bank"]["emails"]:
             e["body_excerpt"] = e["body_excerpt"][:limit]
+    if len(json.dumps(facts).encode()) > MAX_STATE_BYTES:
+        # A long schedule of values (a 100+ line sheet) lists only the lines with something to judge,
+        # and says how many it left out; the progress counts and lists were computed over every line.
+        progress = facts["progress"]
+        quiet = sum(1 for line in progress["lines"] if not _worth_listing(line))
+        progress["lines"] = [line for line in progress["lines"] if _worth_listing(line)]
+        progress["lines_not_listed"] = {
+            "count": quiet, "why": "no video estimate, nothing new billed since the last paid period, "
+                                   "and the percent column agrees with the dollars"}
     if len(json.dumps(facts).encode()) > MAX_STATE_BYTES:
         raise ValueError("judgment state exceeds Jev's request size limit")
     return facts
