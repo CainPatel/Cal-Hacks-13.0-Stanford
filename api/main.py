@@ -30,6 +30,7 @@ DATABASE_URL (Postgres log, deployed), BLOB_* (private Blob store for uploaded o
 """
 import asyncio
 import hashlib
+import hmac
 import io
 import json
 import os
@@ -39,7 +40,7 @@ from datetime import date, datetime
 from decimal import Decimal
 from pathlib import Path
 
-from fastapi import FastAPI, File, Form, HTTPException, Request, UploadFile
+from fastapi import FastAPI, File, Form, Header, HTTPException, Request, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
@@ -149,8 +150,19 @@ def sentence(decision: Decision | None, vendor: str, amount: Decimal, reason: st
     return f"On hold: {failing.message}" if failing else "On hold."
 
 
+SOV_FROM_PAY_APP = "sc_from_pay_app_"  # Subcontract id prefix: SOV read from the sub's first pay app, not a signed contract
+NEW_SUB_NOTE = ("New subcontractor. Their contract amounts were taken from this pay application; "
+                "check them against the signed subcontract before approving.")
+
+
+def new_sub(state, req) -> bool:
+    return any(c.id.startswith(SOV_FROM_PAY_APP) and c.sub_id == req.sub_id and c.job_id == req.job_id
+               for c in state["subcontracts"])
+
+
 def row(req, state, decision, paid=None):
     vendor = next(v.legal_name for v in state["vendors"] if v.id == req.sub_id)
+    fresh = new_sub(state, req)
     amount = req.g702.current_payment_due
     reason = escalation_reason(req, state, decision) if decision and decision.action == Action.escalate and not paid else None
     return {
@@ -161,6 +173,8 @@ def row(req, state, decision, paid=None):
         "sentence": f"Paid ${amount:,.2f} to {vendor.rstrip('.')}." if paid else sentence(decision, vendor, amount, reason),
         "reason": reason,
         "next_action": None if paid else (decision.next_action if decision else None),
+        "new_sub": fresh,
+        "new_sub_note": NEW_SUB_NOTE if fresh and not paid else None,
     }
 
 
@@ -438,6 +452,57 @@ def resolve(request_id: str):
     return {"request_id": request_id, "outcome": outcome}
 
 
+def _require_passcode(given: str | None) -> None:
+    """Same rule as the dashboard's upload route (web/app/api/blob-upload): UPLOAD_PASSCODE when it's
+    set; with none set, only outside Vercel (local development)."""
+    want = os.environ.get("UPLOAD_PASSCODE")
+    if not want:
+        if os.environ.get("VERCEL"):
+            raise HTTPException(401, "Adding subcontractors is off until UPLOAD_PASSCODE is set on the server.")
+        return
+    if not hmac.compare_digest((given or "").encode(), want.encode()):
+        raise HTTPException(401, "That upload passcode isn't right.")
+
+
+@app.get("/vendors")
+def list_vendors():
+    """Every known sub (not only those billing this month), with the jobs they have a subcontract on."""
+    state = events.state(path=DB)
+    jobs = {}
+    for c in state["subcontracts"]:
+        jobs.setdefault(c.sub_id, []).append(c.job_id)
+    return {"vendors": sorted(({"id": v.id, "legal_name": v.legal_name, "job_ids": jobs.get(v.id, [])}
+                               for v in state["vendors"]), key=lambda v: v["legal_name"].lower()),
+            "jobs": [{"id": j.id, "name": j.name} for j in state["jobs"]]}
+
+
+class VendorIn(BaseModel):
+    legal_name: str
+    email_domain: str = ""
+    ein: str = ""
+    bank_account: str = ""
+
+
+@app.post("/vendors")
+def create_vendor(body: VendorIn, x_upload_passcode: str | None = Header(None)):
+    """A new sub, before their first pay application. CRS status starts unknown, so rule 09 holds
+    them until the identity check passes; with no payments yet, the first payment escalates."""
+    from shared.schema import Vendor
+
+    _require_passcode(x_upload_passcode)
+    name = " ".join(body.legal_name.split())
+    if not name:
+        raise HTTPException(422, "Enter the subcontractor's legal name.")
+    state = events.state(path=DB)
+    if any(v.legal_name.strip().lower() == name.lower() for v in state["vendors"]):
+        raise HTTPException(409, f"{name} is already a subcontractor. Pick them from the list.")
+    vendor = Vendor(id=f"sub_{secrets.token_hex(4)}", legal_name=name, ein=body.ein.strip(),
+                    email_domain=body.email_domain.strip().lower().removeprefix("@"),
+                    bank_account=body.bank_account.strip(), first_paid=None, crs_status="unknown")
+    events.append("fact", vendor, table="vendors", at=datetime.now().replace(microsecond=0), path=DB)
+    return {"id": vendor.id, "legal_name": vendor.legal_name}
+
+
 @app.post("/vendors/{vendor_id}/verify")
 def verify_vendor(vendor_id: str):
     """Rule 09's identity check: CRS Business InstantID on the vendor's legal name and EIN."""
@@ -591,7 +656,12 @@ def upload_pay_app(file: UploadFile = File(...), sub_id: str = Form(...), job_id
     from perception import ExtractionError, extract_pay_request
 
     state = events.state(path=DB)
-    _require_subcontract(state, sub_id, job_id)
+    brand_new = (any(v.id == sub_id for v in state["vendors"])
+                 and not any(c.sub_id == sub_id for c in state["subcontracts"])
+                 and not any(e.sub_id == sub_id for e in state["ledger"]))
+    job = next((j for j in state["jobs"] if j.id == job_id), None)
+    if not (brand_new and job):
+        _require_subcontract(state, sub_id, job_id)
     path, sha = _save_upload(file, MAX_PDF_BYTES, ".pdf")
     g702_path = _save_upload(g702, MAX_PDF_BYTES, ".pdf")[0] if g702 is not None and g702.filename else None
     submitted = datetime.now().replace(microsecond=0)
@@ -601,6 +671,14 @@ def upload_pay_app(file: UploadFile = File(...), sub_id: str = Form(...), job_id
         raise HTTPException(422, f"Couldn't read this pay application: {e}")
     req = result.pay_request
     req = req.model_copy(update={"id": f"pr_{sub_id}_{req.number}_{sha[:8]}"})
+    if any(r.id == req.id for r in state["pay_requests"]):
+        raise HTTPException(409, f"this exact file was already uploaded as {req.id}")
+    if brand_new and job:  # read first, so an unreadable PDF leaves no subcontract behind
+        from shared.schema import SOVLine, Subcontract
+        events.append("fact", Subcontract(
+            id=f"{SOV_FROM_PAY_APP}{sub_id}_{job_id}", sub_id=sub_id, job_id=job_id,
+            sov=[SOVLine(item_no=l.item_no, description=l.description, scheduled_value=l.scheduled_value)
+                 for l in req.lines], retainage_rate=job.retainage_rate), table="subcontracts", at=submitted, path=DB)
     seq = _append_new(state, "pay_requests", req, submitted)
     return {"request_id": req.id, "seq": seq, "method": result.method, "fallback_reason": result.fallback_reason,
             "notes": _notes(result.notes), "pay_request": req.model_dump(mode="json")}
