@@ -28,8 +28,11 @@ Two Vercel projects from this repo:
 | Name | Value |
 |---|---|
 | `ANTHROPIC_API_KEY` | from whoever holds it (GitHub secrets can't be read back) |
-| `JEV_API_KEY` | same |
+| `TYPESAFE_API_KEY` | the Jev key from TypeSafe (`apikey_...`). Goes with `JEV_BASE_URL` below |
+| `JEV_BASE_URL` | `https://api.typesafe.ai` for a TypeSafe key. Leave unset only if the key is a Vercel AI Gateway key, which then goes in `JEV_API_KEY` / `AI_GATEWAY_API_KEY` |
 | `NESSIE_API_KEY` | same |
+| `NESSIE_ACCOUNT_ID` | the GC's account in the Nessie sandbox: run `python -m events nessie-setup` once from a laptop with `NESSIE_API_KEY` in `.env`; it prints the id. Without it, payments are refused |
+| `CRS_USERNAME`, `CRS_PASSWORD` | the CRS sandbox login from CRS's email (rule 09's vendor check). Mistyped credentials are tried once and not retried: repeated failed logins lock the CRS account |
 | `CORS_ORIGINS` | the `draw-web` URL, e.g. `https://draw-web.vercel.app` (comma-separate several) |
 | `DEVICE_URL` | the Pi's Tailscale Funnel URL (step 4) |
 | `SCORECARD_CASES` | optional, default `2000`: attacks scored on a cold start |
