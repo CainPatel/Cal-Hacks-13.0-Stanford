@@ -11,10 +11,24 @@ fi
 
 # 2. Key-shaped strings in the lines being added
 hits=$(git diff --cached -U0 --no-color | grep -E '^\+[^+]' | grep -nE \
-  'sk-ant-[A-Za-z0-9_-]{10,}|vck_[A-Za-z0-9]{10,}|ghp_[A-Za-z0-9]{20,}|github_pat_[A-Za-z0-9_]{20,}|AKIA[0-9A-Z]{16}|-----BEGIN [A-Z ]*PRIVATE KEY-----|xox[baprs]-[A-Za-z0-9-]{10,}|(API_KEY|_TOKEN|_SECRET)=[A-Za-z0-9_-]{16,}')
+  'sk-ant-[A-Za-z0-9_-]{10,}|apikey_[A-Za-z0-9_]{20,}|vck_[A-Za-z0-9]{10,}|ghp_[A-Za-z0-9]{20,}|github_pat_[A-Za-z0-9_]{20,}|AKIA[0-9A-Z]{16}|-----BEGIN [A-Z ]*PRIVATE KEY-----|xox[baprs]-[A-Za-z0-9-]{10,}|(API_KEY|_TOKEN|_SECRET)=[A-Za-z0-9_-]{16,}')
 if [ -n "$hits" ]; then
   echo "BLOCKED: this commit adds something that looks like a key:"
   echo "$hits" | sed -E 's/(\+?[^=:"]{0,30}[=:"] ?.{0,6}).*/  \1… (rest hidden)/'; fail=1
+fi
+
+# 3. Any value from this clone's own .env, whatever its format (hex keys, passwords). The values are read
+#    locally at commit time and never written anywhere; only the variable's name is printed.
+if [ -f .env ]; then
+  added=$(git diff --cached -U0 --no-color | grep -E '^\+[^+]')
+  while IFS= read -r line || [ -n "$line" ]; do
+    case "$line" in ''|\#*) continue ;; esac
+    name=${line%%=*}; value=${line#*=}
+    [ "${#value}" -ge 8 ] || continue
+    if printf '%s\n' "$added" | grep -qF -e "$value"; then
+      echo "BLOCKED: this commit contains the value of $name from your .env"; fail=1
+    fi
+  done < .env
 fi
 
 if [ $fail -ne 0 ]; then
