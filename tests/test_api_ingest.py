@@ -269,3 +269,51 @@ def test_needs_ok_sentence_has_one_period():
     from shared.schema import Action, Decision
     d = Decision(request_id="r", action=Action.escalate, results=[])
     assert main.sentence(d, "Airflow HVAC Inc.", Decimal("63723.60")) == "Needs your OK: $63,723.60 to Airflow HVAC Inc."
+
+
+class FakeDownload:
+    """Stands in for vercel.blob.sync.stream_blob: yields the stored bytes in chunks."""
+
+    def __init__(self, data):
+        self.data = data
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *exc):
+        return False
+
+    def __iter__(self):
+        for i in range(0, len(self.data), 64 * 1024):
+            yield self.data[i:i + 64 * 1024]
+
+
+def test_ingest_reads_a_client_upload_from_private_blob(client, world, tmp_path, monkeypatch):
+    from vercel.blob import sync as blob
+    req, path = rendered_pay_app(world, tmp_path)
+    store = {"uploads/payapp-x7Q2.pdf": path.read_bytes()}
+    asked, archived = [], []
+
+    def stream_blob(pathname, access):
+        asked.append((pathname, access))
+        if pathname not in store:
+            raise blob.BlobNotFoundError("missing")
+        return FakeDownload(store[pathname])
+
+    monkeypatch.setattr(blob, "stream_blob", stream_blob)
+    monkeypatch.setattr(main, "_archive", lambda data, name: archived.append(name))
+    r = client.post("/ingest", json={"kind": "pay_app", "pathname": "uploads/payapp-x7Q2.pdf",
+                                     "sub_id": req.sub_id, "job_id": req.job_id})
+    assert r.status_code == 200, r.text
+    stored = next(p for p in events.state(path=main.DB)["pay_requests"] if p.id == r.json()["request_id"])
+    assert stored.lines == req.lines and stored.g702 == req.g702
+    assert asked == [("uploads/payapp-x7Q2.pdf", "private")]
+    assert archived == []  # already in the store: not uploaded again
+    assert not any(p.name.startswith("incoming-") for p in (tmp_path / "uploads").iterdir())  # temp file cleaned up
+
+    assert client.post("/ingest", json={"kind": "pay_app", "pathname": "uploads/nope.pdf",
+                                        "sub_id": req.sub_id, "job_id": req.job_id}).status_code == 404
+    assert client.post("/ingest", json={"kind": "pay_app", "pathname": "../secrets.pdf",
+                                        "sub_id": req.sub_id, "job_id": req.job_id}).status_code == 422
+    assert client.post("/ingest", json={"kind": "pay_app", "pathname": "uploads/payapp-x7Q2.pdf"}).status_code == 422
+    assert client.post("/ingest", json={"kind": "tax_return", "pathname": "uploads/a.pdf"}).status_code == 422

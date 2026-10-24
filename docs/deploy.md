@@ -16,7 +16,10 @@ Two Vercel projects from this repo:
 **Blob** (archive of uploaded originals)
 1. `draw-api` → **Storage** → **Create** → **Blob** → **Continue** → set access to **Private** → create → **Connect** to `draw-api`.
 2. **It must be Private**: pay apps carry bank details. A public store would give every upload a public URL.
-3. Vercel adds `BLOB_STORE_ID` (and the OIDC token Draw's SDK uses automatically). Locally, `vercel env pull` also gives a `BLOB_READ_WRITE_TOKEN`.
+3. Vercel adds `BLOB_STORE_ID`, `BLOB_READ_WRITE_TOKEN` and the OIDC token Draw's SDK uses automatically.
+4. **Also connect the same store to `draw-web`** (store → Projects → Connect Project). The dashboard's
+   Upload screen sends files straight from the browser to Blob (client uploads, so site video isn't
+   capped at 4.5 MB); its token route needs `BLOB_READ_WRITE_TOKEN`, which the connection adds.
 
 ## 2. Environment variables
 
@@ -36,6 +39,7 @@ Two Vercel projects from this repo:
 | Name | Value |
 |---|---|
 | `NEXT_PUBLIC_API_URL` | the `draw-api` URL, e.g. `https://draw-api.vercel.app` |
+| `UPLOAD_PASSCODE` | a passcode the team shares by DM. The Upload screen asks for it; without it set, deployed uploads stay off (the dashboard has no logins, so this keeps strangers out of the Blob store) |
 
 Redeploy both after adding variables (`NEXT_PUBLIC_*` is baked in at build time).
 
@@ -65,8 +69,8 @@ but money moves only on a physical button press plus a signature the executor ve
 
 - **Function duration**: 300 s (Hobby and Pro default). Approve waits up to ~90 s for the button: fine.
   Live updates (`/events`) reconnect every 300 s on their own.
-- **Request body**: 4.5 MB per request. Pay apps, releases, COIs and emails fit. **Site videos
-  don't**: upload video from the laptop setup (`make demo` + `POST /site-video`), not the deployed API.
+- **Request body**: 4.5 MB per request to a function. The Upload screen avoids it: files go from the
+  browser straight to Blob, then `POST /ingest` reads them from the store. Video up to 500 MB.
 - **Cold starts** score a fresh 2,000-attack scorecard (~1-3 s) once per instance.
 - **Fallback**: if venue Wi-Fi or Tailscale misbehaves, `make demo` + `make web` on the laptop is
   the same app with SQLite and needs no internet except for model calls.

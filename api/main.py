@@ -17,6 +17,7 @@ POST /site-video           upload the super's walkthrough video (form: file, job
 POST /releases             upload a lien release PDF (form: file, sub_id, job_id) -> a releases fact
 POST /cois                 upload a certificate of insurance PDF (form: file, sub_id) -> a cois fact
 POST /emails               upload an email (.eml) the AP inbox received (form: file) -> an emails fact
+POST /ingest              read a document the browser uploaded to the private Blob store: {kind, pathname, sub_id?, job_id?}
 POST /requests/{id}/approve  send an escalated payment to the approval key; on a press, the executor pays
 POST /requests/{id}/pay    pay ({"confirm": true}): a released request pays now; one needing an OK goes to the key
 POST /requests/{id}/resolve  settle a payment whose outcome is unknown by asking Nessie
@@ -30,6 +31,7 @@ import asyncio
 import hashlib
 import json
 import os
+import secrets
 import time
 from datetime import date, datetime
 from decimal import Decimal
@@ -427,7 +429,8 @@ def _save_upload(upload: UploadFile, limit: int, suffix: str) -> tuple[Path, str
     UPLOADS.mkdir(parents=True, exist_ok=True)
     path = UPLOADS / f"{sha}{suffix}"
     path.write_bytes(data)
-    _archive(data, f"{sha}{suffix}")
+    if not getattr(upload, "draw_archived", False):  # an /ingest file is already in the Blob store
+        _archive(data, f"{sha}{suffix}")
     return path, sha
 
 
@@ -456,6 +459,68 @@ def _append_new(state, table: str, record, at) -> int:
     if any(r.id == record.id for r in state[table]):
         raise HTTPException(409, f"this exact file was already uploaded as {record.id}")
     return events.append("fact", record, table=table, at=at, path=DB)
+
+
+class IngestIn(BaseModel):
+    kind: str  # pay_app | release | coi | email | site_video
+    pathname: str  # in the private Blob store, under uploads/
+    sub_id: str | None = None
+    job_id: str | None = None
+    upload_date: date | None = None
+
+
+INGEST_SUFFIX = {"pay_app": ".pdf", "release": ".pdf", "coi": ".pdf", "email": ".eml", "site_video": ".mp4"}
+
+
+@app.post("/ingest")
+def ingest(body: IngestIn):
+    """Read a document the browser uploaded straight to the private Blob store (client upload,
+    so large files like site video skip Vercel's 4.5 MB request limit), then run it through the
+    same handler as a direct upload."""
+    if body.kind not in INGEST_SUFFIX:
+        raise HTTPException(422, f"unknown document kind {body.kind!r}")
+    if not body.pathname.startswith("uploads/") or ".." in body.pathname:
+        raise HTTPException(422, "pathname must be under uploads/")
+    needs = {"pay_app": ("sub_id", "job_id"), "release": ("sub_id", "job_id"), "coi": ("sub_id",),
+             "site_video": ("job_id",), "email": ()}[body.kind]
+    missing = [f for f in needs if not getattr(body, f)]
+    if missing:
+        raise HTTPException(422, f"{body.kind} needs {', '.join(missing)}")
+
+    from starlette.datastructures import UploadFile as StarletteUpload
+    from vercel.blob import sync as blob
+    limit = MAX_VIDEO_BYTES if body.kind == "site_video" else MAX_PDF_BYTES
+    UPLOADS.mkdir(parents=True, exist_ok=True)
+    local = UPLOADS / f"incoming-{secrets.token_hex(8)}"
+    try:
+        size = 0
+        with blob.stream_blob(body.pathname, access="private") as download, local.open("wb") as out:
+            for chunk in download:
+                size += len(chunk)
+                if size > limit:
+                    raise HTTPException(413, f"file is larger than {limit // (1024 * 1024)} MB")
+                out.write(chunk)
+    except blob.BlobNotFoundError:
+        raise HTTPException(404, f"no uploaded file at {body.pathname}")
+    except blob.BlobError as e:
+        raise HTTPException(502, f"Couldn't fetch the upload from storage ({type(e).__name__}).")
+
+    name = body.pathname.rsplit("/", 1)[-1]
+    with local.open("rb") as f:
+        file = StarletteUpload(file=f, filename=name)
+        file.draw_archived = True
+        try:
+            if body.kind == "pay_app":
+                return upload_pay_app(file=file, sub_id=body.sub_id, job_id=body.job_id, g702=None)
+            if body.kind == "release":
+                return upload_release(file=file, sub_id=body.sub_id, job_id=body.job_id)
+            if body.kind == "coi":
+                return upload_coi(file=file, sub_id=body.sub_id)
+            if body.kind == "email":
+                return upload_email(file=file)
+            return upload_site_video(file=file, job_id=body.job_id, upload_date=body.upload_date)
+        finally:
+            local.unlink(missing_ok=True)
 
 
 @app.post("/pay-apps")

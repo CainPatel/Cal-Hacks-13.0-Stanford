@@ -65,12 +65,17 @@ def rebill(req: PayRequest, pcts: dict[str, Decimal] = {}, retainage_rate: Decim
     return req.model_copy(update=dict(lines=lines, g702=g702))
 
 
-def put_request(data, req):
+def put_request(data, req, match_release=False):
+    """Replace (or add) the request. match_release: the sub also sends a conditional waiver for the
+    new amount, as a sub padding a request would, so the attack trips only the rule it targets."""
     rows = data["pay_requests"]
     try:
         rows[find(rows, req.id)] = req
     except StopIteration:
         rows.append(req)
+    rel_id = f"rel_c_{req.id}"
+    if match_release and any(r.id == rel_id for r in data["releases"]):
+        update(data["releases"], rel_id, amount=req.g702.current_payment_due)
 
 
 def label(req, anomaly, *rules):
@@ -104,7 +109,7 @@ def overbill_pct(data, sub_id, rng, item_no=None, claim=None, video=None):
     if claim - seen <= 12:  # too close to the video to be a clear over-bill (tolerance is 10)
         return None
     req = rebill(req, {line.item_no: claim})
-    put_request(data, req)
+    put_request(data, req, match_release=True)
     if video is not None:
         update(data["site_evidence"], site_id, estimates={**site.estimates, line.item_no: seen})
     return data, label(req, "overbill_pct", "rule_13")
@@ -114,7 +119,7 @@ def retainage_slip(data, sub_id, rng, rate="0.05"):
     """Withhold less retainage than the contract rate. Rule 3."""
     data = copy(data)
     req = rebill(oct_request(data, sub_id), retainage_rate=Decimal(rate))
-    put_request(data, req)
+    put_request(data, req, match_release=True)
     return data, label(req, "retainage_slip", "rule_03")
 
 
@@ -144,7 +149,7 @@ def past_sov_no_co(data, sub_id, rng, pct=108, unapproved_co=False):
     req = oct_request(data, sub_id)
     line = max(req.lines, key=lambda l: l.pct_complete)
     req = rebill(req, {line.item_no: Decimal(pct)})
-    put_request(data, req)
+    put_request(data, req, match_release=True)
     if unapproved_co:  # a CO exists for the overage but nobody approved it
         data["change_orders"].append(ChangeOrder(
             id=f"co_{sub_id}_1", job_id=req.job_id, sub_id=sub_id, item_no=line.item_no,
@@ -202,7 +207,7 @@ def inflated_scheduled_value(data, sub_id, rng, extra_points=None):
         total_completed_stored=completed, retainage=retainage,
         total_earned_less_retainage=completed - retainage,
         current_payment_due=completed - retainage - g.less_previous_certificates))))
-    put_request(data, req)
+    put_request(data, req, match_release=True)
     return data, label(req, "inflated_scheduled_value", "rule_13")
 
 
@@ -214,7 +219,7 @@ def inflated_payment_due(data, sub_id, rng, factor=None):
     factor = Decimal(str(factor if factor is not None else rng.choice([1.1, 1.25, 1.5, 2])))
     due = money(req.g702.current_payment_due * factor)
     req = req.model_copy(update={"g702": req.g702.model_copy(update={"current_payment_due": due})})
-    put_request(data, req)
+    put_request(data, req, match_release=True)
     return data, label(req, "inflated_payment_due", "rule_01")
 
 
