@@ -262,14 +262,20 @@ async def stream(request: Request, after: int = 0, follow: bool = True):
 
     # Postgres is a network round trip per look (and keeps Neon from idling), so it's asked less often.
     every = 2.0 if os.environ.get("DATABASE_URL") else 0.5
+    # On Vercel an open stream holds a function and its memory until the 300 s timeout, every tab,
+    # nonstop; that exhausted the free plan. There it sends what's new and closes, and `retry` brings
+    # the browser back in 10 s with Last-Event-ID: a cheap poll instead of a held connection.
+    poll = bool(os.environ.get("VERCEL"))
 
     async def gen():
+        if poll:
+            yield "retry: 10000\n\n"
         last = after
         while True:
             for e in events.read(after=last, path=DB):
                 last = e.seq
                 yield f"id: {e.seq}\nevent: {e.kind}\ndata: {e.model_dump_json()}\n\n"
-            if not follow or await request.is_disconnected():
+            if poll or not follow or await request.is_disconnected():
                 return
             await asyncio.sleep(every)
 

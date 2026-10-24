@@ -19,7 +19,9 @@ export function useLive() {
     };
     KINDS.forEach((k) => source.addEventListener(k, bump));
     source.onopen = () => setConnected(true);
-    source.onerror = () => setConnected(false); // EventSource reconnects on its own, resuming from Last-Event-ID
+    // EventSource reconnects on its own, resuming from Last-Event-ID. On Vercel the API closes the stream
+    // after each check on purpose, so only a stream the browser gave up on (CLOSED) counts as paused.
+    source.onerror = () => setConnected(source.readyState !== EventSource.CLOSED);
     return () => {
       clearTimeout(timer);
       source.close();

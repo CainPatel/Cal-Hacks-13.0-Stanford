@@ -157,3 +157,11 @@ def test_status_reports_the_active_jev_route(client, monkeypatch):
     assert client.get("/").json()["configured"]["jev_key"] is False
     monkeypatch.setenv("TYPESAFE_API_KEY", "x")
     assert client.get("/").json()["configured"]["jev_key"] is True
+
+
+def test_event_stream_polls_on_vercel(client, monkeypatch):
+    """On Vercel the stream must close after one look (a held one runs to the 300 s timeout), and tell the
+    browser when to come back."""
+    monkeypatch.setenv("VERCEL", "1")
+    body = client.get("/events", params={"after": 0}).text  # follow defaults to True; returns anyway
+    assert body.startswith("retry: 10000\n\n") and "event: fact" in body
