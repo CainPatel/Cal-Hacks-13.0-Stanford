@@ -17,6 +17,7 @@ POST /site-video           upload the super's walkthrough video (form: file, job
 POST /releases             upload a lien release PDF (form: file, sub_id, job_id) -> a releases fact
 POST /cois                 upload a certificate of insurance PDF (form: file, sub_id) -> a cois fact
 POST /emails               upload an email (.eml) the AP inbox received (form: file) -> an emails fact
+POST /setup/demo          load the demo company into an empty log and decide May-October (one time)
 POST /ingest              read a document the browser uploaded to the private Blob store: {kind, pathname, sub_id?, job_id?}
 POST /requests/{id}/approve  send an escalated payment to the approval key; on a press, the executor pays
 POST /requests/{id}/pay    pay ({"confirm": true}): a released request pays now; one needing an OK goes to the key
@@ -434,6 +435,20 @@ def verify_vendor(vendor_id: str):
     if updated.crs_status != vendor.crs_status:
         events.append("fact", updated, table="vendors", path=DB)
     return {"vendor_id": vendor_id, "crs_status": result.status, "reasons": result.reasons, "evidence": result.evidence}
+
+
+@app.post("/setup/demo")
+def setup_demo():
+    """Load the demo company into an EMPTY log and decide May-October, on the deployment itself, so
+    nobody has to copy the database URL to a laptop. Refuses if the log has anything in it: it can
+    never overwrite or mix with real data."""
+    from events.replay import load_seed
+    from seed.anomalies import with_demo
+    from seed.generate import generate
+    if not events.is_empty(DB):
+        raise HTTPException(409, "The event log already has data; the demo company only loads into an empty log.")
+    facts = load_seed(with_demo(generate())[0], path=DB)
+    return {"facts_loaded": facts, "decisions": len(replay(6, path=DB))}
 
 
 @app.post("/replay")
