@@ -1,5 +1,7 @@
 // Words for things the API names in code.
 
+import type { RequestRow } from "@/lib/api";
+
 export const ATTACK_LABELS: Record<string, string> = {
   overbill_pct: "Bills more progress than the site video shows",
   retainage_slip: "Withholds less retainage than the contract",
@@ -34,13 +36,38 @@ export function sayChar(c: string): string {
   return `a lookalike “${c}” (U+${code})`;
 }
 
-export const STATUS_LABEL = {
-  ready: "Ready",
-  needs_ok: "Needs your OK",
-  on_hold: "On hold",
-  not_checked: "Not checked",
-  paid: "Paid",
-} as const;
+/**
+ * The one place that decides a request's colour category (web/DESIGN.md "Status categories").
+ * A hold is "fraud" if any failed rule says money is going to the wrong place or for the wrong amount,
+ * else it's waiting for paperwork. Rules 14 and 15 escalate, so they never decide a hold's colour.
+ */
+export type Category = "fraud" | "paperwork" | "ok" | "unchecked" | "ready" | "paid";
+
+export const RULE_CATEGORY: Record<string, "fraud" | "paperwork"> = {
+  "01": "fraud", "02": "fraud", "03": "fraud", "10": "fraud", "11": "fraud", "12": "fraud", "13": "fraud",
+  "04": "paperwork", "05": "paperwork", "06": "paperwork", "07": "paperwork", "08": "paperwork", "09": "paperwork",
+};
+
+export const CATEGORY: Record<Category, { label: string; chip: string; fill: string; tone: string }> = {
+  fraud: { label: "Possible fraud or wrong amount", chip: "bg-fail-soft text-fail", fill: "bg-fail text-white", tone: "border-t-fail" },
+  paperwork: { label: "Waiting for paperwork", chip: "bg-pending-soft text-pending", fill: "bg-pending-fill hatch text-white", tone: "border-t-pending-fill" },
+  ok: { label: "Needs your OK", chip: "bg-hold-soft text-hold", fill: "bg-hold-fill text-foreground", tone: "border-t-hold-fill" },
+  unchecked: { label: "Not checked", chip: "border border-dashed border-pending text-pending", fill: "border border-dashed border-pending bg-sheet text-pending", tone: "border-t-pending" },
+  ready: { label: "Ready to pay", chip: "bg-pass-soft text-pass", fill: "bg-pass text-white", tone: "border-t-pass" },
+  paid: { label: "Paid", chip: "bg-pass-soft text-pass", fill: "bg-pass text-white", tone: "border-t-pass" },
+};
+
+/** Most need help first: the order of the top bar, the board's columns and each job's list. */
+export const CATEGORY_ORDER: Category[] = ["fraud", "paperwork", "ok", "unchecked", "ready", "paid"];
+
+export function category(r: Pick<RequestRow, "status" | "failed_rules" | "crs_status">): Category {
+  if (r.status === "paid") return "paid";
+  if (r.status === "ready") return "ready";
+  if (r.status === "needs_ok") return "ok";
+  if (r.status === "not_checked") return "unchecked";
+  const fraud = r.failed_rules.some((n) => RULE_CATEGORY[n] === "fraud" || (n === "09" && r.crs_status !== "unknown"));
+  return fraud ? "fraud" : "paperwork";
+}
 
 /** Rule messages come from code: "1 line(s)" -> "1 line", "$86835.60" -> "$86,835.60". */
 const SINGULAR_VERB: Record<string, string> = { claim: "claims", have: "has", "haven't": "hasn't", "don't": "doesn't", are: "is" };

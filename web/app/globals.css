@@ -38,6 +38,8 @@
   --color-fail-soft: var(--fail-soft);
   --color-pending: var(--pending);
   --color-pending-soft: var(--pending-soft);
+  --color-hold-fill: var(--hold-fill);
+  --color-pending-fill: var(--pending-fill);
   --radius-sm: calc(var(--radius) * 0.6);
   --radius-md: calc(var(--radius) * 0.8);
   --radius-lg: var(--radius);
@@ -93,6 +95,9 @@
   --fail-soft: #f8e2de;
   --pending: #615c54;
   --pending-soft: #ebe7e0;
+  /* top bar fills (DESIGN.md): lighter amber and darker gray keep the four apart for colour-blind readers */
+  --hold-fill: #d39b2f;
+  --pending-fill: #7d776d;
 }
 
 @layer base {
@@ -137,5 +142,9 @@
 @layer utilities {
   .tnum {
     font-variant-numeric: tabular-nums;
+  }
+  /* "Waiting for paperwork" is always hatched, so it never relies on gray alone */
+  .hatch {
+    background-image: repeating-linear-gradient(135deg, transparent 0 6px, rgb(255 255 255 / 0.28) 6px 10px);
   }
 }

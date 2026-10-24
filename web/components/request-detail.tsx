@@ -7,7 +7,7 @@ import { StatusChip } from "@/components/status-chip";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { api, ApiError, money, moneyShort, ruleNumber, type RequestDetail } from "@/lib/api";
-import { day, dayShort, humanize, rowLine, RULE_NAMES, shortName } from "@/lib/labels";
+import { category, day, dayShort, humanize, rowLine, RULE_NAMES, shortName } from "@/lib/labels";
 import { cn } from "@/lib/utils";
 
 const ESCALATION_RULES = new Set(["14_within_spend_authority", "15_confidence_floor"]);
@@ -84,7 +84,7 @@ export function RequestDetailPanel({ id, version, backHref }: { id: string; vers
         <p className="mt-5 max-w-[40ch] text-say font-medium">{sentence}</p>
       ) : (
         <div className="mt-5 flex flex-wrap items-center gap-3">
-          <StatusChip status={data.status} />
+          <StatusChip category={category(data)} />
           <p className="text-say font-medium">{rowLine(data.status, data.sentence, data.reason)}</p>
         </div>
       )}

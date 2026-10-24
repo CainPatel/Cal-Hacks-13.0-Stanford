@@ -19,6 +19,11 @@ export type RequestRow = {
   /** First pay app from a sub added on the Upload screen: their SOV came from that pay app. */
   new_sub: boolean;
   new_sub_note: string | null;
+  /** Rule numbers that didn't pass ("10"), the vendor's CRS status, the auto-release limit, escalation reasons. */
+  failed_rules: string[];
+  crs_status: string;
+  limit: string;
+  why: ("over_limit" | "unsure" | "new_vendor" | "new_bank")[];
 };
 
 export type VendorList = { vendors: { id: string; legal_name: string; job_ids: string[] }[]; jobs: { id: string; name: string }[] };

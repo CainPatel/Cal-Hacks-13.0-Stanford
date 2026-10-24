@@ -32,6 +32,17 @@ def test_list_before_and_after_replay(client):
     assert client.post("/replay").json() == {"new_decisions": 0}
 
 
+def test_rows_carry_what_the_colour_categories_need(client):
+    assert client.get("/requests").json()[0]["failed_rules"] == []  # not checked yet
+    client.post("/replay")
+    rows = {r["id"]: r for r in client.get("/requests").json()}
+    assert {"10", "11"} <= set(rows["pr_sub_04_6"]["failed_rules"])  # Brightline: bank change from a lookalike domain
+    assert rows["pr_sub_01_6"]["failed_rules"] == ["07", "14"]  # Coastal: supplier hasn't released, and over the limit
+    assert rows["pr_sub_10_6"]["why"] == ["over_limit"] and rows["pr_sub_01_6"]["why"] == []
+    assert rows["pr_sub_10_6"]["limit"] == str(main.load_contract()["auto_release_limit_usd"])
+    assert {r["crs_status"] for r in rows.values()} <= {"verified", "mismatch", "flagged", "unknown"}
+
+
 def test_request_detail_shows_video_next_to_claim(client):
     client.post("/replay")
     d = client.get("/requests/pr_sub_03_6").json()

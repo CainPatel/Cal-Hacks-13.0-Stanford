@@ -48,6 +48,7 @@ from pydantic import BaseModel
 from events import log as events
 from events.replay import month_end, replay
 from fuzzer import run as fuzzer
+from shared.contract import load_contract
 from shared.schema import Action, Decision
 
 DB = events.DEFAULT_PATH
@@ -122,20 +123,29 @@ def payments() -> dict[str, dict]:
             if e.data.get("status", "paid") == "paid"}
 
 
-def escalation_reason(req, state, decision: Decision) -> str:
-    """Why the owner's tap is needed, in words: over the limit, unsure review, new sub, new bank account."""
-    reasons = []
+WHY = {"over_limit": "it's over the auto-release limit", "unsure": "the automatic review wasn't sure",
+       "new_vendor": "it's the first payment to this sub", "new_bank": "the bank account is new"}
+
+
+def escalation_codes(req, state, decision: Decision) -> list[str]:
+    """Why the owner's tap is needed: over the limit, unsure review, new sub, new bank account."""
+    codes = []
     failed = {r.rule for r in decision.results if not r.passed}
     if "14_within_spend_authority" in failed:
-        reasons.append("it's over the auto-release limit")
+        codes.append("over_limit")
     if "15_confidence_floor" in failed:
-        reasons.append("the automatic review wasn't sure")
+        codes.append("unsure")
     payments = [e for e in state["ledger"] if e.kind == "sub_payment" and e.sub_id == req.sub_id]
     if not payments:
-        reasons.append("it's the first payment to this sub")
+        codes.append("new_vendor")
     elif req.bank_account != max(payments, key=lambda e: e.date).bank_account:
-        reasons.append("the bank account is new")
-    return " and ".join(reasons) or "the rules asked for a person to look"
+        codes.append("new_bank")
+    return codes
+
+
+def escalation_reason(req, state, decision: Decision) -> str:
+    """The same reasons, in words."""
+    return " and ".join(WHY[c] for c in escalation_codes(req, state, decision)) or "the rules asked for a person to look"
 
 
 def sentence(decision: Decision | None, vendor: str, amount: Decimal, reason: str | None = None) -> str:
@@ -161,10 +171,12 @@ def new_sub(state, req) -> bool:
 
 
 def row(req, state, decision, paid=None):
-    vendor = next(v.legal_name for v in state["vendors"] if v.id == req.sub_id)
+    vendor_record = next(v for v in state["vendors"] if v.id == req.sub_id)
+    vendor = vendor_record.legal_name
     fresh = new_sub(state, req)
     amount = req.g702.current_payment_due
-    reason = escalation_reason(req, state, decision) if decision and decision.action == Action.escalate and not paid else None
+    escalated = decision is not None and decision.action == Action.escalate and not paid
+    reason = escalation_reason(req, state, decision) if escalated else None
     return {
         "id": req.id, "sub_id": req.sub_id, "sub": vendor, "job_id": req.job_id,
         "job": next(j.name for j in state["jobs"] if j.id == req.job_id),
@@ -175,6 +187,11 @@ def row(req, state, decision, paid=None):
         "next_action": None if paid else (decision.next_action if decision else None),
         "new_sub": fresh,
         "new_sub_note": NEW_SUB_NOTE if fresh and not paid else None,
+        # for the dashboard's colour categories (web/lib/labels.ts) and short phrases
+        "failed_rules": sorted(r.rule[:2] for r in decision.results if not r.passed) if decision else [],
+        "crs_status": vendor_record.crs_status,
+        "limit": str(load_contract().get("auto_release_limit_usd", 0)),
+        "why": escalation_codes(req, state, decision) if escalated else [],
     }
 
 
