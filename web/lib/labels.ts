@@ -16,6 +16,7 @@ export const ATTACK_LABELS: Record<string, string> = {
   new_sub_ein_mismatch: "New sub whose tax ID doesn't match",
   inflated_scheduled_value: "Inflates the contract value to hide over-billing",
   inflated_payment_due: "Pads the amount due on the summary page",
+  release_amount_short: "Lien release covers less than the payment",
 };
 
 export const attackLabel = (key: string) =>
