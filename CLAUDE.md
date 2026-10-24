@@ -121,7 +121,7 @@ A short phrase in lists ("Supplier release missing"), a full plain sentence a 55
 ## Status (update at each checkpoint)
 
 - Fri ~10 PM: kernel all 15 rules; scorecard 100% caught by rules on 10k attacks (15 types), 0 false holds; executor gates fixed; perception reads G702/G703, releases, COIs, emails, video (940/940 synthetic exact); judgment + rule 15 wired, no live model call yet (keys); Pi approval device built, untested on hardware; web/ started; no approve endpoint yet; Nessie/CRS not live (seed stands in).
-- Sat 2 PM: 
+- Sat 2 PM: Nessie and CRS are live (the seed no longer stands in for them). Nessie (`kernel/executor.py`, the only caller): payments are completed bills on the GC's sandbox account; `make sync` / `POST /sync` copies owner draws and past sub payments into the log for rule 08; `POST /requests/{id}/resolve` settles an unknown payment outcome. Needs `NESSIE_API_KEY` and `NESSIE_ACCOUNT_ID`; without them sync skips and nothing is paid. CRS (`crs/`): vendor identity against the CRS sandbox, run on demand by `POST /vendors/{id}/verify` (the dashboard's "Check their identity") or `python -m events crs-verify [sub_id]`, never during replay; rule 09 reads the `crs_status` it writes to the log. Needs `CRS_USERNAME`/`CRS_PASSWORD` or `CRS_API_KEY`; a vendor with no EIN isn't sent. Tests fake both.
 - Sat 8 PM: 
 - Sat 11 PM: 
 - Sun 8 AM: 
