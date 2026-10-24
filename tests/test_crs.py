@@ -113,3 +113,24 @@ def test_check_vendor_sets_status_and_keeps_it_through_an_outage(monkeypatch):
     assert updated.crs_status == "mismatch" and result.status == "mismatch" and error is None
     same, result, error = crs.check_vendor(vendor, http=FakeHTTP(check=500))
     assert same == vendor and result is None and "HTTP 500" in error
+
+
+def test_verify_endpoint_records_a_changed_status(tmp_path, monkeypatch):
+    from fastapi.testclient import TestClient
+
+    from api import main
+    from events import log as events
+    from events.replay import load_seed
+    from seed.anomalies import with_demo
+
+    db = tmp_path / "events.db"
+    load_seed(with_demo(generate())[0], path=db)
+    monkeypatch.setattr(main, "DB", db)
+    monkeypatch.setenv("CRS_API_KEY", "direct")
+    monkeypatch.setattr(crs.requests, "post", FakeHTTP(body=biid(ofac=[{"entityName": "FRONT CO"}])).post)
+    r = TestClient(main.app).post("/vendors/sub_01/verify")
+    assert r.status_code == 200 and r.json()["crs_status"] == "flagged"
+    assert next(v for v in events.state(path=db)["vendors"] if v.id == "sub_01").crs_status == "flagged"
+    monkeypatch.setattr(crs.requests, "post", FakeHTTP(check=500).post)
+    assert TestClient(main.app).post("/vendors/sub_01/verify").status_code == 502
+    assert next(v for v in events.state(path=db)["vendors"] if v.id == "sub_01").crs_status == "flagged"

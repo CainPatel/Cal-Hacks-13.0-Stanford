@@ -80,6 +80,15 @@ def ledger_key(e) -> tuple:
     return ("sub_payment", e.request_id or e.id)
 
 
+def double_payments(entries) -> dict[str, int]:
+    """Requests the bank shows paid more than once (sync keeps one row per request; this says so out loud)."""
+    counts: dict[str, int] = {}
+    for e in entries:
+        if e.kind.value == "sub_payment" and e.request_id:
+            counts[e.request_id] = counts.get(e.request_id, 0) + 1
+    return {rid: n for rid, n in counts.items() if n > 1}
+
+
 def sync_ledger(entries, path=events.DEFAULT_PATH) -> int:
     """Append bank ledger entries (e.g. from Nessie) the log doesn't already have, each at its own date."""
     known = {ledger_key(e) for e in events.state(path=path)["ledger"]}

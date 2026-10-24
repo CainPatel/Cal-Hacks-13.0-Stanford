@@ -12,7 +12,9 @@ GET  /attacks              what the attack console offers
 POST /attacks              run one attack: {"name", "target", "settings"}
 POST /attacks/describe     a judge's plain-English attack, mapped by Claude: {"text"}
 POST /replay?through=6     decide every undecided request through that month (&judge=true: Jev first)
-POST /requests/{id}/pay    pay it: straight through if released, else via the approval key, then Nessie
+POST /requests/{id}/pay    pay it ({"confirm": true}): released pays now, else via the approval key, then Nessie
+POST /requests/{id}/resolve  settle a payment whose outcome is unknown by asking Nessie
+POST /vendors/{id}/verify  check a vendor with CRS (rule 09) and record the status
 POST /pay-apps             upload a sub's pay application PDF (form: file, sub_id, job_id) -> a pay_requests fact
 POST /site-video           upload the super's walkthrough video (form: file, job_id) -> a site_evidence fact
 POST /releases             upload a lien release PDF (form: file, sub_id, job_id) -> a releases fact
@@ -213,8 +215,24 @@ def _approval_key() -> tuple[str, str | None]:
     return url.rstrip("/"), pubkey
 
 
+class PayIn(BaseModel):
+    confirm: bool  # a JSON body: browsers won't send one cross-site without CORS approval, so no drive-by payments
+
+
+def _fresh_decision(state, request_id: str, stored: Decision) -> Decision:
+    """Decide again on what is known now; facts can arrive after the stored decision (a lapsed COI, a
+    bank-change email). A new hold wins; an escalation on either side keeps the owner's sign-off."""
+    import pipeline
+    fresh = pipeline.decide(state, request_id)
+    if fresh.action != stored.action or [r.passed for r in fresh.results] != [r.passed for r in stored.results]:
+        events.append("kernel_trace", fresh, request_id=request_id, path=DB)
+    if fresh.action == Action.hold or fresh.action == Action.escalate or stored.action != Action.escalate:
+        return fresh
+    return stored  # stored escalated (e.g. judgment wasn't sure) and fresh didn't: still needs the owner
+
+
 @app.post("/requests/{request_id}/pay")
-def pay(request_id: str):
+def pay(request_id: str, body: PayIn):
     """Move the money. A released request under the limit pays straight away; anything that needs the
     owner's OK goes to the approval key first and pays only on a valid signature (kernel/executor.py)."""
     import time
@@ -225,15 +243,23 @@ def pay(request_id: str):
     import pipeline
     from kernel import executor
 
+    if not body.confirm:
+        raise HTTPException(422, "Send {\"confirm\": true} to pay.")
     state = events.state(path=DB)
     req = next((r for r in state["pay_requests"] if r.id == request_id), None)
     if req is None:
         raise HTTPException(404, f"no pay request {request_id}")
-    decision = decisions().get(request_id)
-    if decision is None:
+    stored = decisions().get(request_id)
+    if stored is None:
         raise HTTPException(409, "This request hasn't been checked yet; run the replay first.")
+    try:
+        executor.check_payable(req, log_path=DB)  # before the owner is asked to tap anything
+    except executor.ExecutionRefused as e:
+        raise HTTPException(409, f"Not paid: {e}")
+    decision = _fresh_decision(state, request_id, stored)
     if decision.action == Action.hold:
-        raise HTTPException(409, f"On hold: {decision.next_action or 'resolve the failing checks first.'}")
+        failing = next((r for r in decision.results if not r.passed), None)
+        raise HTTPException(409, f"On hold: {failing.message if failing else ''} {decision.next_action or ''}".strip())
     limit = Decimal(str(pipeline.default_contract().get("auto_release_limit_usd", 0)))
     amount = req.g702.current_payment_due
     needs_ok = decision.action == Action.escalate or amount > limit or any(not r.passed for r in decision.results)
@@ -244,8 +270,10 @@ def pay(request_id: str):
         if not pubkey:
             raise HTTPException(409, "Register the approval key first: put its public key (GET /pubkey on the "
                                      "device) in config/contract.yaml as esp32_pubkey.")
+        # The owner signs the destination too, so a bank change can't ride on an approval for the old account.
         payload = {"request_id": req.id, "payee": req.sub_id, "amount": str(amount), "job": req.job_id,
-                   "nonce": uuid.uuid4().hex, "expires_at": int(time.time()) + 90}
+                   "bank_account": req.bank_account, "nonce": uuid.uuid4().hex,
+                   "expires_at": int(time.time()) + 120}  # outlives the device's 90 s wait
         try:
             approval = executor.request_device_approval(device, payload, timeout=DEVICE_TIMEOUT_S)
         except http.exceptions.HTTPError as e:
@@ -255,7 +283,7 @@ def pay(request_id: str):
                                  409: "The approval key is already waiting on another payment."}.get(
                                      code, f"The approval key answered HTTP {code}."))
         except http.exceptions.RequestException as e:
-            raise HTTPException(502, f"Can't reach the approval key at {device}: {e}")
+            raise HTTPException(502, f"Can't reach the approval key at {device}: {type(e).__name__}")
         if approval.rejected:
             # A rejection can only stop a payment, so it is honored without checking the signature.
             raise HTTPException(403, "Rejected on the approval key. Nothing was paid.")
@@ -266,6 +294,39 @@ def pay(request_id: str):
         raise HTTPException(409, f"Not paid: {e}")
     return {"paid": True, "request_id": req.id, "amount": str(amount), "approved_on_device": approval is not None,
             "receipt": receipt}
+
+
+@app.post("/requests/{request_id}/resolve")
+def resolve(request_id: str):
+    """After an unknown bank outcome: look for the bill in Nessie and record what really happened."""
+    from kernel import executor
+
+    req = next((r for r in events.state(path=DB)["pay_requests"] if r.id == request_id), None)
+    if req is None:
+        raise HTTPException(404, f"no pay request {request_id}")
+    try:
+        outcome = executor.resolve_unknown(req, log_path=DB)
+    except executor.ExecutionRefused as e:
+        raise HTTPException(409, str(e))
+    except executor.NessieError as e:
+        raise HTTPException(502, f"Couldn't check the bank: {e}")
+    return {"request_id": request_id, "outcome": outcome}
+
+
+@app.post("/vendors/{vendor_id}/verify")
+def verify_vendor(vendor_id: str):
+    """Rule 09's identity check: CRS Business InstantID on the vendor's legal name and EIN."""
+    import crs
+
+    vendor = next((v for v in events.state(path=DB)["vendors"] if v.id == vendor_id), None)
+    if vendor is None:
+        raise HTTPException(404, f"no vendor {vendor_id}")
+    updated, result, error = crs.check_vendor(vendor)
+    if error:
+        raise HTTPException(502, f"CRS check failed; status left as {vendor.crs_status!r}: {error}")
+    if updated.crs_status != vendor.crs_status:
+        events.append("fact", updated, table="vendors", path=DB)
+    return {"vendor_id": vendor_id, "crs_status": result.status, "reasons": result.reasons, "evidence": result.evidence}
 
 
 def _save_upload(upload: UploadFile, limit: int, suffix: str) -> tuple[Path, str]:

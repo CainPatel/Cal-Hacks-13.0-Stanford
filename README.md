@@ -55,7 +55,14 @@ curl localhost:8001/pubkey        # register the approval key: APPROVAL_KEY_PUBK
 curl -X POST localhost:8000/requests/pr_sub_02_6/pay    # released: pays straight away
 curl -X POST localhost:8000/requests/pr_sub_15_6/pay    # escalated: waits for `a` + Enter on the device
 python -m events nessie-sync      # pull the bank's ledger back into the log
+python -m events crs-verify       # check every vendor with CRS (rule 09); POST /vendors/{id}/verify for one
 ```
+
+`POST /requests/{id}/pay` takes `{"confirm": true}`. It decides again on current facts first, pays a
+request once (also refusing the same application under another id), and if the bank's answer is
+unknown (a timeout, a 5xx) it blocks further attempts until `POST /requests/{id}/resolve` (or
+`python -m events nessie-resolve <id>`) checks Nessie for the bill. Payments are serialized within one
+API process; run a single API worker.
 
 ## Commands
 

@@ -17,7 +17,11 @@ def check(state: KernelState, request: PayRequest) -> RuleResult:
     signature = _line_signature(request)
     duplicates = []
     for other in state.all_requests:
-        if other.id == request.id or other.number == request.number:
+        if other.id == request.id:
+            continue
+        if other.number == request.number:
+            if other.period_end == request.period_end:  # the same application submitted again (e.g. re-scanned)
+                duplicates.append({"request_id": other.id, "reason": "same application number and period"})
             continue
         if other.period_end == request.period_end:
             duplicates.append({"request_id": other.id, "reason": "same period, different application number"})

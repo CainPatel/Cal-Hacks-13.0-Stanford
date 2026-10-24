@@ -8,7 +8,9 @@ forbidden from doing: it is the trust boundary between a Decision and money movi
 """
 import json
 import os
+import re
 import sys
+import threading
 import time
 from dataclasses import dataclass
 from datetime import date
@@ -44,8 +46,13 @@ class NessieError(Exception):
     connection mid-request is not definite, because the payment may have gone through."""
 
     def __init__(self, message: str, definite: bool):
-        super().__init__(message)
+        super().__init__(_scrub(message))
         self.definite = definite
+
+
+def _scrub(text: str) -> str:
+    """Nessie takes its key in the query string, and HTTP libraries put URLs in their error messages."""
+    return re.sub(r"(key=)[^&\s'\")]+", r"\1<hidden>", str(text))
 
 
 @dataclass(frozen=True)
@@ -106,11 +113,55 @@ def _check_signature_gate(request: PayRequest, amount: Decimal, approval: Signed
         raise ExecutionRefused(f"signed amount {signed_amount} is not the amount being paid ({amount})")
     if approval.payload.get("payee") != request.sub_id:
         raise ExecutionRefused("signature is for a different payee")
+    if "bank_account" in approval.payload and approval.payload["bank_account"] != request.bank_account:
+        raise ExecutionRefused("signature approved payment to a different bank account")
     body = canonical_payload_bytes(approval.payload)
     if not verify_signature(body, approval.sig_hex, pubkey_hex, rejected=approval.rejected):
         raise ExecutionRefused("signature does not verify against the registered device pubkey")
     if approval.rejected:
         raise ExecutionRefused("a human rejected this payment on the device")
+
+
+# One payment at a time: the paid-once check, the bank call and the record happen under this lock,
+# so two simultaneous /pay calls can't both see "not paid" (single API process; see README).
+_PAY_LOCK = threading.Lock()
+
+
+def payment_status(request_id: str, log_path=events.DEFAULT_PATH) -> str | None:
+    """'paid', 'unknown' (a payment was attempted and the bank's answer is unknown), or None (payable)."""
+    status = None
+    for e in events.read(kind="execution", request_id=request_id, path=log_path):
+        s = e.data.get("status", "paid")
+        if s == "paid":
+            return "paid"
+        if s == "started":
+            status = "unknown"  # cleared below only by a definite failure or a resolution
+        elif s == "failed":
+            status = None if e.data.get("definite") else "unknown"
+        elif s == "resolved_unpaid":
+            status = None
+    return status
+
+
+def check_payable(request: PayRequest, log_path=events.DEFAULT_PATH) -> None:
+    """Refuse anything that is, or might already be, paid: this request, or the same application again."""
+    status = payment_status(request.id, log_path)
+    if status == "paid":
+        raise ExecutionRefused(f"{request.id} has already been paid")
+    if status == "unknown":
+        raise ExecutionRefused(f"an earlier attempt to pay {request.id} has an unknown outcome; resolve it against "
+                               "the bank first (POST /requests/{id}/resolve or `python -m events nessie-resolve`)")
+    state = events.state(path=log_path)
+    numbers = {r.id: r.number for r in state["pay_requests"]}
+    for e in state["ledger"]:
+        if e.kind != LedgerKind.sub_payment:
+            continue
+        if e.request_id == request.id:
+            raise ExecutionRefused(f"{request.id} has already been paid (the bank ledger shows the payment)")
+        if e.sub_id == request.sub_id and e.job_id == request.job_id and (
+                e.period_end == request.period_end or numbers.get(e.request_id) == request.number):
+            raise ExecutionRefused(f"{request.sub_id} was already paid on {request.job_id} for this period or "
+                                   f"application number (request {e.request_id})")
 
 
 def execute(decision: Decision, request: PayRequest, *, auto_release_limit_usd: Decimal,
@@ -137,40 +188,68 @@ def execute(decision: Decision, request: PayRequest, *, auto_release_limit_usd: 
         raise ExecutionRefused(f"payment due {g.current_payment_due} doesn't match the lines ({lines_due})")
     amount = g.current_payment_due
 
-    executions = events.read(kind="execution", path=log_path)
-    if any(e.request_id == request.id and e.data.get("status", "paid") == "paid" for e in executions):
-        raise ExecutionRefused(f"{request.id} has already been paid")
-    if any(e.kind == LedgerKind.sub_payment and e.request_id == request.id
-           for e in events.state(path=log_path)["ledger"]):
-        raise ExecutionRefused(f"{request.id} has already been paid (the bank ledger shows the payment)")
-    needs_signature = decision.action == Action.escalate or bool(failed) or amount > Decimal(str(auto_release_limit_usd))
-    if needs_signature:
-        if approval is None or pubkey_hex is None:
-            raise ExecutionRefused("this payment needs the owner's signed approval and none was given")
-        released = {e.data.get("released_nonce") for e in executions if e.data.get("status") == "failed"}
-        used = (set(used_nonces or ()) | {e.data.get("nonce") for e in events.read(kind="signature", path=log_path)}) \
-            - released
-        _check_signature_gate(request, amount, approval, pubkey_hex, used)
-        events.append("signature", {"sig": approval.sig_hex, "nonce": approval.nonce,
-                                     "payload": approval.payload}, request_id=request.id, path=log_path)
+    with _PAY_LOCK:
+        check_payable(request, log_path)
+        executions = events.read(kind="execution", path=log_path)
+        needs_signature = decision.action == Action.escalate or bool(failed) or amount > Decimal(str(auto_release_limit_usd))
+        if needs_signature:
+            if approval is None or pubkey_hex is None:
+                raise ExecutionRefused("this payment needs the owner's signed approval and none was given")
+            released = {e.data.get("released_nonce") for e in executions if e.data.get("status") == "failed"}
+            used = (set(used_nonces or ()) | {e.data.get("nonce") for e in events.read(kind="signature", path=log_path)}) \
+                - released
+            _check_signature_gate(request, amount, approval, pubkey_hex, used)
+            events.append("signature", {"sig": approval.sig_hex, "nonce": approval.nonce,
+                                         "payload": approval.payload}, request_id=request.id, path=log_path)
 
-    try:
-        result = _nessie_pay(request, amount)
-    except NessieError as e:
-        # A definite failure moved no money, so the owner's approval may be used again; anything
-        # else might have paid, so the approval stays spent and a person checks the bank first.
-        events.append("execution", {"status": "failed", "definite": e.definite, "error": str(e),
-                                     "released_nonce": approval.nonce if (e.definite and approval) else None},
+        # Written before the bank call: if the process dies mid-payment, the request stays blocked
+        # until someone checks the bank, instead of being paid again.
+        events.append("execution", {"status": "started", "amount": str(amount),
+                                     "nonce": approval.nonce if approval else None},
                       request_id=request.id, path=log_path)
-        raise ExecutionRefused(f"the bank didn't take the payment: {e}" if e.definite else
-                               f"the payment's outcome is unknown ({e}); check Nessie before trying again") from e
+        try:
+            result = _nessie_pay(request, amount)
+        except NessieError as e:
+            # A definite failure moved no money, so the owner's approval may be used again; anything
+            # else might have paid, so the approval stays spent and the request waits for a resolution.
+            events.append("execution", {"status": "failed", "definite": e.definite, "error": str(e),
+                                         "released_nonce": approval.nonce if (e.definite and approval) else None},
+                          request_id=request.id, path=log_path)
+            raise ExecutionRefused(f"the bank didn't take the payment: {e}" if e.definite else
+                                   f"the payment's outcome is unknown ({e}); resolve it against the bank before "
+                                   "trying again") from e
+        _record_payment(request, amount, result, log_path)
+        return result
+
+
+def _record_payment(request: PayRequest, amount: Decimal, result: dict, log_path) -> None:
     events.append("execution", result, request_id=request.id, path=log_path)
     events.append("fact", LedgerEntry(
         id=f"nessie_{result['nessie_bill_id']}" if result.get("nessie_bill_id") else f"pay_{request.id}",
         job_id=request.job_id, kind=LedgerKind.sub_payment, amount=amount, date=date.today(),
         period_end=request.period_end, sub_id=request.sub_id, request_id=request.id,
         bank_account=request.bank_account), table="ledger", path=log_path)
-    return result
+
+
+def resolve_unknown(request: PayRequest, log_path=events.DEFAULT_PATH) -> str:
+    """After an unknown outcome, ask the bank: a bill tagged with this request means it was paid
+    (recorded now); none means it wasn't, and the request may be paid again. Returns 'paid' or 'unpaid'."""
+    with _PAY_LOCK:
+        if payment_status(request.id, log_path) != "unknown":
+            raise ExecutionRefused(f"{request.id} has no payment with an unknown outcome to resolve")
+        base, key, account = _nessie_config()
+        bills = [b for b in _nessie("GET", f"/accounts/{account}/bills", key=key, base=base) or []
+                 if isinstance(b, dict) and str(b.get("nickname", "")).startswith(f"pay|{request.id}|")]
+        if bills:
+            b = bills[0]
+            amount = Decimal(str(b.get("payment_amount")))
+            _record_payment(request, amount, {"status": "paid", "request_id": request.id, "amount": str(amount),
+                                              "bank": "nessie", "nessie_bill_id": b.get("_id"), "resolved": True,
+                                              "duplicate_bills": len(bills) - 1}, log_path)
+            return "paid"
+        events.append("execution", {"status": "resolved_unpaid", "checked": "no bill for this request in Nessie"},
+                      request_id=request.id, path=log_path)
+        return "unpaid"
 
 
 def _nessie_config() -> tuple[str, str, str]:
@@ -191,7 +270,10 @@ def _nessie(method: str, path: str, *, key: str, base: str, body: dict | None = 
     except requests.exceptions.RequestException as e:
         raise NessieError(f"Nessie request did not complete: {e}", definite=False) from e
     if resp.status_code >= 400:
-        raise NessieError(f"Nessie answered HTTP {resp.status_code}: {resp.text[:300]}", definite=True)
+        # A 4xx means Nessie refused the request. A 5xx (or 408) can come from a gateway after the
+        # bill was already written, so it doesn't prove the payment failed.
+        definite = 400 <= resp.status_code < 500 and resp.status_code != 408
+        raise NessieError(f"Nessie answered HTTP {resp.status_code}: {resp.text[:300]}", definite=definite)
     try:
         return resp.json()
     except ValueError:
@@ -225,28 +307,40 @@ def _nessie_pay(request: PayRequest, amount: Decimal) -> dict:
 # --- the GC's ledger in Nessie (rule 08's owner draws, and past sub payments) -----------------
 
 
-def nessie_ledger() -> list[LedgerEntry]:
-    """Owner draws (deposits) and sub payments (bills) on the GC's Nessie account, as ledger facts.
-    Only entries this system wrote (tagged descriptions) are read; anything else in the sandbox is ignored."""
+def nessie_ledger() -> tuple[list[LedgerEntry], list[str]]:
+    """(ledger facts, skipped rows) from the GC's Nessie account: owner draws (deposits) and sub payments
+    (bills). Only rows this system wrote (tagged) are read; a malformed tagged row is skipped and named."""
     base, key, account = _nessie_config()
-    out = []
+    out, skipped = [], []
     for d in _nessie("GET", f"/accounts/{account}/deposits", key=key, base=base) or []:
-        parts = str(d.get("description", "")).split("|")
-        if len(parts) == 4 and parts[0] == "draw" and d.get("status", "completed") == "completed":
+        parts = str(d.get("description", "")).split("|") if isinstance(d, dict) else []
+        if len(parts) != 4 or parts[0] != "draw" or d.get("status", "completed") == "cancelled":
+            continue
+        try:
             _, job_id, period_end, amount = parts
-            out.append(LedgerEntry(id=f"nessie_{d['_id']}", job_id=job_id, kind=LedgerKind.owner_draw,
-                                   amount=Decimal(amount), date=date.fromisoformat(d["transaction_date"][:10]),
+            exact = Decimal(amount)
+            if abs(exact - Decimal(str(d.get("amount", 0)))) > 1:  # the tag may not claim more than the bank holds
+                raise ValueError(f"tag says {exact}, deposit is {d.get('amount')}")
+            out.append(LedgerEntry(id=f"nessie_{d['_id']}", job_id=job_id, kind=LedgerKind.owner_draw, amount=exact,
+                                   date=date.fromisoformat(str(d["transaction_date"])[:10]),
                                    period_end=date.fromisoformat(period_end)))
+        except (ValueError, KeyError, ArithmeticError) as e:
+            skipped.append(f"deposit {d.get('_id')}: {e}")
     for b in _nessie("GET", f"/accounts/{account}/bills", key=key, base=base) or []:
-        parts = str(b.get("nickname", "")).split("|")
-        if len(parts) == 6 and parts[0] == "pay" and b.get("status") == "completed":
-            _, request_id, sub_id, job_id, period_end, bank_account = parts
+        parts = str(b.get("nickname", "")).split("|") if isinstance(b, dict) else []
+        if len(parts) < 6 or parts[0] != "pay" or b.get("status") not in ("completed", "pending"):
+            continue
+        try:
+            _, request_id, sub_id, job_id, period_end = parts[:5]
+            bank_account = "|".join(parts[5:]) or None
             out.append(LedgerEntry(id=f"nessie_{b['_id']}", job_id=job_id, kind=LedgerKind.sub_payment,
                                    amount=Decimal(str(b["payment_amount"])),
                                    date=date.fromisoformat(str(b.get("payment_date") or b.get("creation_date"))[:10]),
                                    period_end=date.fromisoformat(period_end), sub_id=sub_id,
                                    request_id=request_id, bank_account=bank_account))
-    return out
+        except (ValueError, KeyError, ArithmeticError) as e:
+            skipped.append(f"bill {b.get('_id')}: {e}")
+    return out, skipped
 
 
 def nessie_setup(ledger: list[LedgerEntry], gc_name: tuple[str, str] = ("Ridgeline", "Builders")) -> str:
