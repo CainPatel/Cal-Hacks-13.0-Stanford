@@ -43,6 +43,13 @@ class KernelState(BaseModel):
                     return line
         return None
 
+    def sov_scheduled_value(self, item_no: str) -> Decimal | None:
+        """The contracted scheduled value for item_no, or None if the line isn't in the
+        subcontract at all. The sub's own G703 also carries a scheduled_value, but that's
+        self-reported and must never be the ceiling -- only the contract is authoritative.
+        """
+        return next((l.scheduled_value for l in self.subcontract.sov if l.item_no == item_no), None)
+
     def approved_co_total(self, item_no: str) -> Decimal:
         return sum(
             (co.amount for co in self.change_orders if co.item_no == item_no and co.approved),

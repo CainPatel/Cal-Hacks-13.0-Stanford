@@ -105,10 +105,39 @@
         "source_doc": "g703/sub_01_202607.xlsx"
       }
     ],
-    "releases": [],
+    "releases": [
+      {
+        "id": "rel_u_pr_sub_01_3",
+        "sub_id": "sub_01",
+        "job_id": "job_1",
+        "kind": "unconditional_progress",
+        "through_date": "2026-07-31",
+        "amount": "9000.00",
+        "signed": true,
+        "received_at": "2026-08-15"
+      }
+    ],
     "lower_tier_notices": [],
-    "coi": null,
-    "ledger": [],
+    "coi": {
+      "id": "coi_sub_01",
+      "sub_id": "sub_01",
+      "gl_expiry": "2027-06-30",
+      "wc_expiry": "2027-06-30",
+      "additional_insured": true
+    },
+    "ledger": [
+      {
+        "id": "pay_pr_sub_01_3",
+        "job_id": "job_1",
+        "kind": "sub_payment",
+        "amount": "9000.00",
+        "date": "2026-08-10",
+        "period_end": "2026-07-31",
+        "sub_id": "sub_01",
+        "request_id": "pr_sub_01_3",
+        "bank_account": "021000021:123456789"
+      }
+    ],
     "emails": [],
     "site_evidence": null,
     "known_bank_account": "021000021:123456789",

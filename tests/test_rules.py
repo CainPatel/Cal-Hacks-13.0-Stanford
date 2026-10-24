@@ -1,5 +1,6 @@
 """Every rule ships with one passing and one failing fixture (CLAUDE.md hard rule #7)."""
 import json
+from decimal import Decimal
 from pathlib import Path
 
 import pytest
@@ -9,7 +10,7 @@ from kernel.state import KernelState
 from shared.schema import PayRequest
 
 FIXTURES = Path(__file__).parent / "fixtures"
-RULE_NUMBERS = ["01", "02", "03", "04"]
+RULE_NUMBERS = ["01", "02", "03", "04", "05", "06", "07"]
 
 
 def load(name: str) -> tuple[KernelState, PayRequest]:
@@ -31,6 +32,54 @@ def test_rule_fails_its_fail_fixture(n):
     rule = next(r for r in ALL_RULES if r.__module__.split(".")[-1].startswith(f"rule_{n}_"))
     result = rule(state, request)
     assert not result.passed, result.message
+
+
+@pytest.mark.parametrize("n", RULE_NUMBERS)
+def test_fail_fixture_is_isolated(n):
+    """A fail fixture should break exactly its own rule and nothing else -- if the shared
+    base_state() in the fixture generator drifts (e.g. forgets a COI or a release), one
+    rule's fail fixture silently starts failing other rules too, which hides bugs and
+    makes next_action_for() point at the wrong rule. Catches exactly the kind of mistake
+    that slipped in while wiring rule 06's COI into base_state().
+    """
+    state, request = load(f"rule_{n}_fail.json")
+    results = {}
+    for rule in ALL_RULES:
+        result = rule(state, request)
+        results[result.rule.split("_", 1)[0]] = result
+    assert not results[n].passed, f"rule {n} was expected to fail its own fail fixture"
+    other_failures = [num for num, r in results.items() if num != n and not r.passed]
+    assert not other_failures, f"fail fixture for rule {n} unexpectedly also fails rule(s) {other_failures}"
+
+
+@pytest.mark.parametrize("n", RULE_NUMBERS)
+def test_pass_fixture_passes_every_rule(n):
+    """A pass fixture is supposed to be a fully clean request: every rule should pass,
+    not just the one it's nominally testing.
+    """
+    state, request = load(f"rule_{n}_pass.json")
+    for rule in ALL_RULES:
+        result = rule(state, request)
+        assert result.passed, f"rule_{n}_pass.json unexpectedly fails {result.rule}: {result.message}"
+
+
+def test_rule_02_ceiling_comes_from_contract_not_self_reported_scheduled_value():
+    """A sub could inflate LineItem.scheduled_value on their own G703 to raise their own
+    billing ceiling. The ceiling must come from the subcontract's SOV, not the request.
+    """
+    state, request = load("rule_02_pass.json")
+    from kernel.rules.rule_02_scheduled_value_ceiling import check
+
+    # contract SOV for item 09-10 is 100,000.00; inflate the sub's self-reported value
+    # and the claimed total-to-date to match, well past what the contract actually allows
+    inflated_line = request.lines[0].model_copy(update={
+        "scheduled_value": Decimal("500000.00"),
+        "total_to_date": Decimal("250000.00"),
+    })
+    forged_request = request.model_copy(update={"lines": [inflated_line]})
+
+    result = check(state, forged_request)
+    assert not result.passed, "rule 02 must not trust the sub's self-reported scheduled_value"
 
 
 def test_runner_releases_on_all_pass():
