@@ -146,9 +146,10 @@ def _is_letter_row(cells: list[str]) -> bool:
     return bool(filled) and all(_LETTER_CELL.match(c) for c in filled)
 
 
-_DATE_TOKEN = r"(\d{1,2}/\d{1,2}/\d{2,4}|\d{4}-\d{2}-\d{2}|[A-Z][a-z]{2,8}\.? \d{1,2}, \d{4})"
+_DATE_TOKEN = r"(\d{1,2}[/.\-]\d{1,2}[/.\-]\d{2,4}|\d{4}-\d{2}-\d{2}|[A-Z][a-z]{2,8}\.? \d{1,2}, \d{4})"
 _HEADER_PATTERNS = {
-    "application_no": re.compile(r"APPLICATION\s+NO\.?\s*:?\s*([A-Z0-9\-]*\d[A-Z0-9\-]*)", re.I),
+    # "APPLICATION NO: 6", also "APPLICATION NO: Draw #1"
+    "application_no": re.compile(r"APPLICATION\s+NO\.?\s*:?\s*(?:DRAW\s*)?#?\s*([A-Z0-9\-]*\d[A-Z0-9\-]*)", re.I),
     "application_date": re.compile(r"APPLICATION\s+DATE\s*:?\s*" + _DATE_TOKEN, re.I),
     "period_to": re.compile(r"PERIOD\s+TO\s*:?\s*" + _DATE_TOKEN, re.I),
     "remit_account": re.compile(
@@ -288,6 +289,17 @@ def _read_text_layer(path: Path) -> RawSheet:
                 _collect_rows(body, st, page_no)
 
     if st.mapping is None:
+        st = _SheetState()
+        with pdfplumber.open(path) as pdf:
+            for page_no, page in enumerate(pdf.pages, start=1):
+                page = visible_page(page, page_no, st.notes)
+                found = _position_rows(page) if page is not None else None
+                if found:
+                    st.mapping, body = found
+                    _collect_rows(body, st, page_no)
+        if st.mapping is not None:
+            st.notes.append(Note("read_by_position", "line items read by position under the A-I column letters"))
+    if st.mapping is None:
         raise _UseFallback("no G703 column header found in the text layer")
     if not st.rows:
         raise _UseFallback("header found but no line items parsed")
@@ -332,14 +344,15 @@ def _collect_rows(body, st: _SheetState, page_no: int) -> None:
         item = cells.get("item_no", "")
         desc = cells.get("description", "")
         values = {k: cells.get(k, "") for k in value_keys}
-        no_values = all(v == "" for v in values.values())
+        no_values = all(v == "" for v in values.values()) or _no_money(values)
         label = f"{item} {desc}"
 
         if not item and not desc and no_values:
             continue
         if _is_letter_row(list(cells.values())) or (_find_header([list(cells.values())]) is not None):
             continue  # repeated header or the A..I column-letter row
-        if not no_values and _TOTAL_LABEL.search(label) and (not item or _TOTAL_LABEL.search(item)):
+        if not no_values and _TOTAL_LABEL.search(label) and (
+                not item or _TOTAL_LABEL.search(item) or _numbered_grand_total(desc, values, st.rows)):
             upper = label.upper()
             if re.search(r"SUB-?\s?TOTAL", upper):
                 st.notes.append(Note("subtotal_skipped", f"page {page_no}: skipped subtotal row {label.strip()!r}"))
@@ -365,6 +378,90 @@ def _collect_rows(body, st: _SheetState, page_no: int) -> None:
         st.rows.append(RawRow(item_no=item, description=desc.replace("\n", " "), cells=values))
 
 
+def _numbered_grand_total(desc: str, values: dict[str, str], rows: list[RawRow]) -> bool:
+    """A grand total printed with an item number ("181  Total Project"): only when it says so and its
+    scheduled value is the sum of the lines above it, so a line item named "Total station" stays a line."""
+    if not re.match(r"\s*(GRAND\s+)?TOTALS?\b", desc, re.I):
+        return False
+    try:
+        return abs(parse_money(values.get("scheduled_value"), blank_is_zero=False) -
+                   sum(parse_money(r.cells.get("scheduled_value")) for r in rows)) <= MONEY_TOLERANCE
+    except CellParseError:
+        return False
+
+
+def _no_money(values: dict[str, str]) -> bool:
+    """True when every amount on a row is blank or zero: a heading or placeholder ("00 - Contract
+    Requirements  $0.00 ...") that bills nothing and can't be paid, so it isn't a line item."""
+    try:
+        return all(parse_money(v) == 0 if k != "pct_complete" else parse_pct(v)[0] == 0
+                   for k, v in values.items() if v.strip())
+    except CellParseError:
+        return False
+
+
+# Reading by position, for sheets whose line items aren't in a ruled table (spreadsheet exports):
+# the A..I letter row every AIA G703 prints gives each column's center.
+_LETTER_KEYS = dict(zip("ABCDEFGHI", ("item_no", "description", "scheduled_value", "previous_applications",
+                                      "this_period", "stored_materials", "total_to_date", "balance_to_finish",
+                                      "retainage")))
+_AMOUNT = re.compile(r"^\(?-?\$?\s?\(?(\d{1,3}(,\d{3})+|\d+)?(\.\d+)?\)?%?$")
+
+
+def _is_amount(text: str) -> bool:
+    t = text.strip()
+    return bool(re.search(r"\d", t)) and bool(_AMOUNT.match(t)) and bool(re.search(r"[$,.%]", t)) or t in ("-", "$-")
+
+
+def _lines(words: list[dict]) -> list[list[dict]]:
+    out: list[list[dict]] = []
+    for w in sorted(words, key=lambda w: (w["top"], w["x0"])):
+        if out and abs(w["top"] - out[-1][0]["top"]) <= 3:
+            out[-1].append(w)
+        else:
+            out.append([w])
+    return [sorted(line, key=lambda w: w["x0"]) for line in out]
+
+
+def _position_rows(page) -> tuple[dict[int, str], list[list[str]]] | None:
+    """(column index -> key, rows of cells) read by word position under the A..I letter row, or None."""
+    lines = _lines(page.extract_words())
+    at = next((i for i, line in enumerate(lines) if [w["text"] for w in line] == list("ABCDEFGHI")), None)
+    if at is None:
+        return None
+    center = {w["text"]: (w["x0"] + w["x1"]) / 2 for w in lines[at]}
+    # % (G / C) sits between G and H and has no letter: its header word, else halfway
+    pct = next(((w["x0"] + w["x1"]) / 2 for line in lines[at + 1:at + 6] for w in line
+                if w["text"] in ("%", "(G") and center["G"] < (w["x0"] + w["x1"]) / 2 < center["H"]),
+               (center["G"] + center["H"]) / 2)
+    columns = [(_LETTER_KEYS[c], center[c]) for c in "CDEFG"] + [("pct_complete", pct)] + \
+              [(_LETTER_KEYS[c], center[c]) for c in "HI"]
+    # the item column ends where its header words ("ITEM", "NO.") end
+    a_words = [w for line in lines[at + 1:at + 6] for w in line if abs((w["x0"] + w["x1"]) / 2 - center["A"])
+               < abs((w["x0"] + w["x1"]) / 2 - center["B"]) and not _is_amount(w["text"])]
+    item_right = max((w["x1"] for w in a_words), default=center["A"] + (center["B"] - center["A"]) / 4) + 3
+    amounts_from = (center["B"] + center["C"]) / 2
+    keys = ["item_no", "description"] + [k for k, _ in columns]
+    rows, started = [], False
+    for line in lines[at + 1:]:
+        cells = {k: [] for k in keys}
+        for i, w in enumerate(line):
+            mid = (w["x0"] + w["x1"]) / 2
+            if i == 0 and w["x1"] <= item_right:
+                cells["item_no"].append(w["text"])
+            elif mid >= amounts_from and _is_amount(w["text"]):
+                cells[min(columns, key=lambda c: abs(c[1] - mid))[0]].append(w["text"])
+            else:
+                cells["description"].append(w["text"])
+        if not started:  # the header block ends at the first line that starts with an item number
+            item = " ".join(cells["item_no"])
+            if not item or item.upper() in ("ITEM", "NO.", "NO") or not _ITEM_NO.match(item):
+                continue
+            started = True
+        rows.append([" ".join(cells[k]) for k in keys])
+    return dict(enumerate(keys)), rows
+
+
 # --- Claude transcription ---------------------------------------------------
 
 
@@ -375,6 +472,13 @@ def _read_with_claude(pdf_bytes: bytes, client) -> RawSheet:
     if t.unreadable_cells:
         # A guessed digit is worse than no answer: someone has to look at the paper.
         raise ExtractionError(f"cells could not be read with certainty: {', '.join(t.unreadable_cells)}")
+    # A row with no money on it (blank or $0.00 everywhere) is a section heading ("HVAC", "Division 23")
+    # or a placeholder: it can't be paid, so it is noted and left out, as on the text-layer path.
+    amounts = (*MONEY_COLUMNS, "pct_complete")
+    headings = [r for r in t.rows if _no_money({k: getattr(r, k) for k in amounts})]
+    t.rows = [r for r in t.rows if r not in headings]
+    notes = [Note("section_heading", f"skipped heading {r.item_no.strip()} {r.description.strip()!r}",
+                  r.item_no.strip() or None) for r in headings]
     for r in t.rows:
         if not _ITEM_NO.match(r.item_no.strip()) or _TOTAL_LABEL.search(r.item_no):
             raise ExtractionError(f"transcribed row has an implausible item number: {r.item_no!r}")
@@ -394,7 +498,7 @@ def _read_with_claude(pdf_bytes: bytes, client) -> RawSheet:
         rows=[RawRow(r.item_no.strip(), r.description.strip(), cells(r)) for r in t.rows],
         totals=cells(t.totals_row) if t.totals_row else None,
         g702=t.g702.model_dump() if t.g702 else None,
-        notes=[],
+        notes=notes,
     )
 
 
@@ -598,16 +702,25 @@ def extract_pay_request(
         except CellParseError as e:
             raise ExtractionError(f"G702 value unreadable: {e}") from e
         sheet.g702 = sheet.g702 or fields or None
+    # Everything the kernel needs besides the lines, said at once, so the sub can fix it in one go.
+    number = re.fullmatch(r"(?:(?:DRAW|PAY\s*APP(?:LICATION)?|APPLICATION|APP|NO\.?)\s*)?#?\s*(\d{1,4})",
+                          (sheet.application_no or "").strip(), re.I)
+    missing = []
     if not sheet.period_to:
-        raise ExtractionError("sheet has no 'period to' date")
+        missing.append("sheet has no 'period to' date")
+    if number is None:
+        missing.append(f"application number missing or not a number: {sheet.application_no!r}")
+    if not sheet.remit_account:
+        missing.append("no remit-to bank account on the pay application")
+    if not sheet.g702:
+        missing.append("no G702 application summary found (send the G702 page with it)")
+    if missing:
+        raise ExtractionError(f"read {len(lines)} line items, but: " + "; ".join(missing))
     try:
         period_end = parse_date(sheet.period_to)
     except CellParseError as e:
         raise ExtractionError(str(e)) from e
-    if not re.fullmatch(r"\d{1,4}", sheet.application_no or ""):
-        raise ExtractionError(f"application number missing or not a number: {sheet.application_no!r}")
-    if not sheet.remit_account:
-        raise ExtractionError("no remit-to bank account on the pay application")
+    sheet.application_no = number.group(1)
     g702 = _to_g702(sheet)
 
     notes = sheet.notes + parse_notes + check_consistency(lines, sheet.totals) + check_g702(g702, lines)
