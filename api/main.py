@@ -30,6 +30,7 @@ DATABASE_URL (Postgres log, deployed), BLOB_* (private Blob store for uploaded o
 """
 import asyncio
 import hashlib
+import io
 import json
 import os
 import secrets
@@ -664,6 +665,48 @@ def upload_email(file: UploadFile = File(...)):
     return {"email_id": result.record.id, "seq": seq, "method": result.method, "notes": _notes(result.notes),
             "email": result.record.model_dump(mode="json"),
             "attachments": _email_attachments(path.read_bytes(), result.record)}
+
+
+@app.post("/inbound/postmark")
+async def inbound_postmark(request: Request):
+    """Postmark's inbound webhook: each email to Draw's address arrives here as JSON and goes through
+    /emails exactly like an uploaded .eml. Postmark sends basic auth from the webhook URL
+    (https://postmark:<INBOUND_PASSWORD>@.../inbound/postmark); with no password set it's off."""
+    import base64
+    from email.message import EmailMessage
+    from starlette.datastructures import UploadFile as StarletteUpload
+
+    want = os.environ.get("INBOUND_PASSWORD")
+    if not want:
+        raise HTTPException(503, "Inbound email is off until INBOUND_PASSWORD is set.")
+    try:
+        user, _, given = base64.b64decode(request.headers.get("authorization", "")[6:]).decode().partition(":")
+    except ValueError:
+        user, given = "", ""
+    if not (secrets.compare_digest(user, "postmark") & secrets.compare_digest(given.encode(), want.encode())):
+        raise HTTPException(403, "wrong inbound credentials")  # 403 also tells Postmark not to retry
+
+    body = await request.json()
+    if body.get("RawEmail"):  # "Include raw email content" on: the message exactly as it arrived
+        eml = body["RawEmail"].encode()
+    else:
+        msg = EmailMessage()
+        for h in ("From", "To", "Subject", "Date"):
+            if body.get(h):
+                msg[h] = body[h]
+        msg.set_content(body.get("TextBody") or "")
+        for a in body.get("Attachments") or []:
+            main_type, _, sub_type = (a.get("ContentType") or "application/octet-stream").partition("/")
+            msg.add_attachment(base64.b64decode(a.get("Content") or ""), maintype=main_type,
+                               subtype=sub_type or "octet-stream", filename=a.get("Name"))
+        eml = bytes(msg)
+    file = StarletteUpload(file=io.BytesIO(eml), filename=f"postmark-{body.get('MessageID', 'mail')}.eml")
+    try:
+        return upload_email(file=file)
+    except HTTPException as e:
+        if e.status_code in (409, 422):  # already have it / can't read it: retrying won't help, so 200
+            return {"ignored": e.detail}
+        raise
 
 
 def _email_attachments(eml: bytes, email) -> list[dict]:
