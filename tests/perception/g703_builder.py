@@ -12,7 +12,7 @@ from reportlab.lib import colors
 from reportlab.lib.pagesizes import landscape, letter
 from reportlab.lib.styles import ParagraphStyle
 from reportlab.lib.units import inch
-from reportlab.platypus import Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle
+from reportlab.platypus import PageBreak, Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle
 
 _CELL = ParagraphStyle("cell", fontName="Helvetica", fontSize=7, leading=8)
 _HEAD = ParagraphStyle("head", fontName="Helvetica-Bold", fontSize=6, leading=7, alignment=1)
@@ -83,6 +83,7 @@ def build_g703(
     g702: bool = True,
     g702_override: dict[str, Decimal] | None = None,
     previous_certificates: Decimal | None = None,
+    aia_g702_page: bool = False,
 ) -> Path:
     """extra_rows are inserted after the line items, before the grand total, as raw cell lists.
 
@@ -136,6 +137,9 @@ def build_g703(
     ]))
 
     def header(canvas, doc):
+        if aia_g702_page and doc.page == 1:
+            draw_aia_g702(canvas, first_page_values, application_no=application_no, period_to=period_to)
+            return
         period = period_to_later_pages if (period_to_later_pages and doc.page > 1) else period_to
         canvas.saveState()
         canvas.setFont("Helvetica-Bold", 10)
@@ -155,7 +159,12 @@ def build_g703(
     doc = SimpleDocTemplate(str(path), pagesize=landscape(letter), topMargin=1.0 * inch,
                             leftMargin=0.5 * inch, rightMargin=0.5 * inch, bottomMargin=0.5 * inch)
     story = [Spacer(1, 0.1 * inch), table]
-    if g702:
+    if aia_g702_page:
+        # Page 1 is an AIA-style G702 drawn by draw_aia_g702; the continuation sheet starts on page 2.
+        story = [PageBreak()] + story
+        g702 = False
+    first_page_values = None
+    if g702 or aia_g702_page:
         rate = retainage_rate or Decimal("0")
         prev = previous_certificates if previous_certificates is not None else money_q(sums["D"] * (1 - rate))
         values = {
@@ -165,12 +174,85 @@ def build_g703(
             "current_payment_due": sums["G"] - sums["I"] - prev,
         }
         values.update(g702_override or {})
+        if aia_g702_page:
+            first_page_values = values
+    if g702:
         summary = Table([[label, money(values[f])] for label, f in G702_LINES], colWidths=[3.2 * inch, 1.3 * inch])
         summary.setStyle(TableStyle([("FONTSIZE", (0, 0), (-1, -1), 8), ("ALIGN", (1, 0), (1, -1), "RIGHT")]))
         story += [Spacer(1, 10), Paragraph("<b>APPLICATION SUMMARY (G702)</b>", _CELL), summary]
     if remit_account:
         story += [Spacer(1, 6), Paragraph(f"Remit payment to account: {remit_account}", _CELL)]
     doc.build(story, onFirstPage=header, onLaterPages=header)
+    return path
+
+
+AIA_LINES = [
+    ("1. ORIGINAL CONTRACT SUM", "original_contract_sum"),
+    ("2. NET CHANGE BY CHANGE ORDERS", "net_change_orders"),
+    ("3. CONTRACT SUM TO DATE (Line 1 \u00b1 2)", "contract_sum_to_date"),
+    ("4. TOTAL COMPLETED & STORED TO DATE (Column G on G703)", "total_completed_stored"),
+    ("5. RETAINAGE:", None),
+    ("   a. 10% of Completed Work (Columns D + E on G703)", "retainage"),
+    ("   b. 0% of Stored Material (Column F on G703)", "zero"),
+    ("   Total Retainage (Lines 5a + 5b, or Total in Column I of G703)", "retainage"),
+    ("6. TOTAL EARNED LESS RETAINAGE (Line 4 minus Line 5 Total)", "total_earned_less_retainage"),
+    ("7. LESS PREVIOUS CERTIFICATES FOR PAYMENT (Line 6 from prior Certificate)", "less_previous_certificates"),
+    ("8. CURRENT PAYMENT DUE", "current_payment_due"),
+    ("9. BALANCE TO FINISH, INCLUDING RETAINAGE (Line 3 minus Line 6)", "balance"),
+]
+RIGHT_COLUMN = [
+    "ARCHITECT'S CERTIFICATE FOR PAYMENT",
+    "In accordance with the Contract Documents, based on evaluation",
+    "of the Work and the data comprising this application, the",
+    "Architect certifies to the Owner that the Work has progressed",
+    "AMOUNT CERTIFIED ........................ $ 1,000,000.00",
+    "CHANGE ORDER SUMMARY      ADDITIONS      DEDUCTIONS",
+    "Total changes approved in previous months  $ 0.00   $ 0.00",
+    "Total approved this month                  $ 0.00   $ 0.00",
+    "NET CHANGES by Change Order                $ 0.00",
+    "Contractor: By ___________ Date: __________",
+    "State of: ______  County of: ______",
+    "Notary Public: ____________________",
+]
+
+
+def draw_aia_g702(c, values, *, application_no, period_to):
+    """A two-column AIA G702 page: lines 1-9 on the left, certificate text on the same baselines on the right."""
+    w, h = landscape(letter)
+    c.setFont("Helvetica-Bold", 11)
+    c.drawString(0.5 * inch, h - 0.6 * inch, "APPLICATION AND CERTIFICATE FOR PAYMENT  AIA DOCUMENT G702")
+    c.setFont("Helvetica", 8)
+    c.drawString(w / 2 + 0.3 * inch, h - 0.85 * inch, f"APPLICATION NO: {application_no}")
+    c.drawString(w / 2 + 0.3 * inch, h - 1.0 * inch, f"PERIOD TO: {period_to}")
+    c.drawString(0.5 * inch, h - 1.3 * inch, "CONTRACTOR'S APPLICATION FOR PAYMENT")
+    y = h - 1.6 * inch
+    extra = {"zero": Decimal("0"), "balance": values["contract_sum_to_date"] - values["total_earned_less_retainage"]}
+    for i, (label, field_) in enumerate(AIA_LINES):
+        c.drawString(0.5 * inch, y, label)
+        if field_:
+            amount = values.get(field_, extra.get(field_))
+            c.drawRightString(w / 2 - 0.2 * inch, y, f"$ {money(amount)}")
+        if i < len(RIGHT_COLUMN):
+            c.drawString(w / 2 + 0.3 * inch, y, RIGHT_COLUMN[i])
+        y -= 0.3 * inch
+
+
+def build_aia_g702(path: Path, lines: list[Line], *, application_no: str = "3", period_to: str = "10/31/2026",
+                   retainage_rate: Decimal = Decimal("0.10"), override: dict[str, Decimal] | None = None) -> Path:
+    """A G702 on its own, as a sub might send it separately from the G703."""
+    from reportlab.pdfgen import canvas as rl_canvas
+
+    completed = sum((l.total for l in lines), Decimal("0"))
+    contract = sum((l.scheduled for l in lines), Decimal("0"))
+    retainage = sum(((l.total * retainage_rate).quantize(Decimal("0.01")) for l in lines), Decimal("0"))
+    prev = money_q(sum((l.previous for l in lines), Decimal("0")) * (1 - retainage_rate))
+    values = {"original_contract_sum": contract, "net_change_orders": Decimal("0"), "contract_sum_to_date": contract,
+              "total_completed_stored": completed, "retainage": retainage,
+              "total_earned_less_retainage": completed - retainage, "less_previous_certificates": prev,
+              "current_payment_due": completed - retainage - prev, **(override or {})}
+    c = rl_canvas.Canvas(str(path), pagesize=landscape(letter))
+    draw_aia_g702(c, values, application_no=application_no, period_to=period_to)
+    c.save()
     return path
 
 

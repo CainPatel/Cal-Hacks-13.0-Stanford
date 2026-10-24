@@ -39,3 +39,32 @@ def test_every_rendered_pay_app_reads_back_exactly(rendered):
                 else g.pct_complete == w.pct_complete
             assert pct_ok and g.model_dump(exclude={"pct_complete"}) == w.model_dump(exclude={"pct_complete"}), \
                 f"{where} line {w.item_no}"
+
+
+def test_every_rendered_release_coi_and_email_reads_back_exactly(rendered):
+    from perception.coi import extract_coi
+    from perception.mail import extract_email
+    from perception.release import extract_release
+    from shared.schema import COI, Email, Release
+
+    counts = {"release": 0, "coi": 0, "email": 0}
+    for truth_path in rendered:
+        truth, folder = json.loads(truth_path.read_text()), truth_path.parent
+        name = truth["vendor"]["legal_name"]
+        if truth["release"]:
+            want = Release.model_validate(truth["release"])
+            got = extract_release(folder / "release.pdf", sub_id=want.sub_id, job_id=want.job_id,
+                                  received_at=want.received_at, release_id=want.id, expected_claimant=name,
+                                  allow_llm_fallback=False)
+            assert got.record == want and got.notes == [], folder.name
+            counts["release"] += 1
+        want = COI.model_validate(truth["coi"])
+        got = extract_coi(folder / "coi.pdf", sub_id=want.sub_id, coi_id=want.id, expected_insured=name,
+                          allow_llm_fallback=False)
+        assert got.record == want and got.notes == [], folder.name
+        counts["coi"] += 1
+        for e in truth["emails"]:
+            want = Email.model_validate(e)
+            assert extract_email(folder / f"email_{want.id}.eml", email_id=want.id, use_llm=False).record == want
+            counts["email"] += 1
+    assert all(counts.values()), counts

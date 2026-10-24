@@ -9,7 +9,6 @@ evidence for the kernel, so they are reported and passed through.
 """
 
 import hashlib
-import math
 import re
 import uuid
 from dataclasses import dataclass, field
@@ -18,11 +17,11 @@ from decimal import Decimal
 from pathlib import Path
 
 import anthropic
-import numpy as np
 import pdfplumber
 import pdfplumber.utils.exceptions
 
 from perception import llm
+from perception.common import ExtractionError, Note, UseFallback as _UseFallback, visible_page
 from perception.numbers import CellParseError, parse_date, parse_money, parse_pct
 from shared.schema import G702, LineItem, PayRequest
 
@@ -49,23 +48,8 @@ MONEY_TOLERANCE = Decimal("0.01")
 PCT_TOLERANCE = Decimal("0.5")  # printed percentages are usually rounded
 
 
-class ExtractionError(RuntimeError):
-    """The document could not be turned into a PayRequest by any path."""
-
-
 class NotAG703(ExtractionError):
     pass
-
-
-class _UseFallback(Exception):
-    """Internal: the text layer can't be trusted for this document."""
-
-
-@dataclass
-class Note:
-    code: str
-    message: str
-    item_no: str | None = None
 
 
 @dataclass
@@ -162,43 +146,6 @@ def _is_letter_row(cells: list[str]) -> bool:
     return bool(filled) and all(_LETTER_CELL.match(c) for c in filled)
 
 
-_INK_RESOLUTION = 144
-_INK_CONTRAST = 60  # grey levels between darkest and lightest pixel inside a glyph's box
-_MAX_HIDDEN_SHARE = 0.2
-
-
-def _char_key(c: dict) -> tuple:
-    return (c["text"], round(c["x0"], 2), round(c["top"], 2))
-
-
-def _inked_char_keys(page) -> tuple[set[tuple], int]:
-    """Keys of characters that actually show up when the page is rendered.
-
-    A text layer can hold characters a person never sees: invisible render
-    mode, white or near-white fill, zero alpha, or glyphs covered by a shape.
-    Rendering the page and looking for ink inside each glyph's box catches all
-    of these at once, so the parser reads what the GC sees on screen.
-    """
-    img = np.asarray(page.to_image(resolution=_INK_RESOLUTION).original.convert("L"), dtype=np.int16)
-    scale = _INK_RESOLUTION / 72
-    keep, hidden = set(), 0
-    for c in page.chars:
-        key = _char_key(c)
-        if c["text"].isspace():
-            keep.add(key)
-            continue
-        # Trim the box edges so ink bleeding in from a neighbouring glyph doesn't count.
-        dx, dy = (c["x1"] - c["x0"]) * 0.15, (c["bottom"] - c["top"]) * 0.1
-        x0, x1 = int((c["x0"] + dx) * scale), math.ceil((c["x1"] - dx) * scale)
-        y0, y1 = int((c["top"] + dy) * scale), math.ceil((c["bottom"] - dy) * scale)
-        crop = img[max(y0, 0):y1, max(x0, 0):x1]
-        if crop.size and int(crop.max()) - int(crop.min()) >= _INK_CONTRAST and c.get("size", 12) >= 3:
-            keep.add(key)
-        else:
-            hidden += 1
-    return keep, hidden
-
-
 _DATE_TOKEN = r"(\d{1,2}/\d{1,2}/\d{2,4}|\d{4}-\d{2}-\d{2}|[A-Z][a-z]{2,8}\.? \d{1,2}, \d{4})"
 _HEADER_PATTERNS = {
     "application_no": re.compile(r"APPLICATION\s+NO\.?\s*:?\s*([A-Z0-9\-]*\d[A-Z0-9\-]*)", re.I),
@@ -228,6 +175,48 @@ _G702_LABELS: dict[str, list[re.Pattern]] = {
     }.items()
 }
 _LEADER = re.compile(r"^\s*(?:\([^)]*\)\s*)?[:.\s]*")
+
+
+_AIA_G702_TITLE = re.compile(r"APPLICATION\s+AND\s+CERTIFICATE\s+FOR\s+PAYMENT", re.I)
+
+
+def _g702_lines(page, text: str) -> list[str]:
+    """Lines to search for G702 labels. The AIA form prints the architect's certificate on the
+    same baselines as lines 1-9, so on that page only the left column is read; otherwise
+    "1. ORIGINAL CONTRACT SUM $ 435,000.00 ARCHITECT'S CERTIFICATE..." would be one line."""
+    if _AIA_G702_TITLE.search(text):
+        left = page.crop((0, 0, float(page.width) / 2, float(page.height)))
+        return (left.extract_text() or "").splitlines()
+    return text.splitlines()
+
+
+def read_g702(path: str | Path) -> tuple[dict[str, str], dict[str, str], list[Note]]:
+    """A G702 sent as its own PDF: printed amounts per field, header values, notes."""
+    notes: list[Note] = []
+    lines: list[str] = []
+    header: dict[str, set[str]] = {k: set() for k in _HEADER_PATTERNS}
+    try:
+        with pdfplumber.open(path) as pdf:
+            for page_no, page in enumerate(pdf.pages, start=1):
+                page = visible_page(page, page_no, notes)
+                if page is None:
+                    continue
+                text = page.extract_text() or ""
+                lines += _g702_lines(page, text)
+                for key, pattern in _HEADER_PATTERNS.items():
+                    for m in pattern.finditer(text):
+                        header[key].add(m.group(1).strip())
+    except pdfplumber.utils.exceptions.PdfminerException as e:
+        raise ExtractionError(f"could not open G702 PDF: {e}") from e
+    except _UseFallback as e:
+        raise ExtractionError(f"G702 is not readable as text ({e}); send it with the G703 or as a digital PDF") from e
+    fields, conflicts = _g702_from_text(lines)
+    if conflicts:
+        raise ExtractionError(f"G702 lines printed more than once with different amounts: {conflicts}")
+    for key, values in header.items():
+        if len(values) > 1:
+            raise ExtractionError(f"G702 shows more than one {key}: {sorted(values)}")
+    return fields, {k: next(iter(v)) for k, v in header.items() if v}, notes
 
 
 def _g702_from_text(lines: list[str]) -> tuple[dict[str, str], list[str]]:
@@ -262,27 +251,12 @@ def _read_text_layer(path: Path) -> RawSheet:
 
     with pdfplumber.open(path) as pdf:
         for page_no, page in enumerate(pdf.pages, start=1):
-            raw_chars = len(page.chars)
-            area = float(page.width * page.height)
-            image_area = sum(float(im["width"] * im["height"]) for im in page.images)
-            if raw_chars == 0:
-                if page.images:
-                    raise _UseFallback(f"page {page_no} is a scanned image with no text layer")
+            page = visible_page(page, page_no, st.notes)
+            if page is None:
                 continue  # blank page
-            if image_area > 0.5 * area:
-                # Text over a page-sized image is usually an OCR layer, which can misread digits.
-                raise _UseFallback(f"page {page_no} looks like a scan with an OCR text layer")
-
-            keep, hidden = _inked_char_keys(page)
-            if hidden:
-                printable = sum(1 for c in page.chars if not c["text"].isspace())
-                if hidden > _MAX_HIDDEN_SHARE * printable:
-                    raise _UseFallback(f"page {page_no}: text layer does not match the rendered page")
-                st.notes.append(Note("hidden_text", f"page {page_no}: ignored {hidden} characters that are not visible on the page"))
-                page = page.filter(lambda o: o.get("object_type") != "char" or _char_key(o) in keep)
 
             text = page.extract_text() or ""
-            text_lines.extend(text.splitlines())
+            text_lines.extend(_g702_lines(page, text))
             for key, pattern in _HEADER_PATTERNS.items():
                 m = pattern.search(text)
                 if m:
@@ -565,12 +539,16 @@ def extract_pay_request(
     request_id: str | None = None,
     allow_llm_fallback: bool = True,
     client=None,
+    g702_pdf: str | Path | None = None,
 ) -> ExtractionResult:
     """Read one pay application PDF (G703 continuation sheet + G702 summary) into a PayRequest.
 
     Sub and job come from the submission, not the document: a PDF can claim to
     be from anyone. The remit-to account is read from the document because it
     is the sub's claim that rule 10 checks against the account on file.
+
+    g702_pdf is the G702 when the sub sends it as a separate file. If both
+    documents carry a G702, application number or period, they must agree.
     """
     path = Path(pdf_path)
     pdf_bytes = path.read_bytes()
@@ -603,6 +581,23 @@ def extract_pay_request(
 
     if not lines:
         raise ExtractionError("no line items found")
+    if g702_pdf is not None:
+        fields, header, g_notes = read_g702(g702_pdf)
+        sheet.notes.extend(g_notes)
+        try:
+            for key in ("application_no", "period_to"):
+                theirs, ours = header.get(key), getattr(sheet, key)
+                same = theirs == ours or (key == "period_to" and theirs and ours and parse_date(theirs) == parse_date(ours))
+                if theirs and ours and not same:
+                    raise ExtractionError(f"G702 and G703 disagree on {key}: {theirs!r} vs {ours!r}")
+                if theirs and not ours:
+                    setattr(sheet, key, theirs)
+            if sheet.g702 and fields and {k: parse_money(v) for k, v in sheet.g702.items()} != {
+                    k: parse_money(v) for k, v in fields.items()}:
+                raise ExtractionError("the G702 file and the G702 inside the pay application disagree")
+        except CellParseError as e:
+            raise ExtractionError(f"G702 value unreadable: {e}") from e
+        sheet.g702 = sheet.g702 or fields or None
     if not sheet.period_to:
         raise ExtractionError("sheet has no 'period to' date")
     try:

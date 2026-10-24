@@ -419,3 +419,56 @@ def test_fraction_sheet_with_a_line_past_its_scheduled_value(tmp_path):
     r = extract(build_g703(tmp_path / "a.pdf", lines))
     assert r.pay_request.lines[1].pct_complete == D("112")
     assert r.pay_request.lines[2].pct_complete == D("60")
+
+
+def test_underscores_are_not_mistaken_for_hidden_text(tmp_path):
+    lines = standard_lines()
+    lines[0].description = "General conditions SUB_01 ______"
+    r = extract(build_g703(tmp_path / "a.pdf", lines))
+    assert "hidden_text" not in codes(r) and r.pay_request.lines[0].description == lines[0].description
+
+
+# --- AIA G702 layout and a separate G702 file ---------------------------------
+
+from tests.perception.g703_builder import build_aia_g702  # noqa: E402
+
+STANDARD_G702 = dict(original_contract_sum=D("435000.00"), net_change_orders=D("0.00"),
+                     contract_sum_to_date=D("435000.00"), total_completed_stored=D("207500.00"),
+                     retainage=D("20750.00"), total_earned_less_retainage=D("186750.00"),
+                     less_previous_certificates=D("126900.00"), current_payment_due=D("59850.00"))
+
+
+def test_aia_two_column_g702_page_reads_left_column_only(tmp_path):
+    r = extract(build_g703(tmp_path / "a.pdf", standard_lines(), aia_g702_page=True))
+    assert r.pay_request.g702.model_dump() == STANDARD_G702  # not the $1,000,000 "amount certified" beside line 5
+    assert not any(n.code.startswith("g702_") for n in r.notes)
+
+
+def test_separate_g702_file(tmp_path):
+    g703 = build_g703(tmp_path / "g703.pdf", standard_lines(), g702=False)
+    with pytest.raises(ExtractionError, match="G702"):
+        extract(g703)
+    r = extract(g703, g702_pdf=build_aia_g702(tmp_path / "g702.pdf", standard_lines()))
+    assert r.pay_request.g702.model_dump() == STANDARD_G702
+
+
+def test_separate_g702_must_agree_on_application_number(tmp_path):
+    g703 = build_g703(tmp_path / "g703.pdf", standard_lines(), g702=False)
+    with pytest.raises(ExtractionError, match="application_no"):
+        extract(g703, g702_pdf=build_aia_g702(tmp_path / "g702.pdf", standard_lines(), application_no="4"))
+
+
+def test_two_g702s_must_agree_on_amounts_not_formatting(tmp_path):
+    both = build_g703(tmp_path / "g703.pdf", standard_lines())  # carries its own G702, printed without $
+    ok = extract(both, g702_pdf=build_aia_g702(tmp_path / "same.pdf", standard_lines()))  # printed with $
+    assert ok.pay_request.g702.model_dump() == STANDARD_G702
+    with pytest.raises(ExtractionError, match="disagree"):
+        extract(both, g702_pdf=build_aia_g702(tmp_path / "diff.pdf", standard_lines(),
+                                              override={"current_payment_due": D("99000")}))
+
+
+def test_scanned_separate_g702_is_refused_plainly(tmp_path):
+    g703 = build_g703(tmp_path / "g703.pdf", standard_lines(), g702=False)
+    scan = rasterize(build_aia_g702(tmp_path / "g702.pdf", standard_lines()), tmp_path / "scan.pdf")
+    with pytest.raises(ExtractionError, match="not readable as text"):
+        extract(g703, g702_pdf=scan)

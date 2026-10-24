@@ -266,3 +266,17 @@ def test_fallback_without_credentials_is_a_fallback_error(monkeypatch):
 
     with pytest.raises(fallback.FallbackError, match="api_key"):
         fallback.ask({}, QUESTIONS, client=NoKey())
+
+
+def test_gateway_accepts_the_team_key_name(monkeypatch):
+    monkeypatch.delenv("JEV_BASE_URL", raising=False)
+    monkeypatch.delenv("AI_GATEWAY_API_KEY", raising=False)
+    monkeypatch.setenv("JEV_API_KEY", "team-key")
+    opener = opener_returning({"answers": {}})
+    jev.ask({}, {}, opener=opener)
+    assert opener.calls[0].get_header("Authorization") == "Bearer team-key"
+
+
+def test_auth_failure_names_the_route(gateway_key):
+    with pytest.raises(jev.JevError, match="is the key for this route"):
+        jev.ask({}, {}, opener=opener_returning(http_error(401)), sleep=lambda s: None)
