@@ -12,6 +12,7 @@ import re
 import sys
 import threading
 import time
+from contextlib import contextmanager
 from dataclasses import dataclass
 from datetime import date
 from decimal import Decimal
@@ -122,9 +123,21 @@ def _check_signature_gate(request: PayRequest, amount: Decimal, approval: Signed
         raise ExecutionRefused("a human rejected this payment on the device")
 
 
-# One payment at a time: the paid-once check, the bank call and the record happen under this lock,
-# so two simultaneous /pay calls can't both see "not paid" (single API process; see README).
+# One payment at a time: the paid-once check, the bank call and the record happen under these locks,
+# so two simultaneous /pay calls can't both see "not paid". _PAY_LOCK covers threads in this process;
+# events.exclusive covers every process writing the same log (Vercel instances via a Postgres advisory
+# lock, local workers via a file lock).
 _PAY_LOCK = threading.Lock()
+
+
+@contextmanager
+def _paying(log_path):
+    with _PAY_LOCK:
+        try:
+            with events.exclusive("payments", path=log_path):
+                yield
+        except events.LockTimeout as e:
+            raise ExecutionRefused(f"another payment is still in progress ({e}); try again in a moment") from e
 
 
 def payment_status(request_id: str, log_path=events.DEFAULT_PATH) -> str | None:
@@ -188,7 +201,7 @@ def execute(decision: Decision, request: PayRequest, *, auto_release_limit_usd: 
         raise ExecutionRefused(f"payment due {g.current_payment_due} doesn't match the lines ({lines_due})")
     amount = g.current_payment_due
 
-    with _PAY_LOCK:
+    with _paying(log_path):
         check_payable(request, log_path)
         executions = events.read(kind="execution", path=log_path)
         needs_signature = decision.action == Action.escalate or bool(failed) or amount > Decimal(str(auto_release_limit_usd))
@@ -234,7 +247,7 @@ def _record_payment(request: PayRequest, amount: Decimal, result: dict, log_path
 def resolve_unknown(request: PayRequest, log_path=events.DEFAULT_PATH) -> str:
     """After an unknown outcome, ask the bank: a bill tagged with this request means it was paid
     (recorded now); none means it wasn't, and the request may be paid again. Returns 'paid' or 'unpaid'."""
-    with _PAY_LOCK:
+    with _paying(log_path):
         if payment_status(request.id, log_path) != "unknown":
             raise ExecutionRefused(f"{request.id} has no payment with an unknown outcome to resolve")
         base, key, account = _nessie_config()

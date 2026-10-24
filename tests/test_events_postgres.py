@@ -68,3 +68,24 @@ def test_explicit_path_still_uses_sqlite(pg, tmp_path):
     events.append("signature", {"sig": "s"}, request_id="only-sqlite", path=p)
     assert events.read_for_request("only-sqlite") == []  # not in Postgres
     assert len(events.read_for_request("only-sqlite", path=p)) == 1
+
+
+def test_advisory_lock_serializes_connections(pg, monkeypatch):
+    """Two Vercel instances = two connections; the payments lock lets one in at a time."""
+    import threading
+    import time
+    from events import log as events
+    order = []
+
+    def worker(name):
+        with events.exclusive("payments"):
+            order.append(f"{name} in")
+            time.sleep(0.5)
+            order.append(f"{name} out")
+
+    threads = [threading.Thread(target=worker, args=(n,)) for n in ("a", "b")]
+    for th in threads:
+        th.start()
+    for th in threads:
+        th.join()
+    assert order in (["a in", "a out", "b in", "b out"], ["b in", "b out", "a in", "a out"])
