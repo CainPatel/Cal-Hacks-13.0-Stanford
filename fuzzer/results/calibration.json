@@ -1,0 +1,203 @@
+{
+  "answers": 6000,
+  "curve": {
+    "bins": [
+      {
+        "bin": "0.2-0.3",
+        "n": 1,
+        "mean_confidence": 0.28,
+        "accuracy": 1.0
+      },
+      {
+        "bin": "0.3-0.4",
+        "n": 9,
+        "mean_confidence": 0.3433,
+        "accuracy": 1.0
+      },
+      {
+        "bin": "0.4-0.5",
+        "n": 17,
+        "mean_confidence": 0.4435,
+        "accuracy": 1.0
+      },
+      {
+        "bin": "0.5-0.6",
+        "n": 2,
+        "mean_confidence": 0.53,
+        "accuracy": 1.0
+      },
+      {
+        "bin": "0.7-0.8",
+        "n": 11,
+        "mean_confidence": 0.7718,
+        "accuracy": 1.0
+      },
+      {
+        "bin": "0.8-0.9",
+        "n": 50,
+        "mean_confidence": 0.8574,
+        "accuracy": 1.0
+      },
+      {
+        "bin": "0.9-1.0",
+        "n": 5910,
+        "mean_confidence": 0.991,
+        "accuracy": 1.0
+      }
+    ],
+    "expected_calibration_error": 0.0133
+  },
+  "by_question": {
+    "bank_change_suspicious": {
+      "bins": [
+        {
+          "bin": "0.9-1.0",
+          "n": 1200,
+          "mean_confidence": 0.9993,
+          "accuracy": 1.0
+        }
+      ],
+      "expected_calibration_error": 0.0007
+    },
+    "duplicate_likelihood": {
+      "bins": [
+        {
+          "bin": "0.2-0.3",
+          "n": 1,
+          "mean_confidence": 0.28,
+          "accuracy": 1.0
+        },
+        {
+          "bin": "0.3-0.4",
+          "n": 9,
+          "mean_confidence": 0.3433,
+          "accuracy": 1.0
+        },
+        {
+          "bin": "0.4-0.5",
+          "n": 17,
+          "mean_confidence": 0.4435,
+          "accuracy": 1.0
+        },
+        {
+          "bin": "0.5-0.6",
+          "n": 2,
+          "mean_confidence": 0.53,
+          "accuracy": 1.0
+        },
+        {
+          "bin": "0.8-0.9",
+          "n": 1,
+          "mean_confidence": 0.89,
+          "accuracy": 1.0
+        },
+        {
+          "bin": "0.9-1.0",
+          "n": 1170,
+          "mean_confidence": 0.9752,
+          "accuracy": 1.0
+        }
+      ],
+      "expected_calibration_error": 0.0385
+    },
+    "progress_plausible": {
+      "bins": [
+        {
+          "bin": "0.7-0.8",
+          "n": 11,
+          "mean_confidence": 0.7718,
+          "accuracy": 1.0
+        },
+        {
+          "bin": "0.8-0.9",
+          "n": 47,
+          "mean_confidence": 0.8553,
+          "accuracy": 1.0
+        },
+        {
+          "bin": "0.9-1.0",
+          "n": 1142,
+          "mean_confidence": 0.9931,
+          "accuracy": 1.0
+        }
+      ],
+      "expected_calibration_error": 0.0143
+    },
+    "proposed_action": {
+      "bins": [
+        {
+          "bin": "0.8-0.9",
+          "n": 2,
+          "mean_confidence": 0.89,
+          "accuracy": 1.0
+        },
+        {
+          "bin": "0.9-1.0",
+          "n": 1198,
+          "mean_confidence": 0.9932,
+          "accuracy": 1.0
+        }
+      ],
+      "expected_calibration_error": 0.007
+    },
+    "release_form_correct": {
+      "bins": [
+        {
+          "bin": "0.9-1.0",
+          "n": 1200,
+          "mean_confidence": 0.9941,
+          "accuracy": 1.0
+        }
+      ],
+      "expected_calibration_error": 0.0059
+    }
+  },
+  "threshold": {
+    "alpha": 0.01,
+    "delta": 0.05,
+    "chosen": {
+      "threshold": 0.5,
+      "accepted": 2978,
+      "errors": 0,
+      "error_bound": 0.00232,
+      "coverage": 0.9927
+    }
+  },
+  "holdout": {
+    "accepted": 2995,
+    "coverage": 0.9983,
+    "error_rate": 0.0
+  },
+  "per_question": {
+    "bank_change_suspicious": {
+      "answers": 1200,
+      "accuracy": 1.0,
+      "threshold": null,
+      "holdout": null
+    },
+    "duplicate_likelihood": {
+      "answers": 1200,
+      "accuracy": 1.0,
+      "threshold": null,
+      "holdout": null
+    },
+    "progress_plausible": {
+      "answers": 1200,
+      "accuracy": 1.0,
+      "threshold": null,
+      "holdout": null
+    },
+    "proposed_action": {
+      "answers": 1200,
+      "accuracy": 1.0,
+      "threshold": null,
+      "holdout": null
+    },
+    "release_form_correct": {
+      "answers": 1200,
+      "accuracy": 1.0,
+      "threshold": null,
+      "holdout": null
+    }
+  }
+}

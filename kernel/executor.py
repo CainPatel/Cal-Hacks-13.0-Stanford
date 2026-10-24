@@ -212,6 +212,8 @@ def execute(decision: Decision, request: PayRequest, *, auto_release_limit_usd: 
             used = (set(used_nonces or ()) | {e.data.get("nonce") for e in events.read(kind="signature", path=log_path)}) \
                 - released
             _check_signature_gate(request, amount, approval, pubkey_hex, used)
+        _refuse_if_in_bank(request, log_path)  # after the signature checks, before the approval is spent
+        if needs_signature:
             events.append("signature", {"sig": approval.sig_hex, "nonce": approval.nonce,
                                          "payload": approval.payload}, request_id=request.id, path=log_path)
 
@@ -242,6 +244,44 @@ def _record_payment(request: PayRequest, amount: Decimal, result: dict, log_path
         job_id=request.job_id, kind=LedgerKind.sub_payment, amount=amount, date=date.today(),
         period_end=request.period_end, sub_id=request.sub_id, request_id=request.id,
         bank_account=request.bank_account), table="ledger", path=log_path)
+
+
+def bank_payment(request: PayRequest) -> LedgerEntry | None:
+    """The bank's record of paying this request, or this sub for the same job and period, if it has one.
+
+    Copies of Draw that share one Nessie account but keep separate logs (a laptop and the deployment)
+    can't see each other's payments in their logs. Every payment lands in the bank, so it is asked
+    right before paying."""
+    base, key, account = _nessie_config()
+    payments, _ = _bank_bills(base, key, account)
+    return next((e for e in payments if e.request_id == request.id or (
+        e.sub_id == request.sub_id and e.job_id == request.job_id and e.period_end == request.period_end)), None)
+
+
+def _refuse_if_in_bank(request: PayRequest, log_path) -> None:
+    """Refuse when the bank already shows this payment, after recording it in this log; refuse too
+    when the bank can't be asked, since a payment that might already exist must not be made again."""
+    try:
+        found = bank_payment(request)
+    except NessieError as e:
+        raise ExecutionRefused(f"couldn't check the bank before paying, so nothing was paid: {e}") from e
+    if found is None:
+        return
+    if not any(e.id == found.id for e in events.state(path=log_path)["ledger"]):
+        events.append("fact", found, table="ledger", at=found.date, path=log_path)
+    if found.request_id == request.id:
+        events.append("execution", {"status": "paid", "request_id": request.id, "amount": str(found.amount),
+                                     "bank": "nessie", "nessie_bill_id": found.id.removeprefix("nessie_"),
+                                     "found_in_bank": True}, request_id=request.id, path=log_path)
+    raise ExecutionRefused(f"{request.id} was already paid: the bank shows ${found.amount:,.2f} to {found.sub_id} on "
+                           f"{found.date} (request {found.request_id}). It's recorded here now; nothing was paid again.")
+
+
+def check_bank(request: PayRequest, log_path=events.DEFAULT_PATH) -> None:
+    """The bank check on its own, for callers about to ask the owner to tap the approval key, so nobody
+    approves a payment the bank already holds. execute() checks again under the same lock."""
+    with _paying(log_path):
+        _refuse_if_in_bank(request, log_path)
 
 
 def resolve_unknown(request: PayRequest, log_path=events.DEFAULT_PATH) -> str:
@@ -344,6 +384,13 @@ def nessie_ledger() -> tuple[list[LedgerEntry], list[str]]:
                                    period_end=date.fromisoformat(period_end)))
         except (ValueError, KeyError, ArithmeticError) as e:
             skipped.append(f"deposit {d.get('_id')}: {e}")
+    payments, bad_bills = _bank_bills(base, key, account)
+    return out + payments, skipped + bad_bills
+
+
+def _bank_bills(base: str, key: str, account: str) -> tuple[list[LedgerEntry], list[str]]:
+    """(sub payments, skipped rows) from the bills this system tagged on the GC's account."""
+    out, skipped = [], []
     for b in _nessie("GET", f"/accounts/{account}/bills", key=key, base=base) or []:
         parts = str(b.get("nickname", "")).split("|") if isinstance(b, dict) else []
         if len(parts) < 6 or parts[0] != "pay" or b.get("status") not in ("completed", "pending"):

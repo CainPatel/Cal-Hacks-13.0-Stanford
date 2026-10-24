@@ -1,10 +1,16 @@
 """python -m events load        fresh data/events.db from the seed (clean + 3 demo holds)
 python -m events replay 6    decide every request through month 6 (Oct), appending decisions
 python -m events replay 6 --judge   same, with Jev (or the Claude fallback) answering first
+python -m events replay 6 --judge --redo   decide every unpaid request again (the newest decision counts)
 python -m events nessie-setup       create the GC's bank account in the Nessie sandbox and load its history
 python -m events nessie-sync        copy owner draws and sub payments from Nessie into the log
 python -m events nessie-resolve ID  settle a payment whose outcome is unknown by asking Nessie
 python -m events crs-verify [ID]    check vendors (all, or one) with CRS; record changed statuses
+python -m events snapshot [FILE]    copy the shared Postgres log into a new SQLite file (default data/events.db)
+python -m events archive --yes      set the whole log aside (renamed, never deleted) and start an empty one
+
+With DATABASE_URL set (in .env), every command works on the shared Postgres log, the same one the
+deployment uses; without it, on data/events.db.
 """
 import sys
 from collections import Counter
@@ -32,7 +38,7 @@ elif cmd == "replay":
     judge = None
     if "--judge" in sys.argv:
         from judgment import judge
-    decisions = replay(month, path=PATH, judge=judge)
+    decisions = replay(month, path=PATH, judge=judge, redo="--redo" in sys.argv)
     print(f"kernel: {pipeline.KERNEL}")
     print(f"{len(decisions)} new decisions through month {month}: {dict(Counter(d.action.value for d in decisions))}")
 elif cmd == "nessie-setup":
@@ -85,5 +91,22 @@ elif cmd == "crs-verify":
         if updated.crs_status != v.crs_status:
             events.append("fact", updated, table="vendors", path=PATH)
         print(f"  {v.id}: {result.status} ({'; '.join(result.reasons)})")
+elif cmd == "snapshot":
+    import os
+    if not os.environ.get("DATABASE_URL"):
+        sys.exit("DATABASE_URL isn't set, so there's no shared log to copy; data/events.db is already local.")
+    dst = Path(sys.argv[2]) if len(sys.argv) > 2 else PATH
+    try:
+        n = events.copy_to_sqlite(dst)
+    except FileExistsError as e:
+        sys.exit(f"{e} (`make snapshot` archives it for you)")
+    print(f"copied {n} events from {events.where(PATH)} into {dst}; run it offline with `make offline`")
+elif cmd == "archive":
+    if "--yes" not in sys.argv:
+        sys.exit(f"This sets aside everything in {events.where(PATH)} (kept, not deleted) and starts an empty log. "
+                 "Run again with --yes to do it.")
+    if events.is_empty(PATH):
+        sys.exit(f"{events.where(PATH)} is already empty; nothing to set aside.")
+    print(f"the old log is now {events.archive(PATH)}; {events.where(PATH)} is empty")
 else:
     sys.exit(__doc__)

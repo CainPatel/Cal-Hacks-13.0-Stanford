@@ -118,9 +118,13 @@ function PayRequests() {
           </div>
         )}
 
-        {unchecked && (
+        {count("not_checked") > 0 && (
           <div className="flex flex-wrap items-center justify-between gap-4 rounded-lg border bg-sheet p-6">
-            <p>These pay requests haven&apos;t been checked yet.</p>
+            <p>
+              {unchecked
+                ? "These pay requests haven't been checked yet."
+                : `${count("not_checked")} pay ${count("not_checked") === 1 ? "request hasn't" : "requests haven't"} been checked yet.`}
+            </p>
             <Button size="lg" onClick={check} disabled={checking}>
               {checking ? "Checking…" : `Check ${MONTHS[month - 1]}`}
             </Button>

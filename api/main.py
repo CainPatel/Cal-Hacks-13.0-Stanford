@@ -4,14 +4,18 @@ except through replay and the attack console, which only append.
     make api        # uvicorn api.main:app --reload --port 8000
 
 GET  /requests?month=6     one month's pay requests with a plain-English status
-GET  /requests/{id}        one request: checklist, lines with video estimates, trace
+GET  /requests/{id}        one request: checklist, lines with video estimates, trace, Jev's review
 GET  /events?after=0       Server-Sent Events from the log (after=-1: from now on; follow=false to just dump)
+GET  /log?limit=100        the log as JSON, newest first, with a sentence per row (&before=seq, &kind=, &request_id=)
 GET  /scorecard            data/scorecard.json from `make fuzz`
-GET  /calibration          data/calibration.json from `python -m fuzzer.calibration`
+GET  /calibration          data/calibration.json from `python -m fuzzer.calibration` (else the committed report)
 GET  /attacks              what the attack console offers
 POST /attacks              run one attack: {"name", "target", "settings"}
 POST /attacks/describe     a judge's plain-English attack, mapped by Claude: {"text"}
-POST /replay?through=6     decide every undecided request through that month (&judge=true: Jev first)
+POST /sync                 copy the bank's ledger (Nessie: owner draws, sub payments) into the log
+POST /replay?through=6     sync the bank, then decide every undecided request through that month; Jev answers
+                           first whenever a model is configured (&judge=false: rules only; &redo=true: decide
+                           every unpaid request again)
 POST /pay-apps             upload a sub's pay application PDF (form: file, sub_id, job_id) -> a pay_requests fact
 POST /site-video           upload the super's walkthrough video (form: file, job_id) -> a site_evidence fact
 POST /releases             upload a lien release PDF (form: file, sub_id, job_id) -> a releases fact
@@ -46,9 +50,9 @@ from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 
 from events import log as events
-from events.replay import month_end, replay
+from events.replay import double_payments, in_month, month_end, replay, sync_ledger
 from fuzzer import run as fuzzer
-from shared.schema import Action, Decision
+from shared.schema import Action, Decision, LedgerKind
 
 DB = events.DEFAULT_PATH
 # Working files. On Vercel only /tmp is writable (and it doesn't last): the log is Postgres there,
@@ -56,6 +60,9 @@ DB = events.DEFAULT_PATH
 DATA = Path(os.environ.get("DRAW_DATA_DIR") or ("/tmp/draw" if os.environ.get("VERCEL") else "data"))
 SCORECARD = DATA / "scorecard.json"
 CALIBRATION = DATA / "calibration.json"
+# The last real calibration run, committed: it takes thousands of Jev calls, so a deployment can't
+# score it on a cold start the way it scores the attack scorecard.
+CALIBRATION_REPORT = Path(__file__).resolve().parents[1] / "fuzzer" / "results" / "calibration.json"
 UPLOADS = DATA / "uploads"
 FRAMES = DATA / "frames"
 MAX_PDF_BYTES = 32 * 1024 * 1024
@@ -91,22 +98,48 @@ def _jev_ready() -> bool:
         return False
 
 
+def _fingerprint(value: str | None) -> str | None:
+    """A short hash, so two copies of Draw can be compared (same database? same bank account?) without
+    showing either value."""
+    return hashlib.sha256(value.encode()).hexdigest()[:8] if value else None
+
+
+def _judge_model():
+    """judgment.judge when a model can answer (Jev, or Claude as its fallback); None means rules only.
+    With no model at all, judging would only escalate everything (rule 15 sees zero confidence)."""
+    if not (_jev_ready() or os.environ.get("ANTHROPIC_API_KEY")):
+        return None
+    from judgment import judge
+    return judge
+
+
 @app.get("/")
 def status():
     """What's configured on this deployment, as yes/no only (never a value), plus whether the log has data."""
+    from urllib.parse import urlsplit
     env = lambda *names: any(os.environ.get(n) for n in names)
-    log = "postgres" if os.environ.get("DATABASE_URL") else ("not connected" if os.environ.get("VERCEL") else "sqlite")
+    db_url = os.environ.get("DATABASE_URL")
+    log = "postgres" if db_url else ("not connected" if os.environ.get("VERCEL") else "sqlite")
     try:
         has_events = not events.is_empty(DB)
     except Exception as e:  # report, don't crash the status page
         has_events = f"error: {type(e).__name__}"
+    db = urlsplit(db_url) if db_url else None
     return {
         "service": "Draw API", "docs": "/docs", "event_log": log, "log_has_events": has_events,
+        "version": (os.environ.get("VERCEL_GIT_COMMIT_SHA") or "")[:7] or None,
+        # equal on two copies means they read and write the same log / pay from the same bank account
+        "log_fingerprint": _fingerprint(f"{db.hostname}{db.path}") if db else None,
+        "bank_fingerprint": _fingerprint(os.environ.get("NESSIE_ACCOUNT_ID")),
         "configured": {
             "anthropic_key": env("ANTHROPIC_API_KEY"), "jev_key": _jev_ready(), "jev_route": _jev_route(),
-            "nessie_key": env("NESSIE_API_KEY"), "blob_store": env("BLOB_STORE_ID", "BLOB_READ_WRITE_TOKEN"),
+            "judgment": "jev" if _jev_ready() else "claude" if env("ANTHROPIC_API_KEY") else "rules only",
+            "nessie_key": env("NESSIE_API_KEY"), "nessie_account": env("NESSIE_ACCOUNT_ID"),
+            "crs": env("CRS_API_KEY") or (env("CRS_USERNAME") and env("CRS_PASSWORD")),
+            "blob_store": env("BLOB_STORE_ID", "BLOB_READ_WRITE_TOKEN"),
             "cors_origins": os.environ.get("CORS_ORIGINS", "http://localhost:3000 (default)"),
-            "device_url": env("DEVICE_URL"),
+            "device_url": env("DEVICE_URL"), "approval_pubkey": bool(_approval_key()[1]),
+            "upload_passcode": env("UPLOAD_PASSCODE"), "inbound_email": env("INBOUND_PASSWORD"),
         },
     }
 
@@ -116,10 +149,16 @@ def decisions() -> dict[str, Decision]:
     return {e.request_id: Decision.model_validate(e.data) for e in events.read(kind="kernel_trace", path=DB)}
 
 
-def payments() -> dict[str, dict]:
-    """Successful executions per request (the bank's receipt)."""
-    return {e.request_id: {**e.data, "at": e.ts.isoformat()} for e in events.read(kind="execution", path=DB)
+def payments(state=None) -> dict[str, dict]:
+    """Paid requests: this log's own receipts, then the bank ledger's sub payments (past months, and
+    payments another copy of Draw made from the same Nessie account, once synced)."""
+    paid = {e.request_id: {**e.data, "at": e.ts.isoformat()} for e in events.read(kind="execution", path=DB)
             if e.data.get("status", "paid") == "paid"}
+    for entry in (state or events.state(path=DB))["ledger"]:
+        if entry.kind == LedgerKind.sub_payment and entry.request_id and entry.request_id not in paid:
+            paid[entry.request_id] = {"status": "paid", "amount": str(entry.amount), "at": entry.date.isoformat(),
+                                      "source": "bank ledger"}
+    return paid
 
 
 def escalation_reason(req, state, decision: Decision) -> str:
@@ -180,8 +219,10 @@ def row(req, state, decision, paid=None):
 
 @app.get("/requests")
 def list_requests(month: int = 6):
-    state, ds, ps = events.state(path=DB), decisions(), payments()
-    return [row(r, state, ds.get(r.id), ps.get(r.id)) for r in state["pay_requests"] if r.period_end == month_end(month)]
+    """One month's requests: every pay application whose period ends in that calendar month."""
+    state, ds = events.state(path=DB), decisions()
+    ps = payments(state)
+    return [row(r, state, ds.get(r.id), ps.get(r.id)) for r in state["pay_requests"] if in_month(r.period_end, month)]
 
 
 @app.get("/requests/{request_id}")
@@ -191,10 +232,13 @@ def get_request(request_id: str):
     if req is None:
         raise HTTPException(404, f"no pay request {request_id}")
     decision = decisions().get(request_id)
+    review = next((e.data for e in reversed(events.read(kind="judgment", request_id=request_id, path=DB))), None)
     site = max((s for s in state["site_evidence"] if s.job_id == req.job_id and s.date <= req.period_end),
                key=lambda s: s.date, default=None)
     return {
-        **row(req, state, decision, payments().get(request_id)),
+        **row(req, state, decision, payments(state).get(request_id)),
+        # Jev's latest answers (source, proposal, each answer with its confidence), behind "Show details"
+        "judgment": {k: review.get(k) for k in ("source", "proposal", "answers")} if review else None,
         "checklist": [{"rule": r.rule, "passed": r.passed, "message": r.message} for r in decision.results]
         if decision else [],
         "lines": [{**l.model_dump(mode="json"),
@@ -216,6 +260,9 @@ async def stream(request: Request, after: int = 0, follow: bool = True):
         rows = events.read(path=DB)
         after = rows[-1].seq if rows else 0
 
+    # Postgres is a network round trip per look (and keeps Neon from idling), so it's asked less often.
+    every = 2.0 if os.environ.get("DATABASE_URL") else 0.5
+
     async def gen():
         last = after
         while True:
@@ -224,7 +271,7 @@ async def stream(request: Request, after: int = 0, follow: bool = True):
                 yield f"id: {e.seq}\nevent: {e.kind}\ndata: {e.model_dump_json()}\n\n"
             if not follow or await request.is_disconnected():
                 return
-            await asyncio.sleep(0.5)
+            await asyncio.sleep(every)
 
     return StreamingResponse(gen(), media_type="text/event-stream")
 
@@ -246,9 +293,11 @@ def scorecard():
 
 @app.get("/calibration")
 def calibration():
-    if not CALIBRATION.exists():
-        raise HTTPException(404, "no calibration yet; run `python -m fuzzer.calibration` (needs kernel + Jev/Claude)")
-    return json.loads(CALIBRATION.read_text())
+    """This machine's latest run if there is one, else the committed report from the last real run."""
+    for path in (CALIBRATION, CALIBRATION_REPORT):
+        if path.exists():
+            return json.loads(path.read_text())
+    raise HTTPException(404, "no calibration yet; run `python -m fuzzer.calibration` (needs kernel + Jev/Claude)")
 
 
 class AttackIn(BaseModel):
@@ -319,6 +368,7 @@ def approve(request_id: str):
         raise HTTPException(409, "Only a request that needs your OK goes to the approval key.")
     try:
         executor.check_payable(req, log_path=DB)
+        executor.check_bank(req, log_path=DB)  # never ask for a tap on a payment the bank already has
     except executor.ExecutionRefused as e:
         return {"paid": False, "rejected": False, "reason": str(e)}
     decision = _fresh_decision(state, request_id, stored)
@@ -359,10 +409,17 @@ class PayIn(BaseModel):
 
 def _fresh_decision(state, request_id: str, stored: Decision) -> Decision:
     """Decide again on what is known now; facts can arrive after the stored decision (a lapsed COI, a
-    bank-change email). A new hold wins; an escalation on either side keeps the owner's sign-off."""
+    bank-change email). Jev answers again when a model is configured, as in replay. A new hold wins;
+    an escalation on either side keeps the owner's sign-off."""
     import pipeline
-    fresh = pipeline.decide(state, request_id)
+    model, review = _judge_model(), None
+    if model is not None:
+        fresh, review = pipeline.judge_and_decide(state, request_id, judge=model)
+    else:
+        fresh = pipeline.decide(state, request_id)
     if fresh.action != stored.action or [r.passed for r in fresh.results] != [r.passed for r in stored.results]:
+        if review is not None:
+            events.append("judgment", pipeline.judgment_event(review), request_id=request_id, path=DB)
         events.append("kernel_trace", fresh, request_id=request_id, path=DB)
     if fresh.action == Action.hold or fresh.action == Action.escalate or stored.action != Action.escalate:
         return fresh
@@ -408,6 +465,10 @@ def pay(request_id: str, body: PayIn):
         if not device or not pubkey:
             raise HTTPException(503, "The approval key isn't set up yet (DEVICE_URL and the key's public key in "
                                      "config/contract.yaml).")
+        try:
+            executor.check_bank(req, log_path=DB)  # never ask for a tap on a payment the bank already has
+        except executor.ExecutionRefused as e:
+            raise HTTPException(409, f"Not paid: {e}")
         # The owner signs the destination too, so a bank change can't ride on an approval for the old account.
         payload = {"request_id": req.id, "payee": _vendor_name(state, req.sub_id) or req.sub_id,
                    "sub_id": req.sub_id, "amount": str(amount), "job": req.job_id,
@@ -530,17 +591,114 @@ def setup_demo():
     if not events.is_empty(DB):
         raise HTTPException(409, "The event log already has data; the demo company only loads into an empty log.")
     facts = load_seed(with_demo(generate())[0], path=DB)
-    return {"facts_loaded": facts, "decisions": len(replay(6, path=DB))}
+    bank = _sync_bank()
+    model = _judge_model()
+    return {"facts_loaded": facts, "bank": bank, "judged": model is not None,
+            "decisions": len(replay(6, path=DB, judge=model))}
+
+
+def _sync_bank() -> dict:
+    """Bring the bank's ledger into the log; never fails the caller (the answer says what happened)."""
+    from kernel import executor
+    if not (os.environ.get("NESSIE_API_KEY") and os.environ.get("NESSIE_ACCOUNT_ID")):
+        return {"skipped": "Nessie isn't configured (NESSIE_API_KEY, NESSIE_ACCOUNT_ID)"}
+    try:
+        entries, skipped = executor.nessie_ledger()
+    except executor.NessieError as e:
+        return {"error": f"Couldn't read the bank: {e}"}
+    return {"in_bank": len(entries), "new_to_log": sync_ledger(entries, path=DB), "skipped_rows": skipped,
+            "paid_twice": double_payments(entries)}
+
+
+@app.post("/sync")
+def sync():
+    """Copy the bank's ledger into the log: owner draws (rule 08) and sub payments, including ones another
+    copy of Draw made from the same Nessie account. Each payment is added once."""
+    if events.is_empty(DB):
+        raise HTTPException(409, "The event log is empty; load the demo company first (POST /setup/demo).")
+    bank = _sync_bank()
+    if "skipped" in bank:
+        raise HTTPException(503, bank["skipped"])
+    if "error" in bank:
+        raise HTTPException(502, bank["error"])
+    return bank
 
 
 @app.post("/replay")
-def run_replay(through: int = 6, judge: bool = False):
+def run_replay(through: int = 6, judge: bool | None = None, redo: bool = False):
     if events.is_empty(DB):
         raise HTTPException(409, "no events yet; run `make events` (or `python -m events load` against Postgres) first")
-    model = None
-    if judge:
-        from judgment import judge as model
-    return {"new_decisions": len(replay(through, path=DB, judge=model))}
+    bank = _sync_bank()
+    model = _judge_model() if judge is not False else None
+    if judge and model is None:
+        raise HTTPException(503, "No model is configured to review requests (a Jev key, or ANTHROPIC_API_KEY).")
+    return {"new_decisions": len(replay(through, path=DB, judge=model, redo=redo)), "judged": model is not None,
+            "bank": bank}
+
+
+# How each row of the log reads on the Log tab. Names come from the log itself (vendors, jobs).
+def _usd(value) -> str:
+    try:
+        return f"${Decimal(str(value)):,.2f}"
+    except ArithmeticError:
+        return f"${value}"
+
+
+def _log_line(e, names: dict[str, str]) -> str:
+    d, who = e.data, lambda sid: names.get(sid, sid or "?")
+    if e.kind == "fact":
+        t = e.table
+        if t == "pay_requests":
+            due = (d.get("g702") or {}).get("current_payment_due")
+            return f"Pay application #{d.get('number')} from {who(d.get('sub_id'))} came in: {_usd(due)} due."
+        if t == "ledger":
+            if d.get("kind") == "owner_draw":
+                return f"The owner's draw for {who(d.get('job_id'))} cleared: {_usd(d.get('amount'))}."
+            return f"The bank paid {who(d.get('sub_id'))} {_usd(d.get('amount'))} (request {d.get('request_id')})."
+        if t == "vendors":
+            return f"{d.get('legal_name')} is on file; identity check: {d.get('crs_status')}."
+        if t == "releases":
+            return f"Lien release from {who(d.get('sub_id'))}: {str(d.get('kind', '')).replace('_', ' ')}, {_usd(d.get('amount'))}."
+        if t == "cois":
+            return f"Insurance certificate for {who(d.get('sub_id'))} (workers' comp until {d.get('wc_expiry')})."
+        if t == "emails":
+            return f"Email from {d.get('from_addr')}: {d.get('subject') or '(no subject)'}."
+        if t == "site_evidence":
+            return f"Site video for {who(d.get('job_id'))} from {d.get('date')}."
+        if t == "lower_tier_notices":
+            return f"{d.get('supplier')} filed a notice to owner on {who(d.get('sub_id'))}'s work."
+        return f"{t.replace('_', ' ').capitalize()} on file: {d.get('id')}."
+    if e.kind == "judgment":
+        if d.get("source") == "unavailable":
+            return "No model could review it."
+        reviewer = "Jev" if d.get("source") == "jev" else str(d.get("source", "")).capitalize()
+        return f"{reviewer} reviewed it and suggested: {(d.get('proposal') or {}).get('action')}."
+    if e.kind == "kernel_trace":
+        failed = [r.get("rule", "")[:2] for r in d.get("results", []) if not r.get("passed")]
+        return f"The rules decided: {d.get('action')}" + (f" (didn't pass: {', '.join(failed)})." if failed else ".")
+    if e.kind == "signature":
+        return f"Signed on the approval key for {_usd((d.get('payload') or {}).get('amount'))}."
+    status = d.get("status", "paid")
+    return {"started": f"Sent {_usd(d.get('amount'))} to the bank.",
+            "paid": f"Paid {_usd(d.get('amount'))}" + (" (found in the bank)." if d.get("found_in_bank") else "."),
+            "failed": f"The bank didn't take the payment: {d.get('error')}",
+            "resolved_unpaid": "Checked the bank: no payment was made, so it can be paid again."}.get(status, status)
+
+
+@app.get("/log")
+def log_page(limit: int = 100, before: int | None = None, kind: str | None = None, request_id: str | None = None):
+    """The event log, newest first, a page at a time, each row with a plain sentence (the Log tab)."""
+    if kind and kind not in events.KINDS:
+        raise HTTPException(422, f"kind must be one of {sorted(events.KINDS)}")
+    limit = max(1, min(limit, 500))
+    rows = events.read(kind=kind or None, request_id=request_id or None, path=DB)
+    if before is not None:
+        rows = [e for e in rows if e.seq < before]
+    page = rows[-limit:][::-1]
+    state = events.state(path=DB)
+    names = {v.id: v.legal_name for v in state["vendors"]} | {j.id: j.name for j in state["jobs"]}
+    return {"events": [{**e.model_dump(mode="json"), "line": _log_line(e, names)} for e in page],
+            "more": len(rows) > len(page)}
 
 
 def _save_upload(upload: UploadFile, limit: int, suffix: str) -> tuple[Path, str]:

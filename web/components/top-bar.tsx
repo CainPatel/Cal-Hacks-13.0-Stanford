@@ -12,6 +12,7 @@ const TABS = [
   { href: "/approve", label: "Approve" },
   { href: "/security", label: "Security" },
   { href: "/upload", label: "Upload" },
+  { href: "/log", label: "Log" },
 ];
 
 // Pay requests reads ?m= (default 6, as in app/page.tsx); every other page is month 6.

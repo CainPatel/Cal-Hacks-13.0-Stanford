@@ -35,6 +35,7 @@ def signed(priv, req, **overrides):
 def env(tmp_path, monkeypatch):
     paid = []
     monkeypatch.setattr(ex, "_nessie_pay", lambda req, amt: paid.append((req.id, amt)) or {"request_id": req.id})
+    monkeypatch.setattr(ex, "bank_payment", lambda req: None)  # the bank has no earlier payment
     priv = ec.generate_private_key(ec.SECP256R1())
     pub = priv.public_key().public_bytes(serialization.Encoding.X962, serialization.PublicFormat.UncompressedPoint).hex()
     return priv, pub, paid, tmp_path / "events.db"

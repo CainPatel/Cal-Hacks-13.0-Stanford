@@ -35,9 +35,17 @@ make device                       # 3. approval key on :8001 (Mac mock: type a /
 make web                          # 4. dashboard on :3000 (npm install on first run)
 ```
 
-Open `localhost:3000` for the three views: the pay-request list, the owner's **Approve**
-screen (mirrors whatever the device is showing), and **Security** (scorecard, calibration,
-attack console). Or exercise the API directly:
+Open `localhost:3000` for the views: the pay-request list (with **Pay** on requests that are ready),
+the owner's **Approve** screen (mirrors whatever the device is showing), **Security** (scorecard,
+calibration, attack console), **Upload**, and **Log** (every row of the event log, newest first, live).
+Or exercise the API directly:
+
+**One log for the laptop and the deployment.** Put the Neon `DATABASE_URL` in `.env`
+(docs/deploy.md, step 5) and every command above works on the same Postgres log as
+drawapi.vercel.app: what you do locally shows up on the site and the other way round. `make test`
+never touches it. `make demo-online` starts that shared log over with the demo company (the old log is
+renamed, never deleted); `make snapshot` copies it to `data/events.db` and `make offline` serves the
+copy with no network, as a fallback.
 
 | Stage | Try it |
 |---|---|
@@ -66,8 +74,13 @@ python -m events nessie-sync      # copy the bank's ledger (owner draws, sub pay
 ```
 
 Both pay endpoints (`/approve` for escalations, `/pay` for anything) decide again on current facts
-first, pay a request once (also refusing the same application under another id), and sign the bank
-account into the device's payload. If the bank's answer is unknown (a timeout, a 5xx), further attempts
+first (Jev reviews again when a model is configured), pay a request once (also refusing the same
+application under another id), and sign the bank account into the device's payload. Right before
+paying, the executor asks Nessie whether it already holds this payment (or one for the same sub, job
+and period): copies of Draw with separate logs can share one Nessie account, so the bank is the one
+record of every payment. If it does, the payment is recorded in the log and refused; if Nessie can't be
+asked, nothing is paid. `POST /sync` (or `make sync`) copies the bank's ledger into the log, and
+`POST /replay` does it before deciding, so rule 08 sees the latest owner draws. If the bank's answer is unknown (a timeout, a 5xx), further attempts
 are blocked until `POST /requests/{id}/resolve` (or `python -m events nessie-resolve <id>`) finds out
 from Nessie. Payments run one at a time across every API instance (a Postgres advisory lock on Vercel, a
 file lock locally).
@@ -96,7 +109,10 @@ Vercel (dashboard + API), Neon Postgres for the event log, a private Blob store 
 | `make benchmark` | score perception's extractor on `data/synthetic` (no Claude calls) |
 | `make keys` | which of the `.env` secrets are set (never prints a value) |
 | `make hooks` | turn on the repo's secret-blocking pre-commit hook (once per clone) |
-| `make demo` | fresh log, decide May-Oct, score 5,000 attacks, serve the API |
+| `make demo` | fresh local log, decide May-Oct, score 5,000 attacks, serve the API (never Neon) |
+| `make demo-online` | start the shared Neon log over with the demo company, bank synced, Jev in the loop |
+| `make sync` | copy the bank's ledger (Nessie owner draws, sub payments) into the log |
+| `make snapshot` / `make offline` | copy the shared Neon log to `data/events.db` / serve that copy offline |
 | `make test` | all tests |
 
 ## How a pay request flows

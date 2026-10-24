@@ -31,9 +31,10 @@ Two Vercel projects from this repo:
 | `TYPESAFE_API_KEY` | the Jev key from TypeSafe (`apikey_...`). Goes with `JEV_BASE_URL` below |
 | `JEV_BASE_URL` | `https://api.typesafe.ai` for a TypeSafe key. Leave unset only if the key is a Vercel AI Gateway key, which then goes in `JEV_API_KEY` / `AI_GATEWAY_API_KEY` |
 | `NESSIE_API_KEY` | same |
-| `NESSIE_ACCOUNT_ID` | the GC's account in the Nessie sandbox: run `python -m events nessie-setup` once from a laptop with `NESSIE_API_KEY` in `.env`; it prints the id. Without it, payments are refused |
+| `NESSIE_ACCOUNT_ID` | the GC's account in the Nessie sandbox: run `python -m events nessie-setup` once from a laptop with `NESSIE_API_KEY` in `.env`; it prints the id. Without it, payments are refused. Use the **same id as every laptop's `.env`**: the bank is the one record of every payment, and the executor checks it before paying, so copies of Draw never pay the same request twice |
 | `CRS_USERNAME`, `CRS_PASSWORD` | the CRS sandbox login from CRS's email (rule 09's vendor check). Mistyped credentials are tried once and not retried: repeated failed logins lock the CRS account |
 | `CORS_ORIGINS` | the `draw-web` URL, e.g. `https://drawweb.vercel.app` (comma-separate several) |
+| `UPLOAD_PASSCODE` | the same passcode as on `draw-web`: adding a new subcontractor (`POST /vendors`) checks it here |
 | `INBOUND_PASSWORD` | optional: turns on `POST /inbound/postmark`. Postmark's inbound webhook URL is `https://postmark:<this>@drawapi.vercel.app/inbound/postmark` |
 | `DEVICE_URL` | the Pi's Tailscale Funnel URL (step 4) |
 | `SCORECARD_CASES` | optional, default `2000`: attacks scored on a cold start |
@@ -57,10 +58,14 @@ After Neon is connected and `draw-api` redeployed:
 curl -X POST https://drawapi.vercel.app/setup/demo
 ```
 
-It loads 419 facts and decides May-October (90 decisions), on Vercel itself, so the database URL never
-leaves Vercel. It only works on an empty log (409 otherwise), so it can't overwrite real data. To start
-over, drop the table in the Neon console (`DROP TABLE events;`); the log refuses UPDATE, DELETE and
-TRUNCATE by trigger, on purpose.
+It loads 419 facts, copies the bank's ledger in (payments already in Nessie count as paid), and decides
+May-October (90 decisions) with Jev reviewing each request when a model is configured, on Vercel itself.
+It only works on an empty log (409 otherwise), so it can't overwrite real data. To start over from a
+laptop, use `make demo-online` (step 5): it renames the old table to `events_archive_<time>` instead of
+deleting it. The log refuses UPDATE, DELETE and TRUNCATE by trigger, on purpose.
+
+A log decided before Jev was configured: `curl -X POST 'https://drawapi.vercel.app/replay?redo=true'`
+decides every unpaid request again with Jev in the loop (appended; the newest decision counts).
 
 When connecting Neon, set the **Custom Prefix to `DATABASE`** so the variable is `DATABASE_URL` (Draw
 reads that name), and untick Preview under "Create database branch for deployment".
@@ -71,10 +76,38 @@ Vercel can't reach your LAN. On the Pi: `sudo tailscale funnel 8000` prints a pu
 `https://<name>.<tailnet>.ts.net` URL; set it as `DEVICE_URL` on `draw-api`. The URL is public,
 but money moves only on a physical button press plus a signature the executor verifies.
 
+## 5. Your laptop on the same log
+
+So local runs and the site share one event log (and one bank):
+
+1. Vercel → `draw-api` → **Storage** → the Neon database → **.env.local** tab → copy `DATABASE_URL`.
+2. Paste it into your `.env` yourself (`DATABASE_URL=postgresql://...`). `.env` is gitignored, and the
+   pre-commit hook blocks any commit containing it or any Postgres URL with a password.
+3. Check that both copies agree, without showing any value: `curl localhost:8000/` and
+   `curl https://drawapi.vercel.app/` should show the same `log_fingerprint` and `bank_fingerprint`.
+
+Then `make api`, `make events`, `make replay`, `make sync` and the `python -m events ...` commands all
+work on the shared log, and the dashboard on either side updates live. `make test` removes
+`DATABASE_URL` (and every service key) for its run, so tests never touch it.
+
+| Command | Does |
+|---|---|
+| `make demo-online` | start the shared log over with the demo company: old log renamed (kept), seed loaded, Nessie synced, May-October decided with Jev |
+| `make sync` | copy Nessie's ledger (owner draws, payments made from anywhere) into the log |
+| `make snapshot` | copy the shared log into `data/events.db` (the old local file is archived) |
+| `make offline` | serve that copy with no database connection: the venue-Wi-Fi fallback |
+
+## 6. Check the deployment
+
+`curl https://drawapi.vercel.app/` answers yes/no for every setting (never a value), the deployed
+commit (`version`), which log and bank it uses (fingerprints), and how requests are reviewed
+(`judgment`: `jev`, `claude`, or `rules only`). Deploys are manual (above), so compare `version` with
+`git rev-parse --short origin/main` after merging.
+
 ## Limits to know
 
 - **Function duration**: 300 s (Hobby and Pro default). Approve waits up to ~90 s for the button: fine.
-  Live updates (`/events`) reconnect every 300 s on their own.
+  Live updates (`/events`) reconnect every 300 s on their own, and look at Postgres every 2 s.
 - **Request body**: 4.5 MB per request to a function. The Upload screen avoids it: files go from the
   browser straight to Blob, then `POST /ingest` reads them from the store. Video up to 500 MB.
 - **Cold starts** score a fresh 2,000-attack scorecard (~1-3 s) once per instance.
