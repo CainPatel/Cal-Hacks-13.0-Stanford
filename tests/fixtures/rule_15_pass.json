@@ -112,7 +112,7 @@
         "job_id": "job_1",
         "kind": "conditional_progress",
         "through_date": "2026-08-31",
-        "amount": "13500.00",
+        "amount": "500000.00",
         "signed": true,
         "received_at": "2026-08-25"
       },
@@ -163,6 +163,7 @@
     "site_evidence": null,
     "known_bank_account": "021000021:123456789",
     "contract": {
+      "auto_release_limit_usd": 25000,
       "escalation_confidence_threshold": 0.85
     },
     "proposal": {
@@ -173,7 +174,8 @@
       },
       "reasons": [
         "Looks clean."
-      ]
+      ],
+      "answers": {}
     }
   },
   "request": {

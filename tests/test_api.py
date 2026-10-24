@@ -99,7 +99,7 @@ def test_approve_flow(client, monkeypatch, tmp_path):
     priv = ec.generate_private_key(ec.SECP256R1())
     pub = priv.public_key().public_bytes(serialization.Encoding.X962, serialization.PublicFormat.UncompressedPoint).hex()
     monkeypatch.setenv("DEVICE_URL", "http://drawkey.test:8001")
-    monkeypatch.setattr("kernel.contract.load_contract", lambda: {"auto_release_limit_usd": 25000, "esp32_pubkey": pub})
+    monkeypatch.setattr("shared.contract.load_contract", lambda: {"auto_release_limit_usd": 25000, "esp32_pubkey": pub})
 
     def device(url, payload, amount=None):
         p = payload if amount is None else {**payload, "amount": amount}

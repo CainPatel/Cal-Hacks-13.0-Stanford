@@ -14,7 +14,7 @@ from functools import cache
 from shared.schema import Action, Decision, LedgerKind
 
 try:
-    from kernel.contract import load_contract
+    from shared.contract import load_contract
     from kernel.runner import decide as kernel_decide
     from kernel.state import KernelState
     KERNEL = "kernel.runner"

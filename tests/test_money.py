@@ -83,7 +83,8 @@ def released_request(db):
 
 def approval_for(priv, req, nonce="n1"):
     import time
-    payload = {"request_id": req.id, "payee": req.sub_id, "amount": str(req.g702.current_payment_due),
+    payload = {"request_id": req.id, "payee": req.sub_id, "sub_id": req.sub_id,
+               "amount": str(req.g702.current_payment_due),
                "job": req.job_id, "nonce": nonce, "expires_at": int(time.time()) + 90}
     return ex.SignedApproval(payload, sign(priv, ex.canonical_payload_bytes(payload)), nonce)
 
@@ -239,12 +240,14 @@ def test_escalation_goes_through_the_approval_key(client, world, monkeypatch):
     monkeypatch.setattr(ex, "request_device_approval", device)
     r = client.post("/requests/pr_sub_15_6/pay", json=CONFIRM)
     assert r.status_code == 200 and r.json()["approved_on_device"], r.text
-    assert sent["url"] == "http://localhost:8001" and sent["payload"]["payee"] == "sub_15"
+    # the device shows the vendor's name, not its id, but the signature still binds the id
+    assert sent["url"] == "http://localhost:8001" and sent["payload"]["sub_id"] == "sub_15"
+    assert sent["payload"]["payee"] != "sub_15"
 
 
 def test_escalation_without_a_registered_key(client, monkeypatch):
     monkeypatch.delenv("APPROVAL_KEY_PUBKEY", raising=False)
-    monkeypatch.setattr("kernel.contract.load_contract", lambda: {"auto_release_limit_usd": 25000, "esp32_pubkey": ""})
+    monkeypatch.setattr("shared.contract.load_contract", lambda: {"auto_release_limit_usd": 25000, "esp32_pubkey": ""})
     r = client.post("/requests/pr_sub_15_6/pay", json=CONFIRM)
     assert r.status_code == 503 and "isn't set up yet" in r.json()["detail"]
 
@@ -404,7 +407,8 @@ def test_signature_covers_the_bank_account(bank, world):
     priv, pub = make_keypair()
     d, req = decided(world, "pr_sub_15_6")
     import time
-    payload = {"request_id": req.id, "payee": req.sub_id, "amount": str(req.g702.current_payment_due),
+    payload = {"request_id": req.id, "payee": req.sub_id, "sub_id": req.sub_id,
+               "amount": str(req.g702.current_payment_due),
                "job": req.job_id, "bank_account": "111111111:2222222222", "nonce": "nb",
                "expires_at": int(time.time()) + 90}
     approval = ex.SignedApproval(payload, sign(priv, ex.canonical_payload_bytes(payload)), "nb")

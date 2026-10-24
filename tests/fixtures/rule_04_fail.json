@@ -152,7 +152,9 @@
     "emails": [],
     "site_evidence": null,
     "known_bank_account": "021000021:123456789",
-    "contract": {},
+    "contract": {
+      "auto_release_limit_usd": 25000
+    },
     "proposal": null
   },
   "request": {

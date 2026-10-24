@@ -248,7 +248,7 @@ def approve(request_id: str):
     import requests as http
 
     from kernel import executor
-    from kernel.contract import load_contract
+    from shared.contract import load_contract
 
     state = events.state(path=DB)
     req = next((r for r in state["pay_requests"] if r.id == request_id), None)
@@ -269,8 +269,9 @@ def approve(request_id: str):
     if not device or not pubkey:
         raise HTTPException(503, "The approval key isn't set up yet (DEVICE_URL and the key's public key in config/contract.yaml).")
     amount = req.g702.current_payment_due
-    payload = {"request_id": req.id, "payee": req.sub_id, "amount": str(amount), "job": req.job_id,
-               "bank_account": req.bank_account, "nonce": uuid.uuid4().hex, "expires_at": int(time.time()) + 120}
+    payload = {"request_id": req.id, "payee": _vendor_name(state, req.sub_id) or req.sub_id, "sub_id": req.sub_id,
+               "amount": str(amount), "job": req.job_id, "bank_account": req.bank_account,
+               "nonce": uuid.uuid4().hex, "expires_at": int(time.time()) + 120}
     try:
         approval = executor.request_device_approval(device, payload)
     except http.exceptions.RequestException as e:  # unreachable, timed out (408), or busy (409): nothing was paid
@@ -286,7 +287,7 @@ def approve(request_id: str):
 def _approval_key() -> tuple[str, str | None]:
     """Where the approval key listens (DEVICE_URL) and its registered public key (contract.yaml's esp32_pubkey,
     read fresh so a newly pasted key works without a restart; or APPROVAL_KEY_PUBKEY for a local mock)."""
-    from kernel.contract import load_contract
+    from shared.contract import load_contract
     url = os.environ.get("DEVICE_URL")
     pubkey = os.environ.get("APPROVAL_KEY_PUBKEY") or load_contract().get("esp32_pubkey") or None
     return (url.rstrip("/") if url else None), pubkey
@@ -318,7 +319,7 @@ def pay(request_id: str, body: PayIn):
     import requests as http
 
     from kernel import executor
-    from kernel.contract import load_contract
+    from shared.contract import load_contract
 
     if not body.confirm:
         raise HTTPException(422, "Send {\"confirm\": true} to pay.")
@@ -348,7 +349,8 @@ def pay(request_id: str, body: PayIn):
             raise HTTPException(503, "The approval key isn't set up yet (DEVICE_URL and the key's public key in "
                                      "config/contract.yaml).")
         # The owner signs the destination too, so a bank change can't ride on an approval for the old account.
-        payload = {"request_id": req.id, "payee": req.sub_id, "amount": str(amount), "job": req.job_id,
+        payload = {"request_id": req.id, "payee": _vendor_name(state, req.sub_id) or req.sub_id,
+                   "sub_id": req.sub_id, "amount": str(amount), "job": req.job_id,
                    "bank_account": req.bank_account, "nonce": uuid.uuid4().hex,
                    "expires_at": int(time.time()) + 120}  # outlives the device's 90 s wait
         try:
