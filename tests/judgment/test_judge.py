@@ -293,3 +293,15 @@ def test_typesafe_route_and_user_agent(monkeypatch):
     assert req.full_url == "https://api.typesafe.ai/v1/systemone"
     assert req.get_header("Authorization") == "Bearer ts-key" and json.loads(req.data)["model"] == "jev-latest"
     assert req.get_header("User-agent").startswith("draw-ap/")  # not urllib's default, which Cloudflare blocks
+
+
+def test_score_confidence_is_the_mass_on_the_answers_side():
+    legend = {str(i): t for i, t in enumerate(QUESTIONS[BANK]["criteria"])}
+    timid = {"type": "score", "score": 0.6, "legend": legend, "confidence": 0.55,
+             "probabilities": {"0": 0.55, "1": 0.40, "2": 0.05, "3": 0.0, "4": 0.0}}
+    a = validate(jev_answers(**{DUPLICATE: timid}))[DUPLICATE]
+    assert a.confidence == pytest.approx(0.95) and a.model_confidence == 0.55  # "not a duplicate" either way
+    torn = {**timid, "score": 2.0, "probabilities": {"0": 0.3, "1": 0.1, "2": 0.2, "3": 0.1, "4": 0.3}}
+    assert validate(jev_answers(**{DUPLICATE: torn}))[DUPLICATE].confidence == pytest.approx(0.4)
+    no_probs = {**timid, "probabilities": {}}
+    assert validate(jev_answers(**{DUPLICATE: no_probs}))[DUPLICATE].confidence == 0.55  # nothing to convert

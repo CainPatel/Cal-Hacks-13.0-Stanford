@@ -71,9 +71,11 @@ QUESTIONS: dict[str, dict] = {
     },
     ACTION: {
         "type": "choice",
-        "instructions": "What should happen to this pay request? Weigh the whole state: state.contract (retainage,"
-        " scheduled values, insurance, supplier notices, owner draw), release, bank, progress, duplicates, and the"
-        " flags in state.request and state.vendor." + _FACTS_NOTE,
+        "instructions": "What should happen to this pay request? state.problems_found lists everything code found"
+        " wrong; if it is not empty, the answer is hold. If it is empty, choose escalate when the payment needs the"
+        " owner's sign-off (state.request.over_auto_release_limit, state.vendor.first_payment_to_vendor), otherwise"
+        " release. Use the rest of the state (release, bank, progress, duplicates, contract) only to weigh anything"
+        " the list cannot capture." + _FACTS_NOTE,
         "criteria": {
             "release": "Everything checks out and nothing calls for a person's sign-off: pay it.",
             "hold": "Something is wrong, missing, or looks like fraud (a suspicious bank change, an imitation sender"

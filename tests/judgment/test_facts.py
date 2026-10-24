@@ -104,3 +104,15 @@ def test_redact(text, expected):
     from judgment.facts import redact
 
     assert redact(text) == expected
+
+
+def test_problems_found_matches_the_kernel_on_every_case(seed, anomaly_cases):
+    """No problem listed on a request the rules let through; at least one on every request the rules hold."""
+    import pipeline
+    from tests.judgment.conftest import CONTRACT
+    sets = [(seed, r.id) for r in seed["pay_requests"] if r.number == THIS_MONTH]
+    sets += [(d, l.request_id) for d, l in anomaly_cases]
+    for data, rid in sets:
+        problems = compute_facts(*state_for(data, rid))["problems_found"]
+        action = pipeline.decide(data, rid, contract=CONTRACT).action.value
+        assert bool(problems) == (action == "hold"), (rid, action, problems)
