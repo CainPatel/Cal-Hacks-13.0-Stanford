@@ -7,6 +7,7 @@ them, so an email crafted to talk its way past the model still gets flagged by t
 """
 
 import re
+from datetime import timezone
 from email import policy
 from email.parser import BytesParser
 from email.utils import getaddresses, parseaddr, parsedate_to_datetime
@@ -89,6 +90,8 @@ def extract_email(eml: str | Path | bytes, *, email_id: str | None = None, use_l
         sent_at = None
     if sent_at is None:
         raise ExtractionError("email has no readable Date header")
+    if sent_at.tzinfo is not None:  # the log and every other record use naive times; store UTC
+        sent_at = sent_at.astimezone(timezone.utc).replace(tzinfo=None)
 
     # Mail clients show the HTML part when there is one, so that is the body a person reads.
     # Claims are checked across both parts: an innocent plain part can't hide what the HTML says.

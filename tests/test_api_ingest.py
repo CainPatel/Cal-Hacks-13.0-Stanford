@@ -131,3 +131,88 @@ def test_replay_can_put_judgment_in_the_loop(client, monkeypatch):
     client.post("/replay", params={"through": 6, "judge": "true"})
     from judgment import judge
     assert calls["judge"] is judge
+
+
+# --- releases, certificates, emails, separate G702 ------------------------------
+
+
+def _post(client, url, path, data, name="doc.pdf", mime="application/pdf"):
+    with open(path, "rb") as f:
+        return client.post(url, files={"file": (name, f, mime)}, data=data)
+
+
+def test_missing_release_upload_flips_the_kernel(tmp_path, monkeypatch):
+    """Held for a missing conditional release; the sub uploads it; the real kernel now sees it."""
+    import pipeline
+    if pipeline.kernel_decide is None:
+        pytest.skip("needs kernel/")
+    world = with_demo(generate())[0]
+    rid = "pr_sub_02_6"
+    release = next(r for r in world["releases"] if r.id == f"rel_c_{rid}")
+    world = {k: [r for r in v if r is not release] if k == "releases" else v for k, v in world.items()}
+    db = tmp_path / "events.db"
+    load_seed(world, path=db)
+    monkeypatch.setattr(main, "DB", db)
+    monkeypatch.setattr(main, "UPLOADS", tmp_path / "uploads")
+    client = TestClient(main.app)
+
+    before = pipeline.decide(events.state(path=db), rid)
+    assert any(r.rule == "04_conditional_release_present" and not r.passed for r in before.results)
+
+    vendor = next(v for v in world["vendors"] if v.id == release.sub_id)
+    job = next(j for j in world["jobs"] if j.id == release.job_id)
+    pdf = tmp_path / "release.pdf"
+    render.release_pdf(release, vendor, job, pdf)
+    r = _post(client, "/releases", pdf, {"sub_id": release.sub_id, "job_id": release.job_id})
+    assert r.status_code == 200, r.text
+    got = r.json()["release"]
+    assert (got["kind"], got["through_date"], got["signed"]) == (release.kind.value, str(release.through_date), True)
+
+    after = pipeline.decide(events.state(path=db), rid)
+    assert next(r for r in after.results if r.rule == "04_conditional_release_present").passed
+
+
+def test_coi_upload(client, world, tmp_path):
+    coi = world["cois"][0]
+    vendor = next(v for v in world["vendors"] if v.id == coi.sub_id)
+    pdf = tmp_path / "coi.pdf"
+    render.coi_pdf(coi, vendor, pdf)
+    r = _post(client, "/cois", pdf, {"sub_id": coi.sub_id})
+    assert r.status_code == 200, r.text
+    stored = next(c for c in events.state(path=main.DB)["cois"] if c.id == r.json()["coi_id"])
+    assert (stored.gl_expiry, stored.wc_expiry, stored.additional_insured) == (coi.gl_expiry, coi.wc_expiry,
+                                                                               coi.additional_insured)
+    assert _post(client, "/cois", pdf, {"sub_id": coi.sub_id}).status_code == 409
+    assert _post(client, "/cois", pdf, {"sub_id": "sub_nobody"}).status_code == 404
+
+
+def test_email_upload_keeps_the_lookalike_domain(client, tmp_path, monkeypatch):
+    from perception import llm
+    monkeypatch.setattr(llm, "classify_email", lambda s, b, client=None: llm.EmailFlags(
+        asks_to_change_payment_details=False, pressures_for_speed=False))
+    from datetime import datetime
+    from shared.schema import Email, EmailClaims
+    e = Email(id="x", from_addr="accounting@brightIineelectric.com", from_domain="brightIineelectric.com",
+              sent_at=datetime(2026, 10, 22, 9, 14), subject="Updated remittance details",
+              body="We moved banks. Send payments to account 447712782:5071050724 immediately.",
+              claims=EmailClaims())
+    eml_path = tmp_path / "m.eml"
+    render.email_eml(e, eml_path)
+    r = _post(client, "/emails", eml_path, {}, name="m.eml", mime="message/rfc822")
+    assert r.status_code == 200, r.text
+    got = r.json()["email"]
+    assert got["from_domain"] == "brightIineelectric.com" and got["claims"] == {
+        "bank_change": True, "new_account": "447712782:5071050724", "urgency": True}
+
+
+def test_pay_app_with_separate_g702(client, world, tmp_path):
+    from tests.perception.g703_builder import build_aia_g702, build_g703, standard_lines
+    req = next(r for r in world["pay_requests"] if r.id == "pr_sub_02_6")
+    g703 = build_g703(tmp_path / "g703.pdf", standard_lines(), g702=False)
+    g702 = build_aia_g702(tmp_path / "g702.pdf", standard_lines())
+    with open(g703, "rb") as a, open(g702, "rb") as b:
+        r = client.post("/pay-apps", files={"file": ("g703.pdf", a, "application/pdf"),
+                                            "g702": ("g702.pdf", b, "application/pdf")},
+                        data={"sub_id": req.sub_id, "job_id": req.job_id})
+    assert r.status_code == 200, r.text
+    assert r.json()["pay_request"]["g702"]["current_payment_due"] == "59850.00"

@@ -14,6 +14,9 @@ POST /attacks/describe     a judge's plain-English attack, mapped by Claude: {"t
 POST /replay?through=6     decide every undecided request through that month (&judge=true: Jev first)
 POST /pay-apps             upload a sub's pay application PDF (form: file, sub_id, job_id) -> a pay_requests fact
 POST /site-video           upload the super's walkthrough video (form: file, job_id) -> a site_evidence fact
+POST /releases             upload a lien release PDF (form: file, sub_id, job_id) -> a releases fact
+POST /cois                 upload a certificate of insurance PDF (form: file, sub_id) -> a cois fact
+POST /emails               upload an email (.eml) the AP inbox received (form: file) -> an emails fact
 """
 import asyncio
 import hashlib
@@ -206,28 +209,102 @@ def _save_upload(upload: UploadFile, limit: int, suffix: str) -> tuple[Path, str
     return path, sha
 
 
+def _notes(notes) -> list[dict]:
+    return [{"code": n.code, "message": n.message, "item_no": n.item_no} for n in notes]
+
+
+def _require_subcontract(state, sub_id: str, job_id: str | None = None) -> None:
+    if not any(c.sub_id == sub_id and (job_id is None or c.job_id == job_id) for c in state["subcontracts"]):
+        raise HTTPException(404, f"no subcontract for {sub_id}" + (f" on {job_id}" if job_id else ""))
+
+
+def _append_new(state, table: str, record, at) -> int:
+    if any(r.id == record.id for r in state[table]):
+        raise HTTPException(409, f"this exact file was already uploaded as {record.id}")
+    return events.append("fact", record, table=table, at=at, path=DB)
+
+
 @app.post("/pay-apps")
-def upload_pay_app(file: UploadFile = File(...), sub_id: str = Form(...), job_id: str = Form(...)):
-    """Read a pay application into the log. Sub and job come from who sent it, never from the PDF."""
+def upload_pay_app(file: UploadFile = File(...), sub_id: str = Form(...), job_id: str = Form(...),
+                   g702: UploadFile | None = File(None)):
+    """Read a pay application into the log. Sub and job come from who sent it, never from the PDF.
+    `g702` is the G702 summary when the sub sent it as a separate file."""
     from perception import ExtractionError, extract_pay_request
 
     state = events.state(path=DB)
-    if not any(c.sub_id == sub_id and c.job_id == job_id for c in state["subcontracts"]):
-        raise HTTPException(404, f"no subcontract for {sub_id} on {job_id}")
+    _require_subcontract(state, sub_id, job_id)
     path, sha = _save_upload(file, MAX_PDF_BYTES, ".pdf")
+    g702_path = _save_upload(g702, MAX_PDF_BYTES, ".pdf")[0] if g702 is not None and g702.filename else None
     submitted = datetime.now().replace(microsecond=0)
     try:
-        result = extract_pay_request(path, sub_id=sub_id, job_id=job_id, submitted_at=submitted)
+        result = extract_pay_request(path, sub_id=sub_id, job_id=job_id, submitted_at=submitted, g702_pdf=g702_path)
     except ExtractionError as e:
         raise HTTPException(422, f"Couldn't read this pay application: {e}")
     req = result.pay_request
     req = req.model_copy(update={"id": f"pr_{sub_id}_{req.number}_{sha[:8]}"})
-    if any(r.id == req.id for r in state["pay_requests"]):
-        raise HTTPException(409, f"this exact file was already uploaded as {req.id}")
-    seq = events.append("fact", req, table="pay_requests", at=submitted, path=DB)
+    seq = _append_new(state, "pay_requests", req, submitted)
     return {"request_id": req.id, "seq": seq, "method": result.method, "fallback_reason": result.fallback_reason,
-            "notes": [{"code": n.code, "message": n.message, "item_no": n.item_no} for n in result.notes],
-            "pay_request": req.model_dump(mode="json")}
+            "notes": _notes(result.notes), "pay_request": req.model_dump(mode="json")}
+
+
+def _vendor_name(state, sub_id: str) -> str | None:
+    return next((v.legal_name for v in state["vendors"] if v.id == sub_id), None)
+
+
+@app.post("/releases")
+def upload_release(file: UploadFile = File(...), sub_id: str = Form(...), job_id: str = Form(...)):
+    """A lien release the sub sent. It counts as received today."""
+    from perception.common import ExtractionError
+    from perception.release import extract_release
+
+    state = events.state(path=DB)
+    _require_subcontract(state, sub_id, job_id)
+    path, sha = _save_upload(file, MAX_PDF_BYTES, ".pdf")
+    today = date.today()
+    try:
+        result = extract_release(path, sub_id=sub_id, job_id=job_id, received_at=today,
+                                 release_id=f"rel_{sub_id}_{sha[:10]}", expected_claimant=_vendor_name(state, sub_id))
+    except ExtractionError as e:
+        raise HTTPException(422, f"Couldn't read this release: {e}")
+    seq = _append_new(state, "releases", result.record, today)
+    return {"release_id": result.record.id, "seq": seq, "method": result.method, "notes": _notes(result.notes),
+            "release": result.record.model_dump(mode="json")}
+
+
+@app.post("/cois")
+def upload_coi(file: UploadFile = File(...), sub_id: str = Form(...)):
+    """A sub's certificate of insurance. The newest one uploaded is the one on file."""
+    from perception.coi import extract_coi
+    from perception.common import ExtractionError
+
+    state = events.state(path=DB)
+    _require_subcontract(state, sub_id)
+    path, sha = _save_upload(file, MAX_PDF_BYTES, ".pdf")
+    try:
+        result = extract_coi(path, sub_id=sub_id, coi_id=f"coi_{sub_id}_{sha[:10]}",
+                             expected_insured=_vendor_name(state, sub_id))
+    except ExtractionError as e:
+        raise HTTPException(422, f"Couldn't read this certificate: {e}")
+    seq = _append_new(state, "cois", result.record, date.today())
+    return {"coi_id": result.record.id, "seq": seq, "method": result.method, "notes": _notes(result.notes),
+            "coi": result.record.model_dump(mode="json")}
+
+
+@app.post("/emails")
+def upload_email(file: UploadFile = File(...)):
+    """An email the AP inbox received (.eml). Which sub it concerns is worked out downstream from its domain."""
+    from perception.common import ExtractionError
+    from perception.mail import extract_email
+
+    state = events.state(path=DB)
+    path, sha = _save_upload(file, 10 * 1024 * 1024, ".eml")
+    try:
+        result = extract_email(path, email_id=f"email_{sha[:12]}")
+    except ExtractionError as e:
+        raise HTTPException(422, f"Couldn't read this email: {e}")
+    seq = _append_new(state, "emails", result.record, result.record.sent_at)
+    return {"email_id": result.record.id, "seq": seq, "method": result.method, "notes": _notes(result.notes),
+            "email": result.record.model_dump(mode="json")}
 
 
 @app.post("/site-video")
@@ -254,6 +331,5 @@ def upload_site_video(file: UploadFile = File(...), job_id: str = Form(...), upl
         raise HTTPException(422, f"Couldn't use this video: {e}")
     ev = result.evidence
     seq = events.append("fact", ev, table="site_evidence", at=ev.date, path=DB)
-    return {"site_evidence_id": ev.id, "seq": seq, "date_source": result.date_source,
-            "notes": [{"code": n.code, "message": n.message, "item_no": n.item_no} for n in result.notes],
+    return {"site_evidence_id": ev.id, "seq": seq, "date_source": result.date_source, "notes": _notes(result.notes),
             "site_evidence": ev.model_dump(mode="json")}

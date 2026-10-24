@@ -109,3 +109,9 @@ def test_model_outage_falls_back_to_code(monkeypatch):
     monkeypatch.setattr(llm, "classify_email", fake_claude(False, False, error="down"))
     r = extract_email(eml("hi"))
     assert r.method == "parsed" and "model_unavailable" in {n.code for n in r.notes}
+
+
+def test_dates_with_a_timezone_are_stored_as_naive_utc():
+    raw = eml("hi").replace(b"+0000", b"-0700")
+    e = read(raw).record
+    assert e.sent_at.tzinfo is None and e.sent_at.hour == 16  # 09:14 -0700 is 16:14 UTC
