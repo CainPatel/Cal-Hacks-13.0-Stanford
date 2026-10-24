@@ -16,7 +16,13 @@ export type RequestRow = {
   sentence: string;
   reason: string | null;
   next_action: string | null;
+  /** First pay app from a sub added on the Upload screen: their SOV came from that pay app. */
+  new_sub: boolean;
+  new_sub_note: string | null;
 };
+
+export type VendorList = { vendors: { id: string; legal_name: string; job_ids: string[] }[]; jobs: { id: string; name: string }[] };
+export type NewVendor = { legal_name: string; email_domain?: string; ein?: string; bank_account?: string };
 
 export type RuleResult = { rule: string; passed: boolean; evidence: Record<string, unknown>; message: string };
 
@@ -148,6 +154,14 @@ export const api = {
     for (const f of DIRECT[kind].fields) if (ids[f]) form.set(f, ids[f] as string);
     return call<IngestResult>(DIRECT[kind].path, { method: "POST", body: form });
   },
+  vendors: () => call<VendorList>("/vendors"),
+  createVendor: (body: NewVendor, passcode: string) =>
+    call<{ id: string; legal_name: string }>("/vendors", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "X-Upload-Passcode": passcode },
+      body: JSON.stringify(body),
+    }),
+  verifyVendor: (id: string) => call<{ crs_status: string; reasons: string[] }>(`/vendors/${encodeURIComponent(id)}/verify`, { method: "POST" }),
   replay: (through: number) => call<{ new_decisions: number }>(`/replay?through=${through}`, { method: "POST" }),
   scorecard: () => call<Scorecard>("/scorecard"),
   calibration: () => call<Calibration>("/calibration"),

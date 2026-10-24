@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useState } from "react";
-import { Evidence, failedRule, MarkRow } from "@/components/evidence";
+import { Evidence, failedRule, Mark, MarkRow } from "@/components/evidence";
 import { StatusChip } from "@/components/status-chip";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -88,8 +88,9 @@ export function RequestDetailPanel({ id, version, backHref }: { id: string; vers
           <p className="text-say font-medium">{rowLine(data.status, data.sentence, data.reason)}</p>
         </div>
       )}
+      {data.new_sub_note && <p className="mt-3 max-w-[52ch] text-body">{data.new_sub_note}</p>}
       <div className="mt-5 flex flex-col items-start gap-2.5">
-        <NextAction detail={data} />
+        {data.new_sub && data.status === "on_hold" && newSubSteps(data).length > 0 ? <NewSubSteps detail={data} /> : <NextAction detail={data} />}
         {data.status === "on_hold" && limit && (
           <p className="max-w-[52ch] text-base text-muted-foreground">
             Once that&apos;s settled, this still needs the owner&apos;s OK: it&apos;s over the {moneyShort(limit)} limit.
@@ -165,6 +166,68 @@ export function RequestDetailPanel({ id, version, backHref }: { id: string; vers
         </details>
       )}
     </article>
+  );
+}
+
+// What a brand-new sub still owes before their first payment, in the order the office manager fixes it.
+const NEW_SUB_STEPS = [
+  { rule: "09", say: "Their identity hasn't been checked yet.", act: "Check their identity" },
+  { rule: "06", say: "There's no insurance certificate on file for them.", act: "Upload their insurance certificate", kind: "coi" },
+  { rule: "04", say: "There's no conditional lien release from them for this period.", act: "Upload their conditional lien release", kind: "release" },
+  { rule: "10", say: "Their bank account isn't on file yet, so the one on this pay application can't be checked.", act: "Call to confirm their bank account" },
+] as const;
+const newSubSteps = (d: RequestDetail) => NEW_SUB_STEPS.filter((s) => failedRule(d, s.rule));
+
+/** A new sub's hold: each missing item as a sentence with its own next action. */
+function NewSubSteps({ detail }: { detail: RequestDetail }) {
+  const [crs, setCrs] = useState<{ busy?: boolean; said?: string; failed?: boolean }>({});
+  const [called, setCalled] = useState(false);
+  const verify = async () => {
+    setCrs({ busy: true });
+    try {
+      const r = await api.verifyVendor(detail.sub_id);
+      await api.replay(6).catch(() => {});
+      setCrs(r.crs_status === "verified"
+        ? { said: "Identity checked: CRS verified them." }
+        : { said: `CRS came back "${r.crs_status}", so it stays on hold.${r.reasons.length ? ` ${r.reasons.join(" ")}` : ""}`, failed: true });
+    } catch (e) {
+      setCrs({ said: (e as ApiError).message, failed: true });
+    }
+  };
+  return (
+    <ul className="w-full border-t">
+      {newSubSteps(detail).map((s) => (
+        <li key={s.rule} className="flex flex-col items-start gap-2.5 border-b py-3.5">
+          <p className="flex items-start gap-2 text-body">
+            <Mark kind="fail" />
+            <span>{s.say}</span>
+          </p>
+          {s.rule === "09" ? (
+            <>
+              <Button size="lg" onClick={verify} disabled={crs.busy}>
+                {crs.busy ? "Checking…" : s.act}
+              </Button>
+              {crs.said && <p className={cn("max-w-[52ch] text-base", crs.failed ? "text-fail" : "text-pass")}>{crs.said}</p>}
+            </>
+          ) : "kind" in s ? (
+            <Button size="lg" nativeButton={false} render={<Link href={`/upload?kind=${s.kind}&sub=${encodeURIComponent(detail.sub_id)}`} />}>
+              {s.act}
+            </Button>
+          ) : (
+            <>
+              <Button size="lg" onClick={() => setCalled(true)}>
+                {s.act}
+              </Button>
+              {called && (
+                <p className="max-w-[52ch] text-base text-muted-foreground">
+                  Call {detail.sub} at a number you trust, not one from their paperwork, and confirm the account ending {detail.bank_account.slice(-4)}.
+                </p>
+              )}
+            </>
+          )}
+        </li>
+      ))}
+    </ul>
   );
 }
 
