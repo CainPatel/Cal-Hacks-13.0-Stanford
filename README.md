@@ -26,15 +26,18 @@ make demo PORT=8010         # if 8000 is taken
 
 ## Run the whole pipeline locally
 
-Three terminals, from the repo root after Setup:
+Four terminals, from the repo root after Setup:
 
 ```
 make events && make replay        # 1. load the seed into data/events.db, decide May-Oct
 make api                          # 2. dashboard API on :8000
 make device                       # 3. approval key on :8001 (Mac mock: type a / r + Enter)
+make web                          # 4. dashboard on :3000 (npm install on first run)
 ```
 
-Then exercise each stage:
+Open `localhost:3000` for the three views: the pay-request list, the owner's **Approve**
+screen (mirrors whatever the device is showing), and **Security** (scorecard, calibration,
+attack console). Or exercise the API directly:
 
 | Stage | Try it |
 |---|---|
@@ -44,10 +47,14 @@ Then exercise each stage:
 | Release / COI / email upload | `POST /releases` (file, sub_id, job_id), `POST /cois` (file, sub_id), `POST /emails` (file) |
 | Site video | `POST /site-video` (file, job_id); needs `ANTHROPIC_API_KEY` |
 | Attacks and scorecard | `make fuzz N=2000`, `curl localhost:8000/scorecard`, `POST /attacks` |
+| Approve and pay | `curl -X POST localhost:8000/requests/<id>/approve` on an escalated request -- posts to the device, waits for a button, and on approve the executor verifies the signature and pays |
 
 Without keys, nothing breaks: Claude-backed uploads (scans, video) answer 422 with the reason, emails
 are read with code-only claims, and a judged replay escalates every request rule 15 can't vouch for.
-There is no approve-and-pay endpoint yet; `kernel/executor.py` is exercised by `tests/test_executor.py`.
+`POST /requests/{id}/approve` answers 503 until `DEVICE_URL` is set and the device's real public key
+is pasted into `config/contract.yaml`'s `esp32_pubkey` (see `firmware/README.md` / `device/README.md`
+for how to get it) -- until then, `kernel/executor.py` is exercised directly by
+`tests/test_executor.py` and `tests/test_executor_gates.py`.
 
 ## Commands
 
@@ -58,21 +65,38 @@ There is no approve-and-pay endpoint yet; `kernel/executor.py` is exercised by `
 | `make replay M=6` | decide every request through month M (1 = May, 6 = October) |
 | `make fuzz N=5000` | attack the pipeline N times, write `data/scorecard.json` |
 | `make api` | dashboard API on `:8000` (see `api/main.py` for endpoints) |
+| `make web` | Next.js dashboard on `:3000` (`npm install` on first run) |
+| `make device` | approval key on `:8001`; Mac mock (`DRAWKEY_MOCK=1`), type `a`/`r` + Enter |
+| `make device-test` | tests for the Pi/mock approval device |
 | `make synthetic W=10` | render pay apps, releases, COIs, emails + `truth.json` for perception |
 | `make benchmark` | score perception's extractor on `data/synthetic` (no Claude calls) |
+| `make keys` | which of the `.env` secrets are set (never prints a value) |
+| `make hooks` | turn on the repo's secret-blocking pre-commit hook (once per clone) |
+| `make demo` | fresh log, decide May-Oct, score 5,000 attacks, serve the API |
 | `make test` | all tests |
 
 ## How a pay request flows
 
 ```
-documents ──► perception/  (Claude extraction, untrusted)
-                │ facts
-                ▼
-           events/  append-only log ──► pipeline.py ──► judgment/ (Jev, bounded) ──► kernel/ (pure rules)
-                ▲                                                                       │ Decision
-                └──────────── kernel_trace, signature, execution ◄── kernel/executor.py ◄┘
-                                                                     (ESP32 signature, Nessie)
-api/ serves the log to web/;  fuzzer/ drives attacks through pipeline.py and writes the scorecard.
+documents ──► perception/ (Claude extraction, untrusted)
+                 │ facts
+                 ▼
+            events/ append-only log ──► pipeline.py ──► judgment/ (Jev) ──► kernel/ (pure rules)
+                 ▲                                                            │ Decision
+                 │  kernel_trace, signature, execution                        │
+                 └────────────────────────────────────────────────────────────┤
+                                                                   hold/release │ escalate
+                                                                                ▼
+                                                   api/ ──POST /approve──► firmware/ or device/
+                                                    ▲                      (ESP32 or Pi button, signs)
+                                                    │ serves the log            │ signed approval
+                                                    │                           ▼
+                                                   web/                  kernel/executor.py ──► Nessie
+                                            (pay requests, approve, security)
+
+Nessie (owner draws, sub payments) and CRS (vendor identity) are the simulated bank and vendor
+registry; seed/ and fuzzer/ stand in for both until real sandbox accounts are wired up.
+fuzzer/ drives attacks through pipeline.py and writes the scorecard that api/ and web/ read.
 ```
 
 ## Scorecard fields
