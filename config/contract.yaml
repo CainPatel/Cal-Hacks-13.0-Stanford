@@ -1,0 +1,18 @@
+# Permissions contract. The kernel reads this at runtime; change a number here and the
+# next decision changes. Owner: A. ESP32 pubkey comes from the device's serial output
+# (see firmware/README.md) -- paste the hex after "PUBKEY ".
+auto_release_limit_usd: 25000
+escalation_confidence_threshold: 0.85
+progress_tolerance_points: 10
+
+never_allowed:
+  - change_vendor_bank_details
+  - release_retainage_before_final
+  - pay_before_owner_draw
+
+always_escalate:
+  - first_payment_to_vendor
+  - bank_detail_change
+  - amount_over_limit
+
+esp32_pubkey: ""  # hex, uncompressed (04 || X || Y) -- fill in once the device boots
