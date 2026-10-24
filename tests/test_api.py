@@ -16,6 +16,7 @@ def client(tmp_path, monkeypatch):
     monkeypatch.setattr(main, "DB", db)
     monkeypatch.setattr(main, "SCORECARD", tmp_path / "scorecard.json")
     monkeypatch.setattr(main, "CALIBRATION", tmp_path / "calibration.json")
+    monkeypatch.setattr(main, "CALIBRATION_REPORT", tmp_path / "no-committed-report.json")
     # the real kernel (all 15 rules): it holds the three demo stories on its own
     return TestClient(main.app)
 
@@ -23,13 +24,15 @@ def client(tmp_path, monkeypatch):
 def test_list_before_and_after_replay(client):
     rows = client.get("/requests", params={"month": 6}).json()
     assert len(rows) == 15 and {r["status"] for r in rows} == {"not_checked"}
-    assert client.post("/replay", params={"through": 6}).json() == {"new_decisions": 90}
+    out = client.post("/replay", params={"through": 6}).json()
+    assert out["new_decisions"] == 90 and out["judged"] is False  # no model configured: rules only
+    assert "skipped" in out["bank"]  # no Nessie configured: nothing to sync, and replay still runs
     rows = {r["id"]: r for r in client.get("/requests").json()}
     statuses = [r["status"] for r in rows.values()]
     assert statuses.count("on_hold") == 3 and statuses.count("ready") == 10 and statuses.count("needs_ok") == 2
     assert rows["pr_sub_01_6"]["sentence"] == "On hold: 1 supplier(s) filed a notice to owner and haven't released."
     assert rows["pr_sub_10_6"]["sentence"] == "Needs your OK because it's over the auto-release limit."
-    assert client.post("/replay").json() == {"new_decisions": 0}
+    assert client.post("/replay").json()["new_decisions"] == 0
 
 
 def test_request_detail_shows_video_next_to_claim(client):
@@ -108,6 +111,7 @@ def test_approve_flow(client, monkeypatch, tmp_path):
 
     paid = []
     monkeypatch.setattr(executor, "_nessie_pay", lambda req, amt: paid.append(amt) or {"request_id": req.id, "amount": str(amt)})
+    monkeypatch.setattr(executor, "bank_payment", lambda req: None)
     monkeypatch.setattr(executor, "request_device_approval", device)
     # real kernel decides pr_sub_10_6 escalates (over limit); fake kernel in this fixture does too
     out = client.post("/requests/pr_sub_10_6/approve").json()
@@ -124,7 +128,7 @@ def test_event_stream_from_now(client):
 def test_status_page_and_unconfigured_log(client, monkeypatch):
     body = client.get("/").json()
     assert body["event_log"] == "sqlite" and body["log_has_events"] is True
-    assert all(isinstance(v, bool) for k, v in body["configured"].items() if k not in ("cors_origins", "jev_route"))  # never secret values
+    assert all(isinstance(v, bool) for k, v in body["configured"].items() if k not in ("cors_origins", "jev_route", "judgment"))  # never secret values
     from events import log as events
     monkeypatch.setenv("VERCEL", "1")
     monkeypatch.delenv("DATABASE_URL", raising=False)
@@ -137,7 +141,8 @@ def test_status_page_and_unconfigured_log(client, monkeypatch):
 def test_setup_demo_only_into_an_empty_log(client, tmp_path, monkeypatch):
     assert client.post("/setup/demo").status_code == 409  # fixture already loaded the seed
     monkeypatch.setattr(main, "DB", tmp_path / "fresh.db")
-    assert client.post("/setup/demo").json() == {"facts_loaded": 419, "decisions": 90}
+    out = client.post("/setup/demo").json()
+    assert (out["facts_loaded"], out["decisions"], out["judged"]) == (419, 90, False)
     assert len(client.get("/requests").json()) == 15
     assert client.post("/setup/demo").status_code == 409  # once only
 
