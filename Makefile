@@ -1,4 +1,4 @@
-.PHONY: seed test fuzz events replay
+.PHONY: seed test fuzz events replay api
 PY = .venv/bin/python
 N ?= 500
 M ?= 6
@@ -17,3 +17,6 @@ events:
 
 replay:
 	$(PY) -m events replay $(M)
+
+api:
+	$(PY) -m uvicorn api.main:app --reload --port 8000
