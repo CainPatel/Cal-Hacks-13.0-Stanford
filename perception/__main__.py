@@ -24,7 +24,7 @@ def main() -> int:
     v.add_argument("--job", required=True)
     v.add_argument("--sov", required=True, help="a G703 PDF whose line items name the work to look for")
     v.add_argument("--frames-dir", default="data/frames")
-    v.add_argument("--n-frames", type=int, default=10)
+    v.add_argument("--n-frames", type=int, default=None, help="default: one every 3 s, 10 to 30")
     args = ap.parse_args()
 
     try:
