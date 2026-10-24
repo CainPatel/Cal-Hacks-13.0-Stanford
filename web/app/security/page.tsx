@@ -50,7 +50,7 @@ export default function SecurityPage() {
 
       {card && (
         <p className="mt-14 font-mono text-sm text-muted-foreground">
-          {card.kernel}, {n(card.cases)} cases from make fuzz. Sample company, synthetic data.
+          {card.kernel}, {n(card.cases)} cases from make fuzz.
         </p>
       )}
     </main>

@@ -132,18 +132,16 @@ An 8px base. In Tailwind units: 2 = 8px, 4 = 16px, 6 = 24px, 10 = 40px, 16 = 64p
 7. Every check, at the bottom, collapsed to its count until opened.
 8. "Show details".
 
-**Evidence boxes.** One collapsible box per piece of proof (email sender, bank account, progress against video, supplier notice, lines). Each box header has a mark, a word and its tone: fail tone (light red) when the box is the reason for a hold, pass tone (light green) when it checks out. The box is open when it explains a hold, closed when it passed. Inside, the existing evidence layouts:
+**Evidence boxes.** One collapsible box per piece of proof, in this order: "Lines billed this period", then each disputed line's "Line 09-20: billed vs. site video" indented under it (it's a closer look at a line), then "Email sender domain", "Bank account", "Supplier notice". Each box header has a mark, a word and its tone: fail tone (light red) when the box is the reason for a hold, pass tone (light green) when it checks out. The box is open when it explains a hold, closed when it passed. Inside, the existing evidence layouts:
 - Progress: a 0–100% scale. The site-video value is an ink mark, the billed value an amber mark, the gap between them an amber bar, and the allowed tolerance a hatched band around the video value. Tick labels in mono. One phrase below ("25 points apart, 10 allowed").
 - Lookalike domain: both domains in mono, one letter per cell, the wrong letter boxed in red. Then the letters named in mono, because in Geist Sans a capital I and a lowercase l look the same.
 - Bank account: `ending 4869 → ending 0724`. Never the full number, anywhere, including inside a quoted email.
 - Supplier: a two-line checklist (notice filed, with a tick; release missing, with a cross).
 - Source documents are drawn as paper: a white frame with a strong rule, a tinted header with the file name in mono. When the original file is in the Blob store, the header links to it.
 
-**Seeded evidence.** Numbers that came from the seed rather than from reading a real video or document carry a quiet line on the box: "Sample numbers, not read from a real video" (or "document"). It goes away for any box whose data came from perception.
-
 **Timeline.** In the detail pane, a vertical list of what happened to this request, built only from the event log: document received, read, reviewed, checked, signed, paid, each with its time. Steps that haven't happened are not drawn.
 
-**Review (Jev) panel.** Each question Jev was asked, its answer and confidence (mono), and whether it met the confidence floor. Before any review has run: "No review has run on this request yet."
+**Review (Jev) panel.** Each question Jev was asked (quiet), then its answer in words (score answers shown as their nearest level, never a raw number), then the confidence as a percent (mono), and whether it met the confidence floor. The timeline shows the latest review and the current decision once; earlier ones that a re-check replaced aren't drawn. Before any review has run: "No review has run on this request yet."
 
 **Waiting for documents.** A list fed by email intake: what came in, from whom, and what still needs a person (unreadable or unmatched attachments), each with what to do.
 
@@ -175,7 +173,7 @@ An 8px base. In Tailwind units: 2 = 8px, 4 = 16px, 6 = 24px, 10 = 40px, 16 = 64p
 - A phrase beats a sentence and a word beats a phrase title, everywhere except the detail pane's status sentence.
 - Every hold has a next action, worded as what the person does: a button, or for a bank change, the phone instruction as a sentence.
 - Money is always `$` with cents in mono. Dates read "Oct 9, 2026". Percentages are whole numbers unless precision matters.
-- No demo label in the chrome. Seeded evidence is labelled where it appears ("Sample numbers, not read from a real video").
+- No demo or sample labels anywhere (decided Oct 24): the screens show the data as the log has it.
 - "Ready to pay" means cleared to pay. "Paid" appears only when the log has a payment.
 - The UI never implies the AI approved a payment. Rules decide; the owner presses the key.
 
@@ -190,5 +188,4 @@ An 8px base. In Tailwind units: 2 = 8px, 4 = 16px, 6 = 24px, 10 = 40px, 16 = 64p
 - Full bank account numbers.
 - A dark theme. Every view, Security included, uses the light tokens.
 - Raw rule codes or JSON outside "Show details" (Security may show "rule 10" next to the plain name).
-- Seeded numbers presented as if they were read from a real video or document.
 - Motion that nobody asked for. Allowed: the phone sheet rising, the key's pads pulsing while waiting, a section opening. All motion stops under `prefers-reduced-motion`.

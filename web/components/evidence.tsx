@@ -62,7 +62,7 @@ export function MarkRow({ kind, sr, children }: { kind: keyof typeof MARKS; sr: 
  * One piece of proof (DESIGN.md "Evidence boxes"): open and light red when it explains the hold,
  * closed and light green when it checks out. The mark and the word say which; colour only repeats it.
  */
-function EvidenceBox({ title, failed, sample, children }: { title: string; failed: boolean; sample?: "video" | "document"; children: ReactNode }) {
+function EvidenceBox({ title, failed, children }: { title: string; failed: boolean; children: ReactNode }) {
   return (
     <details open={failed} className="group overflow-hidden rounded-lg border bg-sheet">
       <summary
@@ -78,7 +78,6 @@ function EvidenceBox({ title, failed, sample, children }: { title: string; faile
       </summary>
       <div className="p-4">
         {children}
-        {sample && <p className="mt-4 border-t pt-2.5 text-meta text-muted-foreground">Sample numbers, not read from a real {sample}.</p>}
       </div>
     </details>
   );
@@ -91,17 +90,23 @@ export function Evidence({ detail }: { detail: RequestDetail }) {
   const domains = failedRule(detail, "11")?.evidence.mismatches ?? [];
   const notices = failedRule(detail, "07")?.evidence.unresolved ?? [];
   const linesFailed = ["01", "02", "03", "13"].some((n) => failedRule(detail, n));
-  const videoSample = detail.site_evidence?.sample ? "video" : undefined;
 
   return (
     <section aria-label="The proof" className="mt-8 space-y-3">
+      <EvidenceBox title="Lines billed this period" failed={linesFailed}>
+        <LinesTable detail={detail} flagged={new Set(progress.map((o) => o.item_no))} />
+        {detail.original && <OpenOriginal name={detail.original} />}
+      </EvidenceBox>
       {progress.map((o) => (
-        <EvidenceBox key={`p${o.item_no}`} title="Progress" failed sample={videoSample}>
-          <ProgressBlock o={o} detail={detail} />
-        </EvidenceBox>
+        // a closer look at one of the lines above, so it sits indented under them
+        <div key={`p${o.item_no}`} className="ml-4 sm:ml-8">
+          <EvidenceBox title={`Line ${o.item_no}: billed vs. site video`} failed>
+            <ProgressBlock o={o} detail={detail} />
+          </EvidenceBox>
+        </div>
       ))}
       {domains.length > 0 && (
-        <EvidenceBox title="Email sender" failed>
+        <EvidenceBox title="Email sender domain" failed>
           <DomainBlock domains={domains} sub={detail.sub} />
         </EvidenceBox>
       )}
@@ -111,15 +116,10 @@ export function Evidence({ detail }: { detail: RequestDetail }) {
         </EvidenceBox>
       )}
       {notices.map((n, i) => (
-        // notices to owner only ever come from the seed: nothing reads a real one yet
-        <EvidenceBox key={`n${i}`} title="Supplier" failed sample="document">
+        <EvidenceBox key={`n${i}`} title="Supplier notice" failed>
           <SupplierBlock n={n} detail={detail} />
         </EvidenceBox>
       ))}
-      <EvidenceBox title="Lines" failed={linesFailed} sample={detail.sample_document ? "document" : videoSample}>
-        <LinesTable detail={detail} flagged={new Set(progress.map((o) => o.item_no))} />
-        {detail.original && <OpenOriginal name={detail.original} />}
-      </EvidenceBox>
     </section>
   );
 }

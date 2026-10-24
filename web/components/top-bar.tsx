@@ -1,10 +1,8 @@
 "use client";
 
-import { Suspense } from "react";
 import Image from "next/image";
 import Link from "next/link";
-import { usePathname, useSearchParams } from "next/navigation";
-import { monthName } from "@/lib/api";
+import { usePathname } from "next/navigation";
 import { cn } from "@/lib/utils";
 
 const TABS = [
@@ -15,13 +13,6 @@ const TABS = [
   { href: "/security", label: "Security" },
 ];
 
-// Pay requests reads ?m= (default 6, as in app/page.tsx); every other page is month 6.
-function Month() {
-  const path = usePathname();
-  const m = useSearchParams().get("m");
-  return <>{monthName(path === "/" ? Number(m ?? 6) : 6)}</>;
-}
-
 export function TopBar() {
   const path = usePathname();
   return (
@@ -31,11 +22,6 @@ export function TopBar() {
           <Link href="/" className="flex items-center">
             <Image src="/imgs/draw-logo.png" alt="Draw" width={1108} height={372} priority className="h-8 w-auto" />
           </Link>
-          <span className="text-muted-foreground">
-            <Suspense fallback={monthName(6)}>
-              <Month />
-            </Suspense>
-          </span>
         </div>
         <nav aria-label="Main" className="flex gap-1 overflow-x-auto max-sm:-mx-4 max-sm:w-[calc(100%+2rem)] sm:ml-auto">
           {TABS.map((t) => {
