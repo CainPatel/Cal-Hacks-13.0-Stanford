@@ -216,3 +216,56 @@ def test_pay_app_with_separate_g702(client, world, tmp_path):
                         data={"sub_id": req.sub_id, "job_id": req.job_id})
     assert r.status_code == 200, r.text
     assert r.json()["pay_request"]["g702"]["current_payment_due"] == "59850.00"
+
+
+# --- no Anthropic key: every Claude-backed upload fails plainly, never a 500 -----
+
+
+@pytest.fixture
+def no_credentials(monkeypatch):
+    """What the SDK does when no API key or credential is configured: a TypeError at request time."""
+    from types import SimpleNamespace
+    from perception import llm
+
+    def parse(**kw):
+        raise TypeError('"Could not resolve authentication method. Expected one of api_key, auth_token, or '
+                        'credentials to be set. Or for the `Authorization` header to be explicitly omitted"')
+
+    monkeypatch.setattr(llm, "get_client", lambda: SimpleNamespace(beta=SimpleNamespace(messages=SimpleNamespace(parse=parse))))
+
+
+def test_scanned_pay_app_without_a_key_is_a_plain_422(client, world, tmp_path, no_credentials):
+    from tests.perception.g703_builder import rasterize
+    req, path = rendered_pay_app(world, tmp_path)
+    scan = rasterize(path, tmp_path / "scan.pdf")
+    r = upload(client, scan, req.sub_id, req.job_id)
+    assert r.status_code == 422 and "no Anthropic credentials" in r.json()["detail"]
+
+
+def test_video_without_a_key_is_a_plain_422(client, world, tmp_path, no_credentials):
+    video = make_video(tmp_path / "walk.mp4", seconds=2)
+    with open(video, "rb") as f:
+        r = client.post("/site-video", files={"file": ("walk.mp4", f, "video/mp4")}, data={"job_id": world["jobs"][0].id})
+    assert r.status_code == 422 and "no Anthropic credentials" in r.json()["detail"]
+
+
+def test_email_without_a_key_still_uploads_with_code_claims(client, tmp_path, no_credentials):
+    from datetime import datetime
+    from shared.schema import Email, EmailClaims
+    e = Email(id="x", from_addr="accounting@brightIineelectric.com", from_domain="brightIineelectric.com",
+              sent_at=datetime(2026, 10, 22, 9, 14), subject="Updated remittance details",
+              body="Send payments to account 447712782:5071050724 immediately.", claims=EmailClaims())
+    path = tmp_path / "m.eml"
+    render.email_eml(e, path)
+    r = _post(client, "/emails", path, {}, name="m.eml", mime="message/rfc822")
+    assert r.status_code == 200, r.text
+    body = r.json()
+    assert body["method"] == "parsed" and body["email"]["claims"]["bank_change"]
+    assert "model_unavailable" in {n["code"] for n in body["notes"]}
+
+
+def test_needs_ok_sentence_has_one_period():
+    from decimal import Decimal
+    from shared.schema import Action, Decision
+    d = Decision(request_id="r", action=Action.escalate, results=[])
+    assert main.sentence(d, "Airflow HVAC Inc.", Decimal("63723.60")) == "Needs your OK: $63,723.60 to Airflow HVAC Inc."

@@ -24,6 +24,31 @@ make demo PORT=8010         # if 8000 is taken
 
 `make demo` archives any existing `data/events.db` to `data/archive-<time>-events.db`; it never deletes a log.
 
+## Run the whole pipeline locally
+
+Three terminals, from the repo root after Setup:
+
+```
+make events && make replay        # 1. load the seed into data/events.db, decide May-Oct
+make api                          # 2. dashboard API on :8000
+make device                       # 3. approval key on :8001 (Mac mock: type a / r + Enter)
+```
+
+Then exercise each stage:
+
+| Stage | Try it |
+|---|---|
+| Decisions | `curl localhost:8000/requests?month=6`, `curl localhost:8000/requests/pr_sub_03_6` |
+| Judgment in the loop | `python -m events replay 6 --judge` on a fresh log (`make keys` first: needs `JEV_API_KEY` and/or `ANTHROPIC_API_KEY`) |
+| Pay application upload | `make synthetic`, then `curl -F file=@data/synthetic/oct/pr_sub_04_6/g703.pdf -F sub_id=sub_04 -F job_id=<job> localhost:8000/pay-apps` and `curl -X POST localhost:8000/replay` |
+| Release / COI / email upload | `POST /releases` (file, sub_id, job_id), `POST /cois` (file, sub_id), `POST /emails` (file) |
+| Site video | `POST /site-video` (file, job_id); needs `ANTHROPIC_API_KEY` |
+| Attacks and scorecard | `make fuzz N=2000`, `curl localhost:8000/scorecard`, `POST /attacks` |
+
+Without keys, nothing breaks: Claude-backed uploads (scans, video) answer 422 with the reason, emails
+are read with code-only claims, and a judged replay escalates every request rule 15 can't vouch for.
+There is no approve-and-pay endpoint yet; `kernel/executor.py` is exercised by `tests/test_executor.py`.
+
 ## Commands
 
 | Command | Does |

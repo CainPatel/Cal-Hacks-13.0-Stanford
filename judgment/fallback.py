@@ -87,6 +87,10 @@ def ask(state: dict, questions: dict, client=None) -> dict:
         raise FallbackError(f"Claude request failed: {e}") from e
     except pydantic.ValidationError as e:  # the SDK parses inside .parse(): truncated or non-JSON output
         raise FallbackError(f"structured output did not parse: {e.error_count()} errors") from e
+    except TypeError as e:  # what the SDK raises when no API key or other credential is configured
+        if "authentication" not in str(e):
+            raise
+        raise FallbackError("no Anthropic credentials configured (set ANTHROPIC_API_KEY)") from e
     if response.stop_reason in ("refusal", "max_tokens") or response.parsed_output is None:
         raise FallbackError(f"no usable answer (stop_reason={response.stop_reason}, request {response._request_id})")
 
