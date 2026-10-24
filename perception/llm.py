@@ -51,7 +51,8 @@ def _parse(client: anthropic.Anthropic, *, system: str, content: list, output_fo
     except anthropic.AnthropicError as e:
         raise PerceptionLLMError(f"Claude request failed: {e}") from e
     except pydantic.ValidationError as e:  # the SDK parses inside .parse(): truncated or non-JSON output
-        raise PerceptionLLMError(f"Claude's answer did not match the expected shape ({e.error_count()} errors)") from e
+        detail = "; ".join(f"{'.'.join(str(p) for p in err['loc'])}: {err['msg']}" for err in e.errors())
+        raise PerceptionLLMError(f"Claude's answer did not match the expected shape ({e.error_count()} errors): {detail}") from e
     except TypeError as e:  # what the SDK raises when no API key or other credential is configured
         if "authentication" not in str(e):
             raise
