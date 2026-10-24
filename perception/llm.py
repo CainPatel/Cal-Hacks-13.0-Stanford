@@ -69,14 +69,27 @@ class TranscribedRow(BaseModel):
     retainage: str
 
 
+class TranscribedG702(BaseModel):
+    original_contract_sum: str
+    net_change_orders: str
+    contract_sum_to_date: str
+    total_completed_stored: str
+    retainage: str
+    total_earned_less_retainage: str
+    less_previous_certificates: str
+    current_payment_due: str
+
+
 class G703Transcription(BaseModel):
     is_g703: bool = Field(description="True only if the document contains an AIA G703-style continuation sheet")
     application_no: str
     application_date: str
     period_to: str
+    remit_account: str = Field(description="The bank account the sub asks to be paid to, exactly as printed")
     has_retainage_column: bool
     rows: list[TranscribedRow]
     totals_row: TranscribedRow | None
+    g702: TranscribedG702 | None = Field(description="The G702 application summary lines 1-8, or null if absent")
     unreadable_cells: list[str] = Field(description="Cells you could not read with certainty, as 'item_no:column'")
 
 
@@ -91,6 +104,8 @@ Rules:
 - Wrapped descriptions belong to the line item they continue.
 - If a cell is illegible, give your best reading and list it in `unreadable_cells`.
 - application_no, application_date and period_to are copied from the sheet header, or empty strings if absent.
+- remit_account is the payment account printed on the application ("remit to" or similar), or an empty string.
+- g702 holds the G702 summary amounts (lines 1-8; for retainage, the total retainage), copied as printed.
 - If there is no retainage column, set has_retainage_column to false and leave retainage empty."""
 
 

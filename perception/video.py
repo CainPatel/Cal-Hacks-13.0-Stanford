@@ -11,6 +11,7 @@ import io
 import re
 from dataclasses import dataclass, field
 from datetime import date, datetime, timezone
+from decimal import Decimal
 from pathlib import Path
 
 import anthropic
@@ -18,7 +19,7 @@ import av
 from PIL import Image
 
 from perception import llm
-from perception.schema import LineItem, SiteEvidence
+from shared.schema import LineItem, SiteEvidence
 
 MAX_EDGE_PX = 1568  # larger images are downscaled by the API anyway
 DEFAULT_FRAMES = 10
@@ -176,7 +177,7 @@ def build_site_evidence(
     for est in raw.estimates:
         counts[est.item_no] = counts.get(est.item_no, 0) + 1
 
-    estimates: dict[str, float] = {}
+    estimates: dict[str, Decimal] = {}
     for est in raw.estimates:
         if est.item_no not in known:
             notes.append(EvidenceNote("unknown_item", f"model returned item {est.item_no!r}, not in the schedule of values", est.item_no))
@@ -189,9 +190,10 @@ def build_site_evidence(
         elif est.confidence < min_confidence:
             notes.append(EvidenceNote("low_confidence", f"confidence {est.confidence:.2f} below {min_confidence}", est.item_no))
         else:
-            estimates[est.item_no] = est.pct_complete
+            estimates[est.item_no] = Decimal(str(est.pct_complete))
     for item_no in sorted(known - counts.keys()):
         notes.append(EvidenceNote("no_estimate", "model returned nothing for this item", item_no))
 
-    evidence = SiteEvidence(job_id=job_id, date=evidence_date, frames=frame_paths, estimates=estimates)
+    evidence = SiteEvidence(id=f"site_{job_id}_{evidence_date:%Y%m%d}_{digest.hexdigest()[:8]}", job_id=job_id,
+                            date=evidence_date, frames=frame_paths, estimates=estimates)
     return EvidenceResult(evidence, date_source, notes, raw)

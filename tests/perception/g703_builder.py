@@ -35,6 +35,22 @@ class Line:
         return self.total_override if self.total_override is not None else self.previous + self.this_period + self.stored
 
 
+G702_LINES = [
+    ("1. ORIGINAL CONTRACT SUM", "original_contract_sum"),
+    ("2. NET CHANGE BY CHANGE ORDERS", "net_change_orders"),
+    ("3. CONTRACT SUM TO DATE (Line 1 + 2)", "contract_sum_to_date"),
+    ("4. TOTAL COMPLETED & STORED TO DATE", "total_completed_stored"),
+    ("5. RETAINAGE", "retainage"),
+    ("6. TOTAL EARNED LESS RETAINAGE (Line 4 - 5)", "total_earned_less_retainage"),
+    ("7. LESS PREVIOUS CERTIFICATES FOR PAYMENT", "less_previous_certificates"),
+    ("8. CURRENT PAYMENT DUE", "current_payment_due"),
+]
+
+
+def money_q(d: Decimal) -> Decimal:
+    return d.quantize(Decimal("0.01"))
+
+
 def money(d: Decimal) -> str:
     return f"{d:,.2f}" if d >= 0 else f"({-d:,.2f})"
 
@@ -63,6 +79,10 @@ def build_g703(
     grid: bool = True,
     overlay=None,
     period_to_later_pages: str | None = None,
+    remit_account: str | None = "121000248:4417700921",
+    g702: bool = True,
+    g702_override: dict[str, Decimal] | None = None,
+    previous_certificates: Decimal | None = None,
 ) -> Path:
     """extra_rows are inserted after the line items, before the grand total, as raw cell lists.
 
@@ -134,7 +154,23 @@ def build_g703(
     path.parent.mkdir(parents=True, exist_ok=True)
     doc = SimpleDocTemplate(str(path), pagesize=landscape(letter), topMargin=1.0 * inch,
                             leftMargin=0.5 * inch, rightMargin=0.5 * inch, bottomMargin=0.5 * inch)
-    doc.build([Spacer(1, 0.1 * inch), table], onFirstPage=header, onLaterPages=header)
+    story = [Spacer(1, 0.1 * inch), table]
+    if g702:
+        rate = retainage_rate or Decimal("0")
+        prev = previous_certificates if previous_certificates is not None else money_q(sums["D"] * (1 - rate))
+        values = {
+            "original_contract_sum": sums["C"], "net_change_orders": Decimal("0"), "contract_sum_to_date": sums["C"],
+            "total_completed_stored": sums["G"], "retainage": sums["I"],
+            "total_earned_less_retainage": sums["G"] - sums["I"], "less_previous_certificates": prev,
+            "current_payment_due": sums["G"] - sums["I"] - prev,
+        }
+        values.update(g702_override or {})
+        summary = Table([[label, money(values[f])] for label, f in G702_LINES], colWidths=[3.2 * inch, 1.3 * inch])
+        summary.setStyle(TableStyle([("FONTSIZE", (0, 0), (-1, -1), 8), ("ALIGN", (1, 0), (1, -1), "RIGHT")]))
+        story += [Spacer(1, 10), Paragraph("<b>APPLICATION SUMMARY (G702)</b>", _CELL), summary]
+    if remit_account:
+        story += [Spacer(1, 6), Paragraph(f"Remit payment to account: {remit_account}", _CELL)]
+    doc.build(story, onFirstPage=header, onLaterPages=header)
     return path
 
 

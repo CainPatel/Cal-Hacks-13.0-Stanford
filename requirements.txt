@@ -1,2 +1,8 @@
 pydantic>=2.9
 pytest>=8
+anthropic>=2.3
+pdfplumber>=0.11.10
+av>=19.0
+pillow>=13.0
+numpy>=2.0
+reportlab>=4

@@ -24,7 +24,7 @@ import pdfplumber.utils.exceptions
 
 from perception import llm
 from perception.numbers import CellParseError, parse_date, parse_money, parse_pct
-from perception.schema import LineItem, PayRequest
+from shared.schema import G702, LineItem, PayRequest
 
 MONEY_COLUMNS = (
     "scheduled_value",
@@ -80,9 +80,11 @@ class RawSheet:
     application_no: str
     application_date: str
     period_to: str
+    remit_account: str
     has_retainage_column: bool
     rows: list[RawRow]
     totals: dict[str, str] | None
+    g702: dict[str, str] | None  # G702 field -> printed amount
     notes: list[Note] = field(default_factory=list)
 
 
@@ -202,7 +204,43 @@ _HEADER_PATTERNS = {
     "application_no": re.compile(r"APPLICATION\s+NO\.?\s*:?\s*([A-Z0-9\-]*\d[A-Z0-9\-]*)", re.I),
     "application_date": re.compile(r"APPLICATION\s+DATE\s*:?\s*" + _DATE_TOKEN, re.I),
     "period_to": re.compile(r"PERIOD\s+TO\s*:?\s*" + _DATE_TOKEN, re.I),
+    "remit_account": re.compile(
+        r"REMIT[^\n:]{0,40}?ACCOUNT\s*(?:NO\.?|NUMBER)?\s*:?\s*([A-Za-z0-9][A-Za-z0-9:\-]{3,})", re.I),
 }
+# Fields that decide where money goes or which period is billed: pages must agree.
+_MUST_AGREE = {"period_to": "billing period", "remit_account": "remit-to account", "application_no": "application number"}
+
+# G702 summary lines, by their printed label. The amount is whatever follows the
+# label (after an optional "(Line 1 + 2)"-style note), so a blank amount reads as 0
+# exactly like a blank G703 cell. Patterns are tried in order; the first label found wins.
+_G702_LABELS: dict[str, list[re.Pattern]] = {
+    field_: [re.compile(p, re.I) for p in pats]
+    for field_, pats in {
+        "original_contract_sum": [r"\b1\.\s*ORIGINAL\s+CONTRACT\s+SUM\b"],
+        "net_change_orders": [r"\b2\.\s*NET\s+CHANGE\s+BY\s+CHANGE\s+ORDERS\b"],
+        "contract_sum_to_date": [r"\b3\.\s*CONTRACT\s+SUM\s+TO\s+DATE\b"],
+        "total_completed_stored": [r"\b4\.\s*TOTAL\s+COMPLETED\s*(?:&|AND)\s*STORED\s+TO\s+DATE\b"],
+        # The AIA form puts the amount on a "Total Retainage" sub-line under "5. RETAINAGE:".
+        "retainage": [r"\bTOTAL\s+RETAINAGE\b", r"\b5\.\s*RETAINAGE\b"],
+        "total_earned_less_retainage": [r"\b6\.\s*TOTAL\s+EARNED\s+LESS\s+RETAINAGE\b"],
+        "less_previous_certificates": [r"\b7\.\s*LESS\s+PREVIOUS\s+CERTIFICATES(?:\s+FOR\s+PAYMENT)?\b"],
+        "current_payment_due": [r"\b8\.\s*CURRENT\s+PAYMENT\s+DUE\b"],
+    }.items()
+}
+_LEADER = re.compile(r"^\s*(?:\([^)]*\)\s*)?[:.\s]*")
+
+
+def _g702_from_text(lines: list[str]) -> tuple[dict[str, str], list[str]]:
+    """Printed amount per G702 field, and the fields whose label appears with conflicting amounts."""
+    found: dict[str, set[str]] = {}
+    for field_, patterns in _G702_LABELS.items():
+        for pattern in patterns:
+            hits = [(line, m) for line in lines for m in [pattern.search(line)] if m]
+            if hits:
+                found[field_] = {_LEADER.sub("", line[m.end():], count=1).strip() for line, m in hits}
+                break
+    conflicts = [f for f, v in found.items() if len(v) > 1]
+    return {f: next(iter(v)) for f, v in found.items() if len(v) == 1}, conflicts
 _ITEM_NO = re.compile(r"^[A-Za-z0-9](?:[A-Za-z0-9.\-/ ]{0,14}[A-Za-z0-9.])?$")
 _TOTAL_LABEL = re.compile(r"\b(SUB-?\s?)?TOTALS?\b", re.I)
 
@@ -220,6 +258,7 @@ class _SheetState:
 def _read_text_layer(path: Path) -> RawSheet:
     st = _SheetState()
     header_values: dict[str, set[str]] = {k: set() for k in _HEADER_PATTERNS}
+    text_lines: list[str] = []
 
     with pdfplumber.open(path) as pdf:
         for page_no, page in enumerate(pdf.pages, start=1):
@@ -243,6 +282,7 @@ def _read_text_layer(path: Path) -> RawSheet:
                 page = page.filter(lambda o: o.get("object_type") != "char" or _char_key(o) in keep)
 
             text = page.extract_text() or ""
+            text_lines.extend(text.splitlines())
             for key, pattern in _HEADER_PATTERNS.items():
                 m = pattern.search(text)
                 if m:
@@ -283,19 +323,25 @@ def _read_text_layer(path: Path) -> RawSheet:
     resolved = {}
     for key, values in header_values.items():
         if len(values) > 1:
-            if key == "period_to":
-                # The billing period decides which releases and prior payments apply; never pick one.
-                raise ExtractionError(f"pages disagree on the billing period: {sorted(values)}")
+            if key in _MUST_AGREE:
+                # These decide which period is billed and where money goes; never pick one.
+                raise ExtractionError(f"pages disagree on the {_MUST_AGREE[key]}: {sorted(values)}")
             st.notes.append(Note("header_mismatch", f"{key} differs between pages: {sorted(values)}"))
         resolved[key] = next(iter(values)) if len(values) == 1 else ""
+
+    g702, conflicts = _g702_from_text(text_lines)
+    if conflicts:
+        raise ExtractionError(f"G702 lines printed more than once with different amounts: {conflicts}")
 
     return RawSheet(
         application_no=resolved["application_no"],
         application_date=resolved["application_date"],
         period_to=resolved["period_to"],
+        remit_account=resolved["remit_account"],
         has_retainage_column="retainage" in st.mapping.values(),
         rows=st.rows,
         totals=st.totals,
+        g702=g702 or None,
         notes=st.notes,
     )
 
@@ -369,9 +415,11 @@ def _read_with_claude(pdf_bytes: bytes, client) -> RawSheet:
         application_no=t.application_no,
         application_date=t.application_date,
         period_to=t.period_to,
+        remit_account=t.remit_account.strip(),
         has_retainage_column=t.has_retainage_column,
         rows=[RawRow(r.item_no.strip(), r.description.strip(), cells(r)) for r in t.rows],
         totals=cells(t.totals_row) if t.totals_row else None,
+        g702=t.g702.model_dump() if t.g702 else None,
         notes=[],
     )
 
@@ -379,14 +427,30 @@ def _read_with_claude(pdf_bytes: bytes, client) -> RawSheet:
 # --- Shared parsing and checks ----------------------------------------------
 
 
+def _to_g702(sheet: RawSheet) -> G702:
+    if not sheet.g702:
+        raise ExtractionError("no G702 application summary found")
+    missing = [f for f in G702.model_fields if f not in sheet.g702]
+    if missing:
+        raise ExtractionError(f"G702 summary is missing: {', '.join(missing)}")
+    try:
+        return G702(**{f: parse_money(sheet.g702[f]) for f in G702.model_fields})
+    except CellParseError as e:
+        raise ExtractionError(f"G702 amount unreadable: {e}") from e
+
+
 def _to_line_items(sheet: RawSheet) -> tuple[list[LineItem], list[Note]]:
+    if not sheet.has_retainage_column:
+        # The schema needs per-line retainage; a guessed 0 would read as a retainage error.
+        raise ExtractionError("sheet has no retainage column")
     notes: list[Note] = []
     pct_raw = [(r, *parse_pct(r.cells.get("pct_complete"))) for r in sheet.rows]
-    # Some sheets print 0.60 rather than 60%. Scale only when no cell carries a
-    # % sign and every value is a plausible fraction.
+    # Some sheets print 0.60 rather than 60%. With no % sign anywhere, pick the
+    # reading that matches G/C. No "every value <= 1" gate: a line billed past its
+    # scheduled value prints as 1.12, and misreading it as 1.12% would hide the over-bill.
     any_sign = any(sign for _, _, sign in pct_raw)
     fractional = False
-    if not any_sign and all(v <= 1 for _, v, _ in pct_raw) and any(v > 0 for _, v, _ in pct_raw):
+    if not any_sign and any(v > 0 for _, v, _ in pct_raw):
         err_points = err_fraction = Decimal("0")
         for r, v, _ in pct_raw:
             try:
@@ -405,12 +469,7 @@ def _to_line_items(sheet: RawSheet) -> tuple[list[LineItem], list[Note]]:
     lines = []
     for r, pct, _ in pct_raw:
         try:
-            money = {
-                k: parse_money(r.cells.get(k), blank_is_zero=(k != "scheduled_value"))
-                for k in MONEY_COLUMNS
-                if k != "retainage"
-            }
-            retainage = parse_money(r.cells.get("retainage")) if sheet.has_retainage_column else None
+            money = {k: parse_money(r.cells.get(k), blank_is_zero=(k != "scheduled_value")) for k in MONEY_COLUMNS}
         except CellParseError as e:
             raise CellParseError(f"item {r.item_no}: {e}") from e
         lines.append(
@@ -418,7 +477,6 @@ def _to_line_items(sheet: RawSheet) -> tuple[list[LineItem], list[Note]]:
                 item_no=r.item_no,
                 description=r.description,
                 pct_complete=pct * 100 if fractional else pct,
-                retainage=retainage,
                 **money,
             )
         )
@@ -450,7 +508,7 @@ def check_consistency(lines: list[LineItem], totals: dict[str, str] | None) -> l
         notes.append(Note("no_totals_row", "no grand total row found; row count cannot be cross-checked"))
         return notes
     for col in MONEY_COLUMNS:
-        if col not in totals or (col == "retainage" and lines and lines[0].retainage is None):
+        if col not in totals:
             continue
         try:
             printed = parse_money(totals[col])
@@ -460,6 +518,25 @@ def check_consistency(lines: list[LineItem], totals: dict[str, str] | None) -> l
         summed = sum((getattr(li, col) for li in lines), Decimal("0"))
         if abs(summed - printed) > MONEY_TOLERANCE:
             notes.append(Note("totals_mismatch", f"{col}: lines sum to {summed}, printed total is {printed}"))
+    return notes
+
+
+def check_g702(g: G702, lines: list[LineItem]) -> list[Note]:
+    """Report where the G702 summary disagrees with itself or with the G703 lines."""
+    notes = []
+    pairs = [
+        ("g702_line3", g.original_contract_sum + g.net_change_orders, g.contract_sum_to_date, "line 1 + line 2"),
+        ("g702_line6", g.total_completed_stored - g.retainage, g.total_earned_less_retainage, "line 4 - line 5"),
+        ("g702_line8", g.total_earned_less_retainage - g.less_previous_certificates, g.current_payment_due,
+         "line 6 - line 7"),
+        ("g702_vs_g703_completed", sum((l.total_to_date for l in lines), Decimal("0")), g.total_completed_stored,
+         "G703 total completed (column G)"),
+        ("g702_vs_g703_retainage", sum((l.retainage for l in lines), Decimal("0")), g.retainage,
+         "G703 total retainage (column I)"),
+    ]
+    for code, expected, printed, what in pairs:
+        if abs(expected - printed) > MONEY_TOLERANCE:
+            notes.append(Note(code, f"G702 shows {printed} but {what} is {expected}"))
     return notes
 
 
@@ -485,15 +562,15 @@ def extract_pay_request(
     sub_id: str,
     job_id: str,
     submitted_at: datetime,
-    bank_account: str | None = None,
     request_id: str | None = None,
     allow_llm_fallback: bool = True,
     client=None,
 ) -> ExtractionResult:
-    """Read one G703 PDF into a PayRequest.
+    """Read one pay application PDF (G703 continuation sheet + G702 summary) into a PayRequest.
 
-    Identity fields (sub, job, bank account) come from the submission, not the
-    document: a PDF can claim to be from anyone.
+    Sub and job come from the submission, not the document: a PDF can claim to
+    be from anyone. The remit-to account is read from the document because it
+    is the sub's claim that rule 10 checks against the account on file.
     """
     path = Path(pdf_path)
     pdf_bytes = path.read_bytes()
@@ -532,16 +609,22 @@ def extract_pay_request(
         period_end = parse_date(sheet.period_to)
     except CellParseError as e:
         raise ExtractionError(str(e)) from e
+    if not re.fullmatch(r"\d{1,4}", sheet.application_no or ""):
+        raise ExtractionError(f"application number missing or not a number: {sheet.application_no!r}")
+    if not sheet.remit_account:
+        raise ExtractionError("no remit-to bank account on the pay application")
+    g702 = _to_g702(sheet)
 
-    notes = sheet.notes + parse_notes + check_consistency(lines, sheet.totals)
+    notes = sheet.notes + parse_notes + check_consistency(lines, sheet.totals) + check_g702(g702, lines)
     pay_request = PayRequest(
         id=request_id or f"pr_{uuid.uuid4().hex[:12]}",
+        number=int(sheet.application_no),
         sub_id=sub_id,
         job_id=job_id,
         period_end=period_end,
         lines=lines,
-        g702=None,
-        bank_account=bank_account,
+        g702=g702,
+        bank_account=sheet.remit_account,
         submitted_at=submitted_at,
         source_doc=str(path),
     )

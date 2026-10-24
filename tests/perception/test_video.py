@@ -9,7 +9,7 @@ import pytest
 from PIL import Image
 
 from perception.llm import ItemEstimate, ProgressEstimate
-from perception.schema import LineItem
+from shared.schema import LineItem
 from perception.video import MAX_EDGE_PX, VideoError, build_site_evidence, sample_frames
 
 
@@ -39,7 +39,7 @@ def line(item_no, desc, pct="60.00"):
     return LineItem(item_no=item_no, description=desc, scheduled_value=Decimal("100000"),
                     previous_applications=Decimal("0"), this_period=Decimal("0"), stored_materials=Decimal("0"),
                     total_to_date=Decimal("0"), pct_complete=Decimal(pct), balance_to_finish=Decimal("0"),
-                    retainage=None)
+                    retainage=Decimal("0"))
 
 
 SOV = [line("3", "Concrete foundations", pct="87.25"), line("4", "Framing"), line("5", "Roofing")]
