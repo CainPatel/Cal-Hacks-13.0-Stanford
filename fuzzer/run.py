@@ -2,11 +2,8 @@
 
     python -m fuzzer.run 500        # writes data/scorecard.json
 
-Kernel interface this expects from A:
-    kernel.runner.decide(state: dict[str, list], request_id: str) -> Decision
-where state is the same dict of model lists that seed.generate.generate() returns.
-Until that exists, a stub that releases everything stands in, so the scorecard is
-obviously wrong rather than plausibly right.
+Decisions go through pipeline.decide, the same path replay uses (see pipeline.py for
+the kernel interface and the stub that stands in until A's kernel exists).
 """
 import json
 import random
@@ -16,18 +13,10 @@ from datetime import date, timedelta
 from decimal import Decimal
 from pathlib import Path
 
+from pipeline import KERNEL, decide
 from seed import anomalies as a
 from seed.generate import generate
-from shared.schema import Action, Decision, Label
-
-try:
-    from kernel.runner import decide
-    KERNEL = "kernel.runner"
-except ImportError:
-    KERNEL = "STUB (releases everything; kernel/runner.py not built yet)"
-
-    def decide(state, request_id):
-        return Decision(request_id=request_id, action=Action.release, results=[])
+from shared.schema import Action, Label
 
 SUBS = [f"sub_{i:02d}" for i in range(1, 16)]
 WORLDS = 8           # distinct fake companies to mutate, so cases aren't all the same 15 requests
@@ -91,6 +80,23 @@ def make_cases(n, rng):
                 continue
             yield case
         n -= 1
+
+
+ATTACKS = {m.__name__: m for m in SINGLE}  # what the judge's attack console offers
+
+
+def attack(name: str, target: str, rng_seed: int | None = None, **kwargs) -> dict:
+    """Run one chosen attack on one sub (or job, for new_sub_ein_mismatch) through the pipeline.
+
+    For the attack console: returns the label (what should happen) and the decision (what did).
+    kwargs override the mutator's settings, e.g. attack("bank_change_email", "sub_04", homoglyph=True).
+    """
+    out = ATTACKS[name](generate(), target, random.Random(rng_seed), **kwargs)
+    if out is None:
+        raise ValueError(f"{name} doesn't apply to {target}")
+    data, label = out
+    return {"label": label, "decision": decide(data, label.request_id),
+            "amount": amount(data, label.request_id)}
 
 
 def amount(data, request_id) -> Decimal:

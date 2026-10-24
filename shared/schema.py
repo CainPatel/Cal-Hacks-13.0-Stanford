@@ -208,6 +208,15 @@ class Decision(Model):
     executed_at: datetime | None = None
 
 
+class Event(Model):
+    """One row of the append-only log. `at` is simulated business time, `seq` is write order."""
+    seq: int
+    at: datetime
+    kind: str  # fact | judgment | decision | signature | execution
+    table: str | None = None  # facts only: which state table the row belongs to
+    data: dict
+
+
 class Label(Model):
     """Ground truth for a seeded or fuzzed request. Never passed to the kernel."""
     request_id: str
