@@ -11,6 +11,7 @@ import os
 import re
 
 import anthropic
+import pydantic
 from pydantic import BaseModel, Field
 
 MODEL = os.environ.get("PERCEPTION_MODEL", "claude-opus-5-5")
@@ -33,17 +34,28 @@ def get_client() -> anthropic.Anthropic:
 
 
 def _parse(client: anthropic.Anthropic, *, system: str, content: list, output_format: type[BaseModel]):
-    response = client.beta.messages.parse(
-        model=MODEL,
-        max_tokens=16000,
-        thinking={"type": "adaptive"},
-        output_config={"effort": EFFORT},
-        betas=["server-side-fallback-2026-07-01"],
-        fallbacks="default",
-        system=system,
-        messages=[{"role": "user", "content": content}],
-        output_format=output_format,
-    )
+    """Every perception call to Claude. Any failure comes back as PerceptionLLMError, so callers
+    can turn it into a plain "couldn't read this" instead of a server error."""
+    try:
+        response = client.beta.messages.parse(
+            model=MODEL,
+            max_tokens=16000,
+            thinking={"type": "adaptive"},
+            output_config={"effort": EFFORT},
+            betas=["server-side-fallback-2026-07-01"],
+            fallbacks="default",
+            system=system,
+            messages=[{"role": "user", "content": content}],
+            output_format=output_format,
+        )
+    except anthropic.AnthropicError as e:
+        raise PerceptionLLMError(f"Claude request failed: {e}") from e
+    except pydantic.ValidationError as e:  # the SDK parses inside .parse(): truncated or non-JSON output
+        raise PerceptionLLMError(f"Claude's answer did not match the expected shape ({e.error_count()} errors)") from e
+    except TypeError as e:  # what the SDK raises when no API key or other credential is configured
+        if "authentication" not in str(e):
+            raise
+        raise PerceptionLLMError("no Anthropic credentials configured (set ANTHROPIC_API_KEY)") from e
     if response.stop_reason == "refusal":
         raise PerceptionLLMError(f"model declined the request (request {response._request_id})")
     if response.stop_reason == "max_tokens":

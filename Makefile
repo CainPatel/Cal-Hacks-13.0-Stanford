@@ -54,7 +54,7 @@ demo:
 
 # Which secrets are set (never prints a value)
 keys:
-	@for k in ANTHROPIC_API_KEY AI_GATEWAY_API_KEY NESSIE_API_KEY CRS_API_KEY ESP32_DEVICE_URL; do \
+	@for k in ANTHROPIC_API_KEY JEV_API_KEY AI_GATEWAY_API_KEY NESSIE_API_KEY CRS_API_KEY ESP32_DEVICE_URL; do \
 		if [ -n "$$(printenv $$k)" ]; then echo "  $$k: set"; else echo "  $$k: missing"; fi; done
 
 # Turn on the repo's secret-blocking pre-commit hook for this clone (run once per laptop)
