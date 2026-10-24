@@ -1,4 +1,4 @@
-.PHONY: seed test
+.PHONY: seed test replay
 PY = .venv/bin/python
 
 seed:
@@ -6,3 +6,6 @@ seed:
 
 test:
 	$(PY) -m pytest -q tests
+
+replay:
+	$(PY) -m events.replay $(if $(M),--month $(M),)

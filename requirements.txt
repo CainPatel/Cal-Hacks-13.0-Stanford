@@ -1,2 +1,5 @@
 pydantic>=2.9
 pytest>=8
+pyyaml>=6
+cryptography>=43
+requests>=2.32
