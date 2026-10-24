@@ -13,6 +13,7 @@ moment the fact or decision belongs to (defaults to `ts`). Replay filters on `at
 import json
 import os
 import sqlite3
+from contextlib import contextmanager
 from datetime import date, datetime
 from pathlib import Path
 
@@ -111,6 +112,52 @@ def is_empty(path: Path = DEFAULT_PATH) -> bool:
 def where(path: Path = DEFAULT_PATH) -> str:
     """Where the log lives, for messages (never prints credentials)."""
     return "the Postgres log (DATABASE_URL)" if _postgres_url(path) else str(path)
+
+
+class LockTimeout(RuntimeError):
+    """Another process held the lock for longer than the caller was willing to wait."""
+
+
+@contextmanager
+def exclusive(name: str, path: Path = DEFAULT_PATH, timeout_s: float = 150):
+    """A lock shared by every process that writes this log, for check-then-act sequences (paying).
+
+    Postgres: a session advisory lock, so every Vercel instance contends for the same lock; if an
+    instance dies, its connection closes and the lock goes with it. SQLite: an OS file lock beside
+    the database, which covers several local worker processes too.
+    """
+    url = _postgres_url(path)
+    if url is not None:
+        import psycopg
+        with psycopg.connect(url, autocommit=True) as db:
+            db.execute("SELECT set_config('lock_timeout', %s, false)", (f"{int(timeout_s * 1000)}ms",))
+            try:
+                db.execute("SELECT pg_advisory_lock(hashtext(%s))", (name,))
+            except psycopg.errors.LockNotAvailable as e:
+                raise LockTimeout(f"waited {timeout_s:.0f}s for the {name!r} lock") from e
+            try:
+                yield
+            finally:
+                db.execute("SELECT pg_advisory_unlock(hashtext(%s))", (name,))
+        return
+    import fcntl
+    import time
+    lock_path = Path(path).with_name(Path(path).name + f".{name}.lock")
+    lock_path.parent.mkdir(parents=True, exist_ok=True)
+    with open(lock_path, "a") as f:
+        deadline = time.monotonic() + timeout_s
+        while True:
+            try:
+                fcntl.flock(f, fcntl.LOCK_EX | fcntl.LOCK_NB)
+                break
+            except BlockingIOError:
+                if time.monotonic() > deadline:
+                    raise LockTimeout(f"waited {timeout_s:.0f}s for the {name!r} lock") from None
+                time.sleep(0.05)
+        try:
+            yield
+        finally:
+            fcntl.flock(f, fcntl.LOCK_UN)
 
 
 class LogNotConfigured(RuntimeError):

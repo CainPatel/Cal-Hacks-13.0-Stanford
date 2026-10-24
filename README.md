@@ -69,7 +69,8 @@ Both pay endpoints (`/approve` for escalations, `/pay` for anything) decide agai
 first, pay a request once (also refusing the same application under another id), and sign the bank
 account into the device's payload. If the bank's answer is unknown (a timeout, a 5xx), further attempts
 are blocked until `POST /requests/{id}/resolve` (or `python -m events nessie-resolve <id>`) finds out
-from Nessie. Payments are serialized within one API process; run a single API worker.
+from Nessie. Payments run one at a time across every API instance (a Postgres advisory lock on Vercel, a
+file lock locally).
 
 ## Deploy
 

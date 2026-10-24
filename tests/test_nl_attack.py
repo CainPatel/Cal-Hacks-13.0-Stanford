@@ -44,3 +44,25 @@ def test_none_and_refusal():
 def test_roster_names_every_sub():
     r = n.roster()
     assert len(r) == 15 and {"id", "name", "trade", "job", "job_name"} <= set(r[0])
+
+
+@pytest.mark.parametrize("text,expected", [("0%", "0"), ("0", "0"), ("5%", "0.05"), ("5", "0.05"), ("0.05", "0.05"),
+                                           (" 10 % ", "0.1")])
+def test_retainage_rate_is_normalized(text, expected):
+    from fuzzer.nl_attack import _fraction
+    assert _fraction(text) == expected
+
+
+@pytest.mark.parametrize("text", ["waived", "", "-5%", "150%"])
+def test_bad_retainage_rate_is_a_value_error(text):
+    from fuzzer.nl_attack import _fraction
+    with pytest.raises(ValueError):
+        _fraction(text)
+
+
+def test_waived_retainage_story_runs_end_to_end():
+    """The exact plan Claude produced live ("0%") used to crash the mutator with InvalidOperation."""
+    from fuzzer import nl_attack, run as fuzzer
+    plan = nl_attack.AttackPlan(attack="retainage_slip", target="sub_04", explanation="waived", rate="0%")
+    out = fuzzer.attack(plan.attack, plan.target, **nl_attack.settings_for(plan))
+    assert out["decision"].action.value == "hold"

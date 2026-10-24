@@ -272,7 +272,7 @@ def describe_attack(body: DescribeIn):
         out = nl_attack.run(body.text)
     except nl_attack.AttackError as e:
         raise HTTPException(502, str(e))
-    except (ValueError, StopIteration, TypeError) as e:
+    except (ValueError, StopIteration, TypeError, ArithmeticError) as e:
         raise HTTPException(422, f"that attack can't run as described: {e}")
     if out["result"] is None:
         return {"plan": out["plan"], "result": None}
