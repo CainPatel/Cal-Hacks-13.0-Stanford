@@ -10,7 +10,7 @@ import hashlib
 import io
 import re
 from dataclasses import dataclass, field
-from datetime import date, datetime
+from datetime import date, datetime, timezone
 from pathlib import Path
 
 import anthropic
@@ -55,9 +55,12 @@ def _recorded_date(container) -> date | None:
         value = (meta or {}).get("creation_time")
         if value:
             try:
-                return datetime.fromisoformat(value.replace("Z", "+00:00")).date()
+                parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
             except ValueError:
                 continue
+            if parsed.tzinfo is not None:
+                parsed = parsed.astimezone(timezone.utc)
+            return parsed.date()
     return None
 
 
@@ -95,8 +98,10 @@ def sample_frames(video_path: Path, n: int = DEFAULT_FRAMES) -> tuple[list[tuple
         if not duration or duration <= 0:
             raise VideoError("video has no usable duration")
 
+        # Frame times are absolute; streams cut from a longer recording (TS, drones, trims) don't start at 0.
+        start = float(stream.start_time * stream.time_base) if stream.start_time is not None else 0.0
         # Midpoints of n equal slices: avoids the black first frame and the fumbled last one.
-        targets = [duration * (i + 0.5) / n for i in range(n)]
+        targets = [start + duration * (i + 0.5) / n for i in range(n)]
         frames: list[tuple[float, bytes]] = []
         for t in targets:
             container.seek(int(t / stream.time_base), stream=stream, backward=True, any_frame=False)
