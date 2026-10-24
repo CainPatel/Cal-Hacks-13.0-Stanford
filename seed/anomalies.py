@@ -218,6 +218,17 @@ def inflated_payment_due(data, sub_id, rng, factor=None):
     return data, label(req, "inflated_payment_due", "rule_01")
 
 
+def release_amount_short(data, sub_id, rng, fraction=None):
+    """The conditional waiver on file is signed and dated right but covers far less than the
+    payment, so the sub keeps lien rights on the rest. Rule 4."""
+    data = copy(data)
+    req = oct_request(data, sub_id)
+    share = Decimal(str(fraction if fraction is not None else rng.choice([0, 0.1, 0.5, 0.9])))
+    amount = money(req.g702.current_payment_due * share) if share else Decimal("1.00")
+    update(data["releases"], f"rel_c_{req.id}", amount=amount)
+    return data, label(req, "release_amount_short", "rule_04")
+
+
 def missing_prior_unconditional(data, sub_id, rng):
     """Last month's payment cleared but its unconditional waiver never came in. Rule 5."""
     data = copy(data)
