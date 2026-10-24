@@ -141,3 +141,19 @@ def test_runner_holds_over_escalates_when_both_fail():
     decision = decide(state, request)
     assert decision.action == Action.hold
     assert decision.next_action
+
+
+def test_low_confidence_escalates_instead_of_holding():
+    """Rule 15 failing alone means "a person should look", so the runner escalates; any other
+    failing rule still holds, and the hold's next action points at that rule, not rule 15."""
+    from kernel.runner import decide
+    from shared.schema import Action
+
+    state, request = load("rule_15_fail.json")
+    d = decide(state, request)
+    assert d.action == Action.escalate and d.next_action is None
+
+    state7, request7 = load("rule_07_fail.json")
+    both = state7.model_copy(update={"proposal": state.proposal, "contract": state.contract})
+    d = decide(both, request7)
+    assert d.action == Action.hold and "supplier" in d.next_action

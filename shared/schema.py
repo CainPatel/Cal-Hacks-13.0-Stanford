@@ -190,6 +190,9 @@ class Proposal(Model):
     action: Action
     confidences: dict[str, float]
     reasons: list[str]
+    # question -> answer: a Choice option name, or a Score normalized to 0-1. Rules that the
+    # spec feeds from a Jev answer (4, 10, 12, 13) read it here; empty when no model ran.
+    answers: dict[str, str | float] = {}
 
 
 class RuleResult(Model):

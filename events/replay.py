@@ -44,11 +44,13 @@ def load_seed(data: dict[str, list], path=events.DEFAULT_PATH) -> int:
     return len(facts)
 
 
-def replay(through: int, write: bool = True, decide=None, path=events.DEFAULT_PATH) -> list:
+def replay(through: int, write: bool = True, decide=None, path=events.DEFAULT_PATH, judge=None) -> list:
     """Decide every request for months 1..through that has no decision yet.
 
     write=False is the what-if mode: decisions come back but nothing is appended,
-    e.g. to rerun October under a changed contract.
+    e.g. to rerun October under a changed contract. With `judge` (e.g. judgment.judge) the
+    model answers first, its Proposal reaches the kernel, and a `judgment` event is logged
+    before each kernel trace.
     """
     decide = decide or pipeline.decide
     done = {e.request_id for e in events.read(kind="kernel_trace", path=path)} if write else set()
@@ -59,7 +61,12 @@ def replay(through: int, write: bool = True, decide=None, path=events.DEFAULT_PA
         for req in state["pay_requests"]:
             if req.period_end != month_end(month) or req.id in done:
                 continue
-            d = decide(state, req.id)
+            if judge is not None:
+                d, result = pipeline.judge_and_decide(state, req.id, judge=judge)
+                if write:
+                    events.append("judgment", pipeline.judgment_event(result), request_id=req.id, at=at, path=path)
+            else:
+                d = decide(state, req.id)
             if write:
                 events.append("kernel_trace", d, request_id=req.id, at=at, path=path)
             out.append(d)
