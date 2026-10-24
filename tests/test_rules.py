@@ -42,6 +42,11 @@ def test_fail_fixture_is_isolated(n):
     rule's fail fixture silently starts failing other rules too, which hides bugs and
     makes next_action_for() point at the wrong rule. Catches exactly the kind of mistake
     that slipped in while wiring rule 06's COI into base_state().
+
+    Escalation rules (14, 15) are exempt from "unexpected": e.g. rule 02's fail fixture
+    legitimately bills an amount that's also over the spend limit, and a co-failure there
+    doesn't hide anything -- next_action_for() already skips ESCALATION_RULES when picking
+    the rule to report on, so only a non-escalation co-failure is a real isolation bug.
     """
     state, request = load(f"rule_{n}_fail.json")
     results = {}
@@ -49,7 +54,8 @@ def test_fail_fixture_is_isolated(n):
         result = rule(state, request)
         results[result.rule.split("_", 1)[0]] = result
     assert not results[n].passed, f"rule {n} was expected to fail its own fail fixture"
-    other_failures = [num for num, r in results.items() if num != n and not r.passed]
+    other_failures = [num for num, r in results.items()
+                       if num != n and not r.passed and num not in ESCALATION_RULES]
     assert not other_failures, f"fail fixture for rule {n} unexpectedly also fails rule(s) {other_failures}"
 
 
@@ -81,6 +87,22 @@ def test_rule_02_ceiling_comes_from_contract_not_self_reported_scheduled_value()
 
     result = check(state, forged_request)
     assert not result.passed, "rule 02 must not trust the sub's self-reported scheduled_value"
+
+
+def test_rule_14_fails_closed_when_limit_is_missing():
+    """A missing auto_release_limit_usd (a config mistake) must not read as "no limit" --
+    it must escalate everything, never auto-release."""
+    from kernel.rules.rule_14_within_spend_authority import check
+    from kernel.runner import decide
+
+    state, request = load("rule_14_pass.json")
+    misconfigured = state.model_copy(update={"contract": {}})
+
+    result = check(misconfigured, request)
+    assert not result.passed, "rule 14 must fail closed when the limit is missing, not pass open"
+
+    from shared.schema import Action
+    assert decide(misconfigured, request).action == Action.escalate
 
 
 def test_runner_releases_on_all_pass():

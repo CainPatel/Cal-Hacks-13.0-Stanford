@@ -22,7 +22,8 @@ def decided(rid, world=WORLD):
 
 
 def signed(priv, req, **overrides):
-    payload = {"request_id": req.id, "payee": req.sub_id, "amount": str(req.g702.current_payment_due),
+    payload = {"request_id": req.id, "payee": req.sub_id, "sub_id": req.sub_id,
+               "amount": str(req.g702.current_payment_due),
                "job": req.job_id, "nonce": f"n-{req.id}-{time.time_ns()}", "expires_at": int(time.time()) + 90,
                **overrides}
     r, s = decode_dss_signature(priv.sign(ex.canonical_payload_bytes(payload), ec.ECDSA(hashes.SHA256())))
@@ -71,9 +72,19 @@ def test_signature_for_one_dollar_cannot_pay_more(env):
 
 
 def test_signature_for_another_payee_refused(env):
+    """The security-critical check binds sub_id (the id the device was told to show the
+    name for), not the free-text "payee" display name."""
     _, d, req = decided("pr_sub_10_6")
     with pytest.raises(ex.ExecutionRefused, match="payee"):
-        run(env, d, req, signed(env[0], req, payee="sub_99"))
+        run(env, d, req, signed(env[0], req, sub_id="sub_99"))
+
+
+def test_payee_display_name_does_not_affect_the_check(env):
+    """"payee" is only what the device shows; a vendor's display name isn't security-critical
+    on its own, as long as sub_id (the field the signature is actually checked against) is right."""
+    _, d, req = decided("pr_sub_10_6")
+    run(env, d, req, signed(env[0], req, payee="Some Other Company LLC"))
+    assert env[2] == [(req.id, req.g702.current_payment_due)]
 
 
 def test_approval_pays_only_once(env):

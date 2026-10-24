@@ -66,6 +66,32 @@ ESCALATION_RULES = {"14_within_spend_authority", "15_confidence_floor"}  # kerne
 STATUS = {Action.release: "ready", Action.escalate: "needs_ok", Action.hold: "on_hold"}
 
 
+@app.exception_handler(events.LogNotConfigured)
+def log_not_configured(request: Request, exc: events.LogNotConfigured):
+    from fastapi.responses import JSONResponse
+    return JSONResponse(status_code=503, content={"detail": str(exc)})
+
+
+@app.get("/")
+def status():
+    """What's configured on this deployment, as yes/no only (never a value), plus whether the log has data."""
+    env = lambda *names: any(os.environ.get(n) for n in names)
+    log = "postgres" if os.environ.get("DATABASE_URL") else ("not connected" if os.environ.get("VERCEL") else "sqlite")
+    try:
+        has_events = not events.is_empty(DB)
+    except Exception as e:  # report, don't crash the status page
+        has_events = f"error: {type(e).__name__}"
+    return {
+        "service": "Draw API", "docs": "/docs", "event_log": log, "log_has_events": has_events,
+        "configured": {
+            "anthropic_key": env("ANTHROPIC_API_KEY"), "jev_key": env("JEV_API_KEY", "AI_GATEWAY_API_KEY"),
+            "nessie_key": env("NESSIE_API_KEY"), "blob_store": env("BLOB_STORE_ID", "BLOB_READ_WRITE_TOKEN"),
+            "cors_origins": os.environ.get("CORS_ORIGINS", "http://localhost:3000 (default)"),
+            "device_url": env("DEVICE_URL"),
+        },
+    }
+
+
 def decisions() -> dict[str, Decision]:
     """Latest kernel trace per request."""
     return {e.request_id: Decision.model_validate(e.data) for e in events.read(kind="kernel_trace", path=DB)}
@@ -250,7 +276,7 @@ def approve(request_id: str):
     import requests as http
 
     from kernel import executor
-    from kernel.contract import load_contract
+    from shared.contract import load_contract
 
     state = events.state(path=DB)
     req = next((r for r in state["pay_requests"] if r.id == request_id), None)
@@ -271,8 +297,9 @@ def approve(request_id: str):
     if not device or not pubkey:
         raise HTTPException(503, "The approval key isn't set up yet (DEVICE_URL and the key's public key in config/contract.yaml).")
     amount = req.g702.current_payment_due
-    payload = {"request_id": req.id, "payee": req.sub_id, "amount": str(amount), "job": req.job_id,
-               "bank_account": req.bank_account, "nonce": uuid.uuid4().hex, "expires_at": int(time.time()) + 120}
+    payload = {"request_id": req.id, "payee": _vendor_name(state, req.sub_id) or req.sub_id, "sub_id": req.sub_id,
+               "amount": str(amount), "job": req.job_id, "bank_account": req.bank_account,
+               "nonce": uuid.uuid4().hex, "expires_at": int(time.time()) + 120}
     try:
         approval = executor.request_device_approval(device, payload)
     except http.exceptions.RequestException as e:  # unreachable, timed out (408), or busy (409): nothing was paid
@@ -288,7 +315,7 @@ def approve(request_id: str):
 def _approval_key() -> tuple[str, str | None]:
     """Where the approval key listens (DEVICE_URL) and its registered public key (contract.yaml's esp32_pubkey,
     read fresh so a newly pasted key works without a restart; or APPROVAL_KEY_PUBKEY for a local mock)."""
-    from kernel.contract import load_contract
+    from shared.contract import load_contract
     url = os.environ.get("DEVICE_URL")
     pubkey = os.environ.get("APPROVAL_KEY_PUBKEY") or load_contract().get("esp32_pubkey") or None
     return (url.rstrip("/") if url else None), pubkey
@@ -320,7 +347,7 @@ def pay(request_id: str, body: PayIn):
     import requests as http
 
     from kernel import executor
-    from kernel.contract import load_contract
+    from shared.contract import load_contract
 
     if not body.confirm:
         raise HTTPException(422, "Send {\"confirm\": true} to pay.")
@@ -350,7 +377,8 @@ def pay(request_id: str, body: PayIn):
             raise HTTPException(503, "The approval key isn't set up yet (DEVICE_URL and the key's public key in "
                                      "config/contract.yaml).")
         # The owner signs the destination too, so a bank change can't ride on an approval for the old account.
-        payload = {"request_id": req.id, "payee": req.sub_id, "amount": str(amount), "job": req.job_id,
+        payload = {"request_id": req.id, "payee": _vendor_name(state, req.sub_id) or req.sub_id,
+                   "sub_id": req.sub_id, "amount": str(amount), "job": req.job_id,
                    "bank_account": req.bank_account, "nonce": uuid.uuid4().hex,
                    "expires_at": int(time.time()) + 120}  # outlives the device's 90 s wait
         try:

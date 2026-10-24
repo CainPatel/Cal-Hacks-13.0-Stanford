@@ -17,7 +17,10 @@ def check(state: KernelState, request: PayRequest) -> RuleResult:
     limit = state.contract.get("auto_release_limit_usd")
     amount = request.g702.current_payment_due
     if limit is None:
-        return ok(RULE, {"limit": None, "amount": str(amount)}, "No auto-release limit is configured.")
+        # Fail closed: a missing limit must not mean "no limit". This fails like an
+        # over-limit amount, so it escalates everything rather than quietly releasing it.
+        return fail(RULE, {"limit": None, "amount": str(amount)},
+                     "No auto-release limit is configured; this needs the owner's sign-off.")
 
     limit_dec = Decimal(str(limit))
     evidence = {"amount": str(amount), "limit": str(limit_dec)}

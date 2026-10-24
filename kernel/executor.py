@@ -111,7 +111,7 @@ def _check_signature_gate(request: PayRequest, amount: Decimal, approval: Signed
         raise ExecutionRefused("signed amount is not a number")
     if signed_amount != amount:
         raise ExecutionRefused(f"signed amount {signed_amount} is not the amount being paid ({amount})")
-    if approval.payload.get("payee") != request.sub_id:
+    if approval.payload.get("sub_id") != request.sub_id:
         raise ExecutionRefused("signature is for a different payee")
     if "bank_account" in approval.payload and approval.payload["bank_account"] != request.bank_account:
         raise ExecutionRefused("signature approved payment to a different bank account")

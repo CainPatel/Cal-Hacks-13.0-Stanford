@@ -39,13 +39,24 @@ class KernelState(BaseModel):
     # rule 15 treats either case as "nothing to check," not as a failure.
     proposal: Proposal | None = None
 
-    def prior_line(self, item_no: str) -> dict | None:
-        """The most recent prior request's line for item_no, or None if this is the first."""
-        for req in sorted(self.prior_requests, key=lambda r: r.number, reverse=True):
+    def prior_line(self, item_no: str, before_number: int) -> dict | None:
+        """The most recent request's line for item_no among applications numbered before
+        before_number, or None if there isn't one. The number filter matters once
+        prior_requests holds full history rather than just what's already been paid --
+        without it, deciding an old request could match against a *later* one.
+        """
+        for req in sorted((r for r in self.prior_requests if r.number < before_number),
+                           key=lambda r: r.number, reverse=True):
             for line in req.lines:
                 if line.item_no == item_no:
                     return line
         return None
+
+    def requests_before(self, number: int) -> list[PayRequest]:
+        """Every prior_requests entry numbered before `number` -- the same filter prior_line
+        uses, for callers (rule 01) that need the most recent prior request as a whole.
+        """
+        return [r for r in self.prior_requests if r.number < number]
 
     def sov_scheduled_value(self, item_no: str) -> Decimal | None:
         """The contracted scheduled value for item_no, or None if the line isn't in the

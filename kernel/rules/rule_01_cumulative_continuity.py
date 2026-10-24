@@ -16,7 +16,7 @@ RULE = "01_cumulative_continuity"
 def check(state: KernelState, request: PayRequest) -> RuleResult:
     mismatches = []
     for line in request.lines:
-        prior = state.prior_line(line.item_no)
+        prior = state.prior_line(line.item_no, request.number)
         expected = prior.total_to_date if prior else Decimal("0")
         if line.previous_applications != expected:
             mismatches.append({
@@ -25,7 +25,7 @@ def check(state: KernelState, request: PayRequest) -> RuleResult:
                 "ledger_previous": str(expected),
             })
 
-    prior = max(state.prior_requests, key=lambda r: r.number, default=None)
+    prior = max(state.requests_before(request.number), key=lambda r: r.number, default=None)
     certified = prior.g702.total_earned_less_retainage if prior else Decimal("0")
     due = sum((l.total_to_date - l.retainage for l in request.lines), Decimal("0")) - certified
     g = request.g702
