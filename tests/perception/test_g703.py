@@ -321,7 +321,7 @@ def _target(tmp_path, text="4,000.00"):
         return word["x0"], page.height - word["bottom"]
 
 
-@pytest.mark.parametrize("mode", ["render_mode_3", "white_box", "alpha_0", "near_white"])
+@pytest.mark.parametrize("mode", ["render_mode_3", "white_box", "alpha_0", "near_white", "microscopic"])
 def test_hidden_digit_cannot_change_a_value(tmp_path, mode):
     x, y = _target(tmp_path)
     x, y = x - 4.0, y + 1.5
@@ -341,6 +341,9 @@ def test_hidden_digit_cannot_change_a_value(tmp_path, mode):
         elif mode == "alpha_0":
             c.setFillAlpha(0.0)
             c.drawString(x, y, "9")
+        elif mode == "microscopic":  # inked, but far too small to read next to 7 pt print
+            c.setFont("Helvetica", 1)
+            c.drawString(x + 3.5, y, "9")
         else:
             c.setFillColorRGB(0.99, 0.99, 0.99)
             c.drawString(x, y, "9")
