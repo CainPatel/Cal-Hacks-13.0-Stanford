@@ -7,7 +7,7 @@ next month at 9 AM: after the owner's draw clears (the 5th), before subs are pai
 from datetime import date, datetime, timedelta
 
 import pipeline
-from events.log import TABLES, EventLog
+from events import log as events
 from seed.generate import PERIODS
 
 START = date(2026, 5, 1)  # contracts, vendors and insurance are on file from day one
@@ -35,32 +35,32 @@ def as_datetime(at) -> datetime:
     return at if isinstance(at, datetime) else datetime(at.year, at.month, at.day)
 
 
-def load_seed(log: EventLog, data: dict[str, list]) -> int:
+def load_seed(data: dict[str, list], path=events.DEFAULT_PATH) -> int:
     """Append every seed row as a fact, in the order the GC would have learned it."""
-    facts = sorted(((as_datetime(KNOWN_AT[t](row)), t, row) for t in TABLES for row in data.get(t, [])),
+    facts = sorted(((as_datetime(KNOWN_AT[t](row)), t, row) for t in events.TABLES for row in data.get(t, [])),
                    key=lambda f: f[0])
     for at, table, row in facts:
-        log.append("fact", row, at=at, table=table)
+        events.append("fact", row, at=at, table=table, path=path)
     return len(facts)
 
 
-def replay(log: EventLog, through: int, write: bool = True, decide=None) -> list:
+def replay(through: int, write: bool = True, decide=None, path=events.DEFAULT_PATH) -> list:
     """Decide every request for months 1..through that has no decision yet.
 
     write=False is the what-if mode: decisions come back but nothing is appended,
     e.g. to rerun October under a changed contract.
     """
     decide = decide or pipeline.decide
-    done = {e.data["request_id"] for e in log.read(kind="decision")} if write else set()
+    done = {e.request_id for e in events.read(kind="kernel_trace", path=path)} if write else set()
     out = []
     for month in range(1, through + 1):
         at = decision_time(month)
-        state = log.state(as_of=at)
+        state = events.state(as_of=at, path=path)
         for req in state["pay_requests"]:
             if req.period_end != month_end(month) or req.id in done:
                 continue
             d = decide(state, req.id)
             if write:
-                log.append("decision", d, at=at)
+                events.append("kernel_trace", d, request_id=req.id, at=at, path=path)
             out.append(d)
     return out

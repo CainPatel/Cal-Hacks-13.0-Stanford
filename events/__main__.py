@@ -6,7 +6,6 @@ from collections import Counter
 from pathlib import Path
 
 import pipeline
-from events.log import EventLog
 from events.replay import load_seed, replay
 from seed.anomalies import with_demo
 from seed.generate import generate
@@ -18,12 +17,12 @@ if cmd == "load":
     if PATH.exists():  # never wipe a log that may hold real decisions and signatures
         sys.exit(f"{PATH} already exists. Delete it yourself to start a fresh log.")
     data, _ = with_demo(generate())
-    print(f"loaded {load_seed(EventLog(PATH), data)} facts into {PATH}")
+    print(f"loaded {load_seed(data, path=PATH)} facts into {PATH}")
 elif cmd == "replay":
     month = int(sys.argv[2]) if len(sys.argv) > 2 else 6
     if not PATH.exists():
         sys.exit(f"No log at {PATH}. Run `make events` first.")
-    decisions = replay(EventLog(PATH), month)
+    decisions = replay(month, path=PATH)
     print(f"kernel: {pipeline.KERNEL}")
     print(f"{len(decisions)} new decisions through month {month}: {dict(Counter(d.action.value for d in decisions))}")
 else:

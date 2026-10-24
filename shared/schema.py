@@ -209,10 +209,12 @@ class Decision(Model):
 
 
 class Event(Model):
-    """One row of the append-only log. `at` is simulated business time, `seq` is write order."""
+    """One row of the append-only log. `seq` is write order, `ts` wall clock, `at` business time."""
     seq: int
+    ts: datetime
     at: datetime
-    kind: str  # fact | judgment | decision | signature | execution
+    kind: str  # fact | judgment | kernel_trace | signature | execution
+    request_id: str | None = None
     table: str | None = None  # facts only: which state table the row belongs to
     data: dict
 

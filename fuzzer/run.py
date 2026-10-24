@@ -7,6 +7,7 @@ the kernel interface and the stub that stands in until A's kernel exists).
 """
 import json
 import random
+import re
 import sys
 from collections import defaultdict
 from datetime import date, timedelta
@@ -103,6 +104,11 @@ def amount(data, request_id) -> Decimal:
     return data["pay_requests"][a.find(data["pay_requests"], request_id)].g702.current_payment_due
 
 
+def rule_numbers(rules) -> set[str]:
+    """'rule_07' and '07_lower_tier_released' both mean rule 07."""
+    return {re.search(r"\d{2}", r).group() for r in rules}
+
+
 def score(rows) -> dict:
     clean = [r for r in rows if r["anomaly"] is None]
     bad = [r for r in rows if r["anomaly"] is not None]
@@ -112,7 +118,7 @@ def score(rows) -> dict:
         t["n"] += 1
         t["caught"] += r["action"] != "release"
         t["wrongful"] += r["action"] == "release"
-        t["right_rule"] += set(r["expected_rules"]) <= set(r["failed_rules"])
+        t["right_rule"] += rule_numbers(r["expected_rules"]) <= rule_numbers(r["failed_rules"])
     ratio = lambda num, den: round(num / den, 4) if den else None
     return {
         "kernel": KERNEL,
