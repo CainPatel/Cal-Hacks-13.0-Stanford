@@ -77,6 +77,15 @@ def label(req, anomaly, *rules):
     return Label(request_id=req.id, anomaly=anomaly, expected_action=Action.hold, rules=list(rules))
 
 
+def confusable(domain):
+    """Lookalike domain: capital I for l, rn for m, or zero for o (first one that applies)."""
+    name, _, tld = domain.rpartition(".")
+    for real, fake in [("l", "I"), ("m", "rn"), ("o", "0")]:
+        if real in name:
+            return f"{name.replace(real, fake, 1)}.{tld}"
+    raise ValueError(f"no confusable for {domain}")
+
+
 def account(rng):
     return f"{rng.randint(10**8, 10**9 - 1)}:{rng.randint(10**9, 10**10 - 1)}"
 
@@ -84,17 +93,20 @@ def account(rng):
 # --- mutators: one per anomaly in the spec ----------------------------------
 
 def overbill_pct(data, sub_id, rng, item_no=None, claim=None, video=None):
-    """Claim more % on one line than the site video shows. Rule 13."""
+    """Claim more % on one line than the site video shows. Rule 13. None if no line has room."""
     data = copy(data)
     req = oct_request(data, sub_id)
+    site_id = f"site_{req.job_id}_{THIS_MONTH}"
+    site = data["site_evidence"][find(data["site_evidence"], site_id)]
     line = next(l for l in req.lines if l.item_no == item_no) if item_no else min(req.lines, key=lambda l: l.pct_complete)
-    claim = Decimal(claim if claim is not None else min(95, line.pct_complete + rng.randint(15, 35)))
+    claim = Decimal(claim if claim is not None else min(100, line.pct_complete + rng.randint(15, 35)))
+    seen = Decimal(video) if video is not None else site.estimates[line.item_no]
+    if claim - seen <= 12:  # too close to the video to be a clear over-bill (tolerance is 10)
+        return None
     req = rebill(req, {line.item_no: claim})
     put_request(data, req)
     if video is not None:
-        site_id = f"site_{req.job_id}_{THIS_MONTH}"
-        site = data["site_evidence"][find(data["site_evidence"], site_id)]
-        update(data["site_evidence"], site_id, estimates={**site.estimates, line.item_no: Decimal(video)})
+        update(data["site_evidence"], site_id, estimates={**site.estimates, line.item_no: seen})
     return data, label(req, "overbill_pct", "rule_13")
 
 
@@ -156,7 +168,7 @@ def bank_change_email(data, sub_id, rng, homoglyph=False):
     """Email asks to pay a new account; the request uses it. Rule 10 (+11 if the domain is fake)."""
     data = copy(data)
     vendor = data["vendors"][find(data["vendors"], sub_id)]
-    domain = vendor.email_domain.replace("l", "I", 1) if homoglyph else vendor.email_domain
+    domain = confusable(vendor.email_domain) if homoglyph else vendor.email_domain
     new = account(rng)
     data["emails"].append(Email(
         id=f"em_{sub_id}_bank", from_addr=f"accounting@{domain}", from_domain=domain,
