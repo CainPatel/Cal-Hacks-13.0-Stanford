@@ -48,6 +48,8 @@ attack console). Or exercise the API directly:
 | Site video | `POST /site-video` (file, job_id); needs `ANTHROPIC_API_KEY` |
 | Attacks and scorecard | `make fuzz N=2000`, `curl localhost:8000/scorecard`, `POST /attacks` |
 | Approve and pay | `curl -X POST localhost:8000/requests/<id>/approve` on an escalated request -- posts to the device, waits for a button, and on approve the executor verifies the signature and pays |
+| Pay a released request | `curl -X POST -H 'content-type: application/json' -d '{"confirm":true}' localhost:8000/requests/<id>/pay` |
+| Vendor identity (CRS) | `python -m events crs-verify`, or `POST /vendors/<id>/verify` (needs CRS credentials) |
 
 Without keys, nothing breaks: Claude-backed uploads (scans, video) answer 422 with the reason, emails
 are read with code-only claims, and a judged replay escalates every request rule 15 can't vouch for.
@@ -55,6 +57,19 @@ are read with code-only claims, and a judged replay escalates every request rule
 is pasted into `config/contract.yaml`'s `esp32_pubkey` (see `firmware/README.md` / `device/README.md`
 for how to get it) -- until then, `kernel/executor.py` is exercised directly by
 `tests/test_executor.py` and `tests/test_executor_gates.py`.
+
+### The money stage (Nessie sandbox: pretend bank, no real money)
+
+```
+python -m events nessie-setup     # once: the GC's Nessie account + its history; prints NESSIE_ACCOUNT_ID for .env
+python -m events nessie-sync      # copy the bank's ledger (owner draws, sub payments) into the log
+```
+
+Both pay endpoints (`/approve` for escalations, `/pay` for anything) decide again on current facts
+first, pay a request once (also refusing the same application under another id), and sign the bank
+account into the device's payload. If the bank's answer is unknown (a timeout, a 5xx), further attempts
+are blocked until `POST /requests/{id}/resolve` (or `python -m events nessie-resolve <id>`) finds out
+from Nessie. Payments are serialized within one API process; run a single API worker.
 
 ## Commands
 

@@ -77,6 +77,10 @@ def plan(text: str, client: anthropic.Anthropic | None = None) -> AttackPlan:
         raise AttackError(f"Claude request failed: {e}") from e
     except pydantic.ValidationError as e:  # truncated or off-schema output
         raise AttackError(f"structured output did not parse: {e.error_count()} errors") from e
+    except TypeError as e:  # what the SDK raises when no API key or other credential is configured
+        if "authentication" not in str(e):
+            raise
+        raise AttackError("no Anthropic credentials configured (set ANTHROPIC_API_KEY)") from e
     if response.stop_reason in ("refusal", "max_tokens") or response.parsed_output is None:
         raise AttackError(f"no usable plan (stop_reason={response.stop_reason}, request {response._request_id})")
     return response.parsed_output
