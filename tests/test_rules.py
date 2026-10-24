@@ -10,7 +10,7 @@ from kernel.state import KernelState
 from shared.schema import PayRequest
 
 FIXTURES = Path(__file__).parent / "fixtures"
-RULE_NUMBERS = ["01", "02", "03", "04", "05", "06", "07"]
+RULE_NUMBERS = ["01", "02", "03", "04", "05", "06", "07", "15"]
 
 
 def load(name: str) -> tuple[KernelState, PayRequest]:
@@ -112,3 +112,19 @@ def test_runner_holds_on_any_fail():
     decision = decide(state, request)
     assert decision.action == Action.hold
     assert decision.next_action
+
+
+def test_low_confidence_escalates_instead_of_holding():
+    """Rule 15 failing alone means "a person should look", so the runner escalates; any other
+    failing rule still holds, and the hold's next action points at that rule, not rule 15."""
+    from kernel.runner import decide
+    from shared.schema import Action
+
+    state, request = load("rule_15_fail.json")
+    d = decide(state, request)
+    assert d.action == Action.escalate and d.next_action is None
+
+    state7, request7 = load("rule_07_fail.json")
+    both = state7.model_copy(update={"proposal": state.proposal, "contract": state.contract})
+    d = decide(both, request7)
+    assert d.action == Action.hold and "supplier" in d.next_action

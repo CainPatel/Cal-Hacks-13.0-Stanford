@@ -7,7 +7,7 @@ from decimal import Decimal
 from pydantic import BaseModel, ConfigDict
 
 from shared.schema import (
-    COI, ChangeOrder, Email, Job, LedgerEntry, LowerTierNotice, PayRequest,
+    COI, ChangeOrder, Email, Job, LedgerEntry, LowerTierNotice, PayRequest, Proposal,
     Release, SiteEvidence, Subcontract, Vendor,
 )
 
@@ -34,6 +34,8 @@ class KernelState(BaseModel):
     known_bank_account: str | None = None
     # permissions contract, as loaded from config/contract.yaml
     contract: dict = {}
+    # judgment's Proposal for this request (judgment/), or None when no model ran -- rule 15 reads it
+    proposal: Proposal | None = None
 
     def prior_line(self, item_no: str) -> dict | None:
         """The most recent prior request's line for item_no, or None if this is the first."""
