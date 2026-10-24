@@ -290,19 +290,24 @@ def _previous_period(state, request: PayRequest) -> PayRequest | None:
     return max(earlier, key=lambda r: r.period_end, default=None)
 
 
-def _billed_pct(line) -> Decimal | None:
-    return line.total_to_date / line.scheduled_value * 100 if line.scheduled_value else None
+def _billed_pct(line, contract_sv: Decimal | None = None) -> Decimal | None:
+    """Billed % against the CONTRACT's scheduled value. A sub can print a bigger scheduled value on its
+    own G703 so its % matches the video while billing more dollars (fuzzer: inflated_scheduled_value);
+    the sub's figure is used only for lines missing from the subcontract."""
+    sv = contract_sv or line.scheduled_value
+    return line.total_to_date / sv * 100 if sv else None
 
 
 def progress_facts(state, request: PayRequest) -> dict:
     tolerance = state.contract.get("progress_tolerance_points")
     tol = Decimal(str(tolerance)) if tolerance is not None else None
     prev = _previous_period(state, request)
-    prev_pct = {l.item_no: _billed_pct(l) for l in prev.lines} if prev else {}
+    contract_sv = {s.item_no: s.scheduled_value for s in state.subcontract.sov}
+    prev_pct = {l.item_no: _billed_pct(l, contract_sv.get(l.item_no)) for l in prev.lines} if prev else {}
     ev = state.site_evidence
     lines = []
     for l in request.lines:
-        billed = _billed_pct(l)  # what the dollars bill, whatever the % column says
+        billed = _billed_pct(l, contract_sv.get(l.item_no))  # what the dollars bill against the contract
         seen = ev.estimates.get(l.item_no) if ev else None
         gap = billed - seen if billed is not None and seen is not None else None
         last = prev_pct.get(l.item_no)
