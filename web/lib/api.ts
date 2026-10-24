@@ -24,9 +24,12 @@ export type Line = {
   item_no: string;
   description: string;
   scheduled_value: string;
+  previous_applications: string;
   this_period: string;
+  stored_materials: string;
   total_to_date: string;
   pct_complete: string;
+  balance_to_finish: string;
   retainage: string;
   video_pct: string | null;
 };
