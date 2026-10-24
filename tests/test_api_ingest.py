@@ -55,6 +55,15 @@ def test_pay_app_upload_becomes_a_fact(client, world, tmp_path):
     assert (stored.sub_id, stored.job_id, stored.number) == (req.sub_id, req.job_id, req.number)
 
 
+def test_uploaded_pay_app_is_not_sample_and_links_its_original(client, world, tmp_path):
+    req, path = rendered_pay_app(world, tmp_path)
+    rid = upload(client, path, req.sub_id, req.job_id).json()["request_id"]
+    client.post("/replay")
+    d = client.get(f"/requests/{rid}").json()
+    assert d["sample_document"] is False and main.HASHED.fullmatch(d["original"])
+    assert client.get(f"/files/{d['original']}").content == path.read_bytes()
+
+
 def test_same_file_twice_is_refused(client, world, tmp_path):
     req, path = rendered_pay_app(world, tmp_path)
     assert upload(client, path, req.sub_id, req.job_id).status_code == 200
@@ -314,7 +323,7 @@ def test_ingest_reads_a_client_upload_from_private_blob(client, world, tmp_path,
     stored = next(p for p in events.state(path=main.DB)["pay_requests"] if p.id == r.json()["request_id"])
     assert stored.lines == req.lines and stored.g702 == req.g702
     assert asked == [("uploads/payapp-x7Q2.pdf", "private")]
-    assert archived == []  # already in the store: not uploaded again
+    assert len(archived) == 1 and main.HASHED.fullmatch(archived[0])  # kept by hash too, so GET /files finds it
     assert not any(p.name.startswith("incoming-") for p in (tmp_path / "uploads").iterdir())  # temp file cleaned up
 
     assert client.post("/ingest", json={"kind": "pay_app", "pathname": "uploads/nope.pdf",

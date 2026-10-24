@@ -10,9 +10,9 @@ import { cn } from "@/lib/utils";
 const TABS = [
   { href: "/", label: "Pay requests" },
   { href: "/approve", label: "Approve" },
-  { href: "/security", label: "Security" },
-  { href: "/upload", label: "Upload" },
+  { href: "/upload", label: "Upload Portal" },
   { href: "/log", label: "Log" },
+  { href: "/security", label: "Security" },
 ];
 
 // Pay requests reads ?m= (default 6, as in app/page.tsx); every other page is month 6.
@@ -36,7 +36,6 @@ export function TopBar() {
               <Month />
             </Suspense>
           </span>
-          <span className="text-[15px] text-muted-foreground">Sample company, synthetic data</span>
         </div>
         <nav aria-label="Main" className="flex gap-1 overflow-x-auto max-sm:-mx-4 max-sm:w-[calc(100%+2rem)] sm:ml-auto">
           {TABS.map((t) => {

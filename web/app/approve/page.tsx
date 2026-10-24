@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useLive } from "@/hooks/use-live";
 import { api, ApiError, money, type RequestRow } from "@/lib/api";
-import { day } from "@/lib/labels";
+import { day, phrase } from "@/lib/labels";
 import { cn } from "@/lib/utils";
 
 const MONTH = 6; // this month: October 2026
@@ -93,7 +93,7 @@ export default function ApprovePage() {
             <p className="mt-1 text-meta text-muted-foreground">
               {lead.job}, period ending {day(lead.period_end)}
             </p>
-            <p className="mt-4 max-w-[46ch] text-body">{lead.reason ? `You're asked because ${lead.reason}.` : lead.sentence}</p>
+            <p className="mt-4 max-w-[46ch] text-body">{phrase(lead) || lead.sentence}</p>
             {lead.new_sub_note && <p className="mt-2 max-w-[46ch] text-body">{lead.new_sub_note}</p>}
             <div className="mt-6 flex flex-wrap items-center gap-x-6 gap-y-3">
               {sendButton(lead)}
@@ -152,7 +152,7 @@ export default function ApprovePage() {
                 {r.sub}
               </p>
               <p className="text-meta text-muted-foreground">{r.job}</p>
-              <p className="mt-2 max-w-[46ch] text-body">{r.reason ? `You're asked because ${r.reason}.` : r.sentence}</p>
+              <p className="mt-2 max-w-[46ch] text-body">{phrase(r) || r.sentence}</p>
               {r.new_sub_note && <p className="mt-1 max-w-[46ch] text-body">{r.new_sub_note}</p>}
             </div>
             <div className="flex flex-wrap items-center gap-x-6 gap-y-3">

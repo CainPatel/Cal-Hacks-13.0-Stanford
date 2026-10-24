@@ -28,7 +28,7 @@ Monthly cycle: subs submit by the 25th, GC verifies, owner's draw funds, subs pa
 
 ## Capabilities and Constraints
 
-Real: rule kernel (15 rules), fuzzer/scorecard, append-only event log, approval-key signing, Claude and Jev calls. Simulated: the GC, its subs, the bank (Nessie sandbox), vendor identities (CRS sandbox), site footage. Demo data is synthetic and must be labelled so where it could be mistaken for real. Not building: daily job reports, chat, multi-agent, landing page, mobile beyond responsive.
+Real: rule kernel (15 rules), fuzzer/scorecard, append-only event log, approval-key signing, Claude and Jev calls. Simulated: the GC, its subs, the bank (Nessie sandbox), vendor identities (CRS sandbox), site footage. Seeded evidence (video estimates, document fields) is labelled as sample numbers wherever it appears. Not building: daily job reports, chat, multi-agent, landing page, mobile beyond responsive.
 
 ## Evidence on Hand
 
@@ -36,7 +36,7 @@ Interview with one small commercial GC (Oct 23): the $1.5M homoglyph wire near-m
 
 ## Product Principles
 
-- Every status is a sentence an office manager would say; raw codes live behind "Show details".
+- Every status is a short phrase in lists and a full sentence an office manager would say in the detail pane; raw codes live behind "Show details".
 - Show the document or evidence whenever something is held; every hold has a next action.
 - The machine proposes, people and rules decide; the UI never implies the AI approved a payment.
 - Nothing typed in: the screen reads what already exists.

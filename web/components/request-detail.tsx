@@ -4,28 +4,33 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 import { Evidence, failedRule, Mark, MarkRow } from "@/components/evidence";
 import { StatusChip } from "@/components/status-chip";
+import { Timeline } from "@/components/timeline";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { api, ApiError, money, moneyShort, ruleNumber, type RequestDetail } from "@/lib/api";
-import { day, dayShort, humanize, rowLine, RULE_NAMES, shortName } from "@/lib/labels";
+import { category, day, dayShort, humanize, missingPaperwork, PAPERWORK_ACTION, rowLine, RULE_NAMES, shortName } from "@/lib/labels";
 import { cn } from "@/lib/utils";
 
 const ESCALATION_RULES = new Set(["14_within_spend_authority", "15_confidence_floor"]);
 
-/** The status sentence, built from the evidence (names, numbers, dates all from the API); null when it can't be. */
-function say(d: RequestDetail): string | null {
-  if (d.status !== "on_hold") return null;
+/** The status sentence, built from the evidence (names, numbers, dates all from the API). */
+function say(d: RequestDetail): string {
   const name = shortName(d.sub);
-  const o = failedRule(d, "13")?.evidence.overstatements?.[0];
-  const line = o && d.lines.find((l) => l.item_no === o.item_no);
-  if (o && line && d.site_evidence)
-    return `On hold: ${name} billed ${line.description.toLowerCase()} at ${Number(o.claimed_pct)}%, but the site video from ${dayShort(d.site_evidence.date)} shows ${Number(o.video_estimate_pct)}%.`;
-  if (failedRule(d, "10") && failedRule(d, "11")?.evidence.mismatches?.length)
-    return `On hold: an email that looks like it's from ${name} asks us to pay a new bank account. It came from a lookalike domain.`;
-  const notices = failedRule(d, "07")?.evidence.unresolved ?? [];
-  if (notices.length === 1)
-    return `On hold: ${name}'s supplier, ${notices[0].supplier}, filed a notice to owner and hasn't released.`;
-  return null;
+  if (d.status === "ready") return `Every check passed and it's under your ${moneyShort(d.limit)} limit.`;
+  if (d.status === "needs_ok" && d.why.length === 1 && d.why[0] === "over_limit")
+    return `Every check passed, but it's over your ${moneyShort(d.limit)} limit, so the owner signs on the approval key.`;
+  if (d.status === "on_hold") {
+    const o = failedRule(d, "13")?.evidence.overstatements?.[0];
+    const line = o && d.lines.find((l) => l.item_no === o.item_no);
+    if (o && line && d.site_evidence)
+      return `On hold: ${name} billed ${line.description.toLowerCase()} at ${Number(o.claimed_pct)}%, but the site video from ${dayShort(d.site_evidence.date)} shows ${Number(o.video_estimate_pct)}%.`;
+    if (failedRule(d, "10") && failedRule(d, "11")?.evidence.mismatches?.length)
+      return `On hold: an email that looks like it's from ${name} asks us to pay a new bank account. It came from a lookalike domain.`;
+    const notices = failedRule(d, "07")?.evidence.unresolved ?? [];
+    if (notices.length === 1)
+      return `On hold: ${name}'s supplier, ${notices[0].supplier}, filed a notice to owner and hasn't released.`;
+  }
+  return humanize(d.sentence);
 }
 
 export function RequestDetailPanel({ id, version, backHref }: { id: string; version: number; backHref: string }) {
@@ -51,9 +56,7 @@ export function RequestDetailPanel({ id, version, backHref }: { id: string; vers
   const word = { pass: "Passed:", fail: "Didn't pass:", ok: "Needs the owner:" } as const;
   const attention = results.filter((r) => !r.passed);
   const passed = results.filter((r) => r.passed);
-  const flagged = new Set((failedRule(data, "13")?.evidence.overstatements ?? []).map((o) => o.item_no));
-  const limit = failedRule(data, "14")?.evidence.limit as string | undefined;
-  const sentence = say(data);
+  const overLimit = failedRule(data, "14")?.evidence.limit as string | undefined;
 
   const item = (r: (typeof results)[number]) => {
     const name = RULE_NAMES[ruleNumber(r.rule)];
@@ -80,90 +83,60 @@ export function RequestDetailPanel({ id, version, backHref }: { id: string; vers
           {money(data.amount)} <span className="font-sans text-[15px] font-normal tracking-normal text-muted-foreground">this period</span>
         </p>
       </header>
-      {sentence ? (
-        <p className="mt-5 max-w-[40ch] text-say font-medium">{sentence}</p>
-      ) : (
-        <div className="mt-5 flex flex-wrap items-center gap-3">
-          <StatusChip status={data.status} />
-          <p className="text-say font-medium">{rowLine(data.status, data.sentence, data.reason)}</p>
-        </div>
-      )}
-      {data.new_sub_note && <p className="mt-3 max-w-[52ch] text-body">{data.new_sub_note}</p>}
+
       <div className="mt-5 flex flex-col items-start gap-2.5">
-        {data.new_sub && data.status === "on_hold" && newSubSteps(data).length > 0 ? <NewSubSteps detail={data} /> : <NextAction detail={data} />}
+        <StatusChip category={category(data)} />
+        <p className="max-w-[44ch] text-say font-medium">{say(data)}</p>
+        {data.new_sub_note && <p className="max-w-[52ch] text-body">{data.new_sub_note}</p>}
+      </div>
+
+      <div className="mt-5 flex flex-col items-start gap-2.5">
+        <NextStep detail={data} />
         {data.status === "ready" && <PayNow key={data.id} detail={data} />}
         {data.status === "needs_ok" && (
           <Button size="lg" nativeButton={false} render={<Link href="/approve" />}>
             Send it to the approval key
           </Button>
         )}
-        {data.status === "on_hold" && limit && (
+        {data.status === "on_hold" && overLimit && (
           <p className="max-w-[52ch] text-base text-muted-foreground">
-            Once that&apos;s settled, this still needs the owner&apos;s OK: it&apos;s over the {moneyShort(limit)} limit.
+            Once that&apos;s settled, this still needs the owner&apos;s OK: it&apos;s over the {moneyShort(overLimit)} limit.
           </p>
         )}
       </div>
 
       <Evidence detail={data} />
+      <Timeline id={data.id} version={version} />
 
       {results.length > 0 && (
-        <section aria-labelledby="checks" className="mt-8 border-t pt-6">
-          <h3 id="checks" className="mb-3.5 text-lg font-semibold">
+        <details className="group mt-8 border-t pt-4">
+          <summary className="flex min-h-12 cursor-pointer list-none items-center rounded-sm text-lg font-semibold outline-none select-none focus-visible:ring-3 focus-visible:ring-ring/50 [&::-webkit-details-marker]:hidden">
             {results.length} checks, {passed.length} passed
-          </h3>
-          {attention.length > 0 && (
-            <>
-              <p className="mb-1.5 text-base text-muted-foreground">Needs attention</p>
-              <ul className="border-t">{attention.map(item)}</ul>
-            </>
-          )}
-          {passed.length > 0 && (
-            <>
-              <p className={cn("mb-1.5 text-base text-muted-foreground", attention.length > 0 && "mt-[18px]")}>Passed</p>
-              <ul className="border-t">{passed.map(item)}</ul>
-            </>
-          )}
-        </section>
+            <span className="ml-3 text-meta font-normal text-primary underline underline-offset-[3px]">
+              <span className="group-open:hidden">Show</span>
+              <span className="hidden group-open:inline">Hide</span>
+            </span>
+          </summary>
+          <div className="mt-2">
+            {attention.length > 0 && (
+              <>
+                <p className="mb-1.5 text-base text-muted-foreground">Needs attention</p>
+                <ul className="border-t">{attention.map(item)}</ul>
+              </>
+            )}
+            {passed.length > 0 && (
+              <>
+                <p className={cn("mb-1.5 text-base text-muted-foreground", attention.length > 0 && "mt-[18px]")}>Passed</p>
+                <ul className="border-t">{passed.map(item)}</ul>
+              </>
+            )}
+          </div>
+        </details>
       )}
 
-      <section aria-labelledby="lines" className="mt-8 border-t pt-6">
-        <h3 id="lines" className="mb-3.5 text-lg font-semibold">Lines on this request</h3>
-        <div className="overflow-x-auto">
-          <table className="w-full border-collapse text-base">
-            <thead className="text-left text-sm text-muted-foreground">
-              <tr className="border-b border-foreground">
-                <th className="px-2 py-1.5 font-medium">Item</th>
-                <th className="px-2 py-1.5 font-medium">Description</th>
-                <th className="px-2 py-1.5 text-right font-medium">Billed</th>
-                <th className="px-2 py-1.5 text-right font-medium">Video</th>
-                <th className="px-2 py-1.5 text-right font-medium">To date</th>
-              </tr>
-            </thead>
-            <tbody>
-              {data.lines.map((l) => {
-                const flag = flagged.has(l.item_no);
-                return (
-                  <tr key={l.item_no} className={cn("border-b", flag && "bg-hold-soft")}>
-                    <td className="px-2 py-[9px] font-mono whitespace-nowrap">{l.item_no}</td>
-                    <td className="px-2 py-[9px]">
-                      {l.description}
-                      {flag && <span className="sr-only"> (claims more than the site video shows)</span>}
-                    </td>
-                    <td className={cn("px-2 py-[9px] text-right font-mono whitespace-nowrap tnum", flag && "font-semibold text-hold")}>{Number(l.pct_complete)}%</td>
-                    <td className="px-2 py-[9px] text-right font-mono whitespace-nowrap tnum">{l.video_pct === null ? "none" : `${Number(l.video_pct)}%`}</td>
-                    <td className="px-2 py-[9px] text-right font-mono whitespace-nowrap tnum">{money(l.total_to_date)}</td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        </div>
-        {data.site_evidence && <p className="mt-2 text-sm text-muted-foreground">Video from the site walk on {day(data.site_evidence.date)}.</p>}
-      </section>
-
       {data.trace && (
-        <details className="mt-8 border-t pt-6">
-          <summary className="flex min-h-12 cursor-pointer list-none items-center text-primary underline underline-offset-[3px] select-none [&::-webkit-details-marker]:hidden">
+        <details className="mt-4 border-t pt-4">
+          <summary className="flex min-h-12 cursor-pointer list-none items-center rounded-sm text-primary underline underline-offset-[3px] outline-none select-none focus-visible:ring-3 focus-visible:ring-ring/50 [&::-webkit-details-marker]:hidden">
             Show details
           </summary>
           <pre className="mt-2 max-h-[480px] overflow-auto rounded-[4px] bg-muted p-4 font-mono text-[13px] leading-normal whitespace-pre-wrap">
@@ -175,19 +148,45 @@ export function RequestDetailPanel({ id, version, backHref }: { id: string; vers
   );
 }
 
-// What a brand-new sub still owes before their first payment, in the order the office manager fixes it.
-const NEW_SUB_STEPS = [
-  { rule: "09", say: "Their identity hasn't been checked yet.", act: "Check their identity" },
-  { rule: "06", say: "There's no insurance certificate on file for them.", act: "Upload their insurance certificate", kind: "coi" },
-  { rule: "04", say: "There's no conditional lien release from them for this period.", act: "Upload their conditional lien release", kind: "release" },
-  { rule: "10", say: "Their bank account isn't on file yet, so the one on this pay application can't be checked.", act: "Call to confirm their bank account" },
-] as const;
-const newSubSteps = (d: RequestDetail) => NEW_SUB_STEPS.filter((s) => failedRule(d, s.rule));
+/** What to do about this hold (DESIGN.md "Buttons"): paperwork steps, the phone instruction, or an email. */
+function NextStep({ detail }: { detail: RequestDetail }) {
+  if (detail.status !== "on_hold") return null;
+  if (category(detail) === "paperwork") return <PaperworkSteps detail={detail} />;
+  const bank = failedRule(detail, "10")?.evidence;
+  if (bank || failedRule(detail, "11")) {
+    // the safe action is a phone call to a number we already had, so it's a sentence, not a button
+    return (
+      <p className="max-w-[52ch] text-body">
+        {bank && !bank.on_file
+          ? `Call ${detail.sub} at a number you trust, not one from their paperwork, and confirm the account ending ${detail.bank_account.slice(-4)}.`
+          : `Call ${detail.sub} at the number in your own records, not one from the email, and ask whether they changed banks.`}
+      </p>
+    );
+  }
+  const action = detail.next_action?.replace(/\.$/, "");
+  if (!action) return null;
+  if (/^hold\b/i.test(action)) {
+    // some rules' next step is "keep holding", not something to send: say it, don't make it a button
+    return <p className="max-w-[52ch] text-base text-muted-foreground">{action.replace(/^hold;?\s*/i, "Keep it on hold: ")}.</p>;
+  }
+  return <MailButton detail={detail} action={action} />;
+}
 
-/** A new sub's hold: each missing item as a sentence with its own next action. */
-function NewSubSteps({ detail }: { detail: RequestDetail }) {
+/** Opens the mail app with the message filled in, to the sub's accounting address (or blank for the super). */
+function MailButton({ detail, action }: { detail: RequestDetail; action: string }) {
+  const subject = `${detail.job}: ${action.toLowerCase()}`;
+  const body = `Hi,\n\nWe can't include your pay request for this period yet. ${rowLine(detail.status, detail.sentence, null)}\n\n${action}.\n\nThanks`;
+  const to = /super/i.test(action) || !detail.vendor.email_domain ? "" : `accounting@${detail.vendor.email_domain}`;
+  return (
+    <Button size="lg" nativeButton={false} render={<a href={`mailto:${to}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`} />}>
+      {action}
+    </Button>
+  );
+}
+
+/** A hold that's only waiting on paperwork: each missing piece as a sentence with its own next action. */
+function PaperworkSteps({ detail }: { detail: RequestDetail }) {
   const [crs, setCrs] = useState<{ busy?: boolean; said?: string; failed?: boolean }>({});
-  const [called, setCalled] = useState(false);
   const verify = async () => {
     setCrs({ busy: true });
     try {
@@ -202,37 +201,31 @@ function NewSubSteps({ detail }: { detail: RequestDetail }) {
   };
   return (
     <ul className="w-full border-t">
-      {newSubSteps(detail).map((s) => (
-        <li key={s.rule} className="flex flex-col items-start gap-2.5 border-b py-3.5">
-          <p className="flex items-start gap-2 text-body">
-            <Mark kind="fail" />
-            <span>{s.say}</span>
-          </p>
-          {s.rule === "09" ? (
-            <>
-              <Button size="lg" onClick={verify} disabled={crs.busy}>
-                {crs.busy ? "Checking…" : s.act}
+      {missingPaperwork(detail).map((n) => {
+        const step = PAPERWORK_ACTION[n];
+        return (
+          <li key={n} className="flex flex-col items-start gap-2.5 border-b py-3.5">
+            <p className="flex items-start gap-2 text-body">
+              <Mark kind="fail" />
+              <span>{step.say}</span>
+            </p>
+            {step.does === "verify" ? (
+              <>
+                <Button size="lg" onClick={verify} disabled={crs.busy}>
+                  {crs.busy ? "Checking…" : step.act}
+                </Button>
+                {crs.said && <p className={cn("max-w-[52ch] text-base", crs.failed ? "text-fail" : "text-pass")}>{crs.said}</p>}
+              </>
+            ) : step.does === "mail" && step.act ? (
+              <MailButton detail={detail} action={step.act} />
+            ) : step.kind && step.act ? (
+              <Button size="lg" nativeButton={false} render={<Link href={`/upload?kind=${step.kind}&sub=${encodeURIComponent(detail.sub_id)}`} />}>
+                {step.act}
               </Button>
-              {crs.said && <p className={cn("max-w-[52ch] text-base", crs.failed ? "text-fail" : "text-pass")}>{crs.said}</p>}
-            </>
-          ) : "kind" in s ? (
-            <Button size="lg" nativeButton={false} render={<Link href={`/upload?kind=${s.kind}&sub=${encodeURIComponent(detail.sub_id)}`} />}>
-              {s.act}
-            </Button>
-          ) : (
-            <>
-              <Button size="lg" onClick={() => setCalled(true)}>
-                {s.act}
-              </Button>
-              {called && (
-                <p className="max-w-[52ch] text-base text-muted-foreground">
-                  Call {detail.sub} at a number you trust, not one from their paperwork, and confirm the account ending {detail.bank_account.slice(-4)}.
-                </p>
-              )}
-            </>
-          )}
-        </li>
-      ))}
+            ) : null}
+          </li>
+        );
+      })}
     </ul>
   );
 }
@@ -315,40 +308,6 @@ function PayNow({ detail }: { detail: RequestDetail }) {
         </p>
       )}
     </div>
-  );
-}
-
-/** The one thing the office manager can do about this hold, as a button. */
-function NextAction({ detail }: { detail: RequestDetail }) {
-  const [shown, setShown] = useState(false);
-  const action = detail.next_action?.replace(/\.$/, "");
-  if (detail.status !== "on_hold" || !action) return null;
-  if (/^hold\b/i.test(action)) {
-    // some rules' next step is "keep holding", not something to send: say it, don't make it a button
-    return <p className="max-w-[52ch] text-base text-muted-foreground">{action.replace(/^hold;?\s*/i, "Keep it on hold: ")}.</p>;
-  }
-
-  if (/call/i.test(action)) {
-    return (
-      <div className="flex flex-col items-start gap-2.5">
-        <Button size="lg" onClick={() => setShown(true)}>
-          Call to verify the new bank details
-        </Button>
-        {shown && (
-          <p className="max-w-[52ch] text-base text-muted-foreground">
-            Call {detail.sub} at the number in your own records, not one from the email, and ask whether they changed banks.
-          </p>
-        )}
-      </div>
-    );
-  }
-  const subject = `${detail.job}: ${action.toLowerCase()}`;
-  const body = `Hi,\n\nWe can't include your pay request for this period yet. ${rowLine(detail.status, detail.sentence, null)}\n\n${action}.\n\nThanks`;
-  const to = /super/i.test(action) ? "" : `accounting@${detail.vendor.email_domain}`;
-  return (
-    <Button size="lg" nativeButton={false} render={<a href={`mailto:${to}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`} />}>
-      {action}
-    </Button>
   );
 }
 

@@ -36,6 +36,7 @@ Two Vercel projects from this repo:
 | `CORS_ORIGINS` | the `draw-web` URL, e.g. `https://drawweb.vercel.app` (comma-separate several) |
 | `UPLOAD_PASSCODE` | the same passcode as on `draw-web`: adding a new subcontractor (`POST /vendors`) checks it here |
 | `INBOUND_PASSWORD` | optional: turns on `POST /inbound/postmark`. Postmark's inbound webhook URL is `https://postmark:<this>@drawapi.vercel.app/inbound/postmark` |
+| `UPLOAD_PASSCODE` | the same passcode as on `draw-web`. Adding a new subcontractor (`POST /vendors`) checks it; without it set, that's off when deployed |
 | `DEVICE_URL` | the Pi's Tailscale Funnel URL (step 4) |
 | `SCORECARD_CASES` | optional, default `2000`: attacks scored on a cold start |
 

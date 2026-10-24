@@ -116,7 +116,7 @@ Full wire contract: `docs/device-api.md`. Both devices speak it, so the executor
 
 ## UI copy rule (web/)
 
-Every status is a plain sentence a 55-year-old office manager would say. Not `HOLD: RULE_07_FAIL`. "On hold: Coastal Concrete's supplier filed a notice to owner and hasn't released." Every hold has a next-action button. Raw trace lives behind "Show details" in monospace.
+A short phrase in lists ("Supplier release missing"), a full plain sentence a 55-year-old office manager would say in the detail pane. Not `HOLD: RULE_07_FAIL`. "On hold: Coastal Concrete's supplier filed a notice to owner and hasn't released." Every hold has a next action: a button, or for a bank change, the instruction to phone the number on file. Raw trace lives behind "Show details" in monospace. The rule-to-colour map is in `web/lib/labels.ts`; `web/DESIGN.md` has the rest.
 
 ## Status (update at each checkpoint)
 

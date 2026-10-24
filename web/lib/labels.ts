@@ -1,5 +1,7 @@
 // Words for things the API names in code.
 
+import { moneyShort, type RequestRow } from "@/lib/api";
+
 export const ATTACK_LABELS: Record<string, string> = {
   overbill_pct: "Bills more progress than the site video shows",
   retainage_slip: "Withholds less retainage than the contract",
@@ -34,13 +36,40 @@ export function sayChar(c: string): string {
   return `a lookalike “${c}” (U+${code})`;
 }
 
-export const STATUS_LABEL = {
-  ready: "Ready",
-  needs_ok: "Needs your OK",
-  on_hold: "On hold",
-  not_checked: "Not checked",
-  paid: "Paid",
-} as const;
+/**
+ * The one place that decides a request's colour category (web/DESIGN.md "Status categories").
+ * A hold is "fraud" if any failed rule says money is going to the wrong place or for the wrong amount,
+ * else it's waiting for paperwork. Rules 14 and 15 escalate, so they never decide a hold's colour.
+ */
+export type Category = "fraud" | "paperwork" | "ok" | "unchecked" | "ready" | "paid";
+
+export const RULE_CATEGORY: Record<string, "fraud" | "paperwork"> = {
+  "01": "fraud", "02": "fraud", "03": "fraud", "10": "fraud", "11": "fraud", "12": "fraud", "13": "fraud",
+  "04": "paperwork", "05": "paperwork", "06": "paperwork", "07": "paperwork", "08": "paperwork", "09": "paperwork",
+};
+
+export const CATEGORY: Record<Category, { label: string; short: string; chip: string; fill: string; tone: string }> = {
+  fraud: { label: "Possible fraud or wrong amount", short: "Fraud or error", chip: "bg-fail-soft text-fail", fill: "bg-fail text-white", tone: "border-t-fail" },
+  paperwork: { label: "Waiting for paperwork", short: "Paperwork", chip: "bg-pending-soft text-pending", fill: "bg-pending-fill hatch text-white", tone: "border-t-pending-fill" },
+  ok: { label: "Needs your OK", short: "Needs OK", chip: "bg-hold-soft text-hold", fill: "bg-hold-fill text-foreground", tone: "border-t-hold-fill" },
+  unchecked: { label: "Not checked", short: "Not checked", chip: "border border-dashed border-pending text-pending", fill: "border border-dashed border-pending bg-sheet text-pending", tone: "border-t-pending" },
+  ready: { label: "Ready to pay", short: "Ready", chip: "bg-pass-soft text-pass", fill: "bg-pass text-white", tone: "border-t-pass" },
+  paid: { label: "Paid", short: "Paid", chip: "bg-pass-soft text-pass", fill: "bg-pass text-white", tone: "border-t-pass" },
+};
+
+/** Most need help first: the order of the top bar, the board's columns and each job's list. */
+export const CATEGORY_ORDER: Category[] = ["fraud", "paperwork", "ok", "unchecked", "ready", "paid"];
+
+type Judged = Pick<RequestRow, "status" | "failed_rules" | "crs_status">;
+
+export function category(r: Judged): Category {
+  if (r.status === "paid") return "paid";
+  if (r.status === "ready") return "ready";
+  if (r.status === "needs_ok") return "ok";
+  if (r.status === "not_checked") return "unchecked";
+  const fraud = r.failed_rules.some((n) => RULE_CATEGORY[n] === "fraud" || (n === "09" && r.crs_status !== "unknown"));
+  return fraud ? "fraud" : "paperwork";
+}
 
 /** Rule messages come from code: "1 line(s)" -> "1 line", "$86835.60" -> "$86,835.60". */
 const SINGULAR_VERB: Record<string, string> = { claim: "claims", have: "has", "haven't": "hasn't", "don't": "doesn't", are: "is" };
@@ -78,3 +107,65 @@ const at = (s: string) => new Date(`${s.slice(0, 10)}T12:00:00`);
 export const day = (s: string) => at(s).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
 /** "Oct 22" */
 export const dayShort = (s: string) => at(s).toLocaleDateString("en-US", { month: "short", day: "numeric" });
+
+/** A short phrase per failed rule, for lists (DESIGN.md "Copy"). The detail pane says the full sentence. */
+export const RULE_PHRASE: Record<string, string> = {
+  "01": "Billing doesn't add up", "02": "Over the contract amount", "03": "Retainage is short",
+  "04": "Lien release missing", "05": "Last month's final waiver missing", "06": "Insurance missing",
+  "07": "Supplier release missing", "08": "Owner's draw not funded", "09": "Identity not checked",
+  "10": "Bank account changed", "11": "Lookalike email domain", "12": "Looks like a duplicate",
+  "13": "Billed past the site video",
+};
+
+const identity = (crs: string) => (crs === "unknown" ? "Identity not checked" : crs === "flagged" ? "Identity flagged" : "Identity doesn't match");
+const FRAUD_FIRST = ["11", "10", "12", "13", "02", "01", "03"];
+const PAPERWORK_FIRST = ["07", "04", "05", "06", "08"];
+
+/** The failed rules that decide a hold, worst first (rule 09 counts as fraud unless CRS simply hasn't checked). */
+export function holdRules(r: Judged): string[] {
+  const has = (n: string) => r.failed_rules.includes(n);
+  const id09 = has("09") ? ["09"] : [];
+  const fraud = [...FRAUD_FIRST.filter(has), ...(r.crs_status !== "unknown" ? id09 : [])];
+  return [...fraud, ...PAPERWORK_FIRST.filter(has), ...(r.crs_status === "unknown" ? id09 : [])];
+}
+
+export const rulePhrase = (n: string, r: Judged) => (n === "09" ? identity(r.crs_status) : RULE_PHRASE[n]);
+
+const WHY_PHRASE: Record<RequestRow["why"][number], (r: RequestRow) => string> = {
+  over_limit: (r) => `Over your ${moneyShort(r.limit)} limit`,
+  unsure: () => "Review wasn't sure",
+  new_vendor: () => "New subcontractor",
+  new_bank: () => "New bank account",
+};
+
+/** The list's phrase: why it's held or needs the owner. Ready, paid and not checked need none; the chip says it. */
+export function phrase(r: RequestRow): string {
+  if (r.status === "needs_ok") return r.why.map((w) => WHY_PHRASE[w](r)).join(", ");
+  if (r.status !== "on_hold") return "";
+  const rules = holdRules(r);
+  if (!rules.length) return "";
+  const first = rulePhrase(rules[0], r);
+  return rules.length > 1 ? `${first} and ${rules.length - 1} more` : first;
+}
+
+/** What to do about each missing piece of paperwork. `kind` links to the Upload Portal with the sub picked. */
+export const PAPERWORK_ACTION: Record<string, { say: string; act?: string; kind?: "release" | "coi"; does?: "verify" | "mail" }> = {
+  "04": { say: "There's no signed conditional lien release for this period.", act: "Upload their lien release", kind: "release" },
+  "05": { say: "Last month's unconditional waiver hasn't come in.", act: "Upload their lien release", kind: "release" },
+  "06": { say: "There's no current insurance certificate on file.", act: "Upload their insurance certificate", kind: "coi" },
+  "07": { say: "A supplier filed a notice to owner and hasn't released.", act: "Ask the sub for their supplier's release", does: "mail" },
+  "08": { say: "Waiting for the owner's draw to fund." },
+  "09": { say: "Their identity hasn't been checked yet.", act: "Check their identity", does: "verify" },
+};
+
+/** The paperwork a hold is waiting on, in the order to chase it (fraud rules are not paperwork). */
+export const missingPaperwork = (r: Judged) => holdRules(r).filter((n) => n in PAPERWORK_ACTION && !(n === "09" && r.crs_status !== "unknown"));
+
+/** Jev's questions (judgment/questions.py), in words. */
+export const JEV_QUESTION: Record<string, string> = {
+  release_form_correct: "Is the lien release the right form?",
+  bank_change_suspicious: "Does the bank change look suspicious?",
+  progress_plausible: "Does the billed progress look right?",
+  duplicate_likelihood: "Is this a duplicate?",
+  proposed_action: "What should happen?",
+};

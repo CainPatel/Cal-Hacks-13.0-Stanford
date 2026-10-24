@@ -19,7 +19,23 @@ export type RequestRow = {
   /** First pay app from a sub added on the Upload screen: their SOV came from that pay app. */
   new_sub: boolean;
   new_sub_note: string | null;
+  /** Rule numbers that didn't pass ("10"), the vendor's CRS status, the auto-release limit, escalation reasons. */
+  failed_rules: string[];
+  crs_status: string;
+  limit: string;
+  why: ("over_limit" | "unsure" | "new_vendor" | "new_bank")[];
 };
+
+type When = { seq: number; at: string; ts: string };
+export type Step =
+  | (When & { kind: "received"; read_from_file: boolean })
+  | (When & { kind: "reviewed"; source: string | null; answers: Record<string, { value: string | number | null; confidence: number | null }>; errors: number })
+  | (When & { kind: "checked"; action: string; failed_rules: string[]; times: number })
+  | (When & { kind: "signed"; rejected: boolean })
+  | (When & { kind: "paid" | "payment_failed"; amount: string | null });
+export type RequestEvents = { steps: Step[]; threshold: number | null };
+
+export type EmailRow = { id: string; from_addr: string; from_domain: string; subject: string; sent_at: string; sub_id: string | null; sub: string | null };
 
 export type VendorList = { vendors: { id: string; legal_name: string; job_ids: string[] }[]; jobs: { id: string; name: string }[] };
 export type NewVendor = { legal_name: string; email_domain?: string; ein?: string; bank_account?: string };
@@ -43,10 +59,15 @@ export type Line = {
 export type RequestDetail = RequestRow & {
   checklist: { rule: string; passed: boolean; message: string }[];
   lines: Line[];
-  site_evidence: { date: string; frames: string[] } | null;
+  /** `sample`: seeded estimates, not read from a real video. */
+  site_evidence: { date: string; frames: string[]; sample: boolean } | null;
   bank_account: string;
   vendor: { legal_name: string; email_domain: string };
   source_doc: string;
+  /** True when the lines came from the seed, not from reading an uploaded file. */
+  sample_document: boolean;
+  /** The uploaded original's stored name, for GET /files (behind the upload passcode). */
+  original: string | null;
   trace: { action: string; results: RuleResult[]; next_action: string | null } | null;
   /** Jev's latest review of this request (null when it was decided on the rules alone). */
   judgment: {
@@ -189,6 +210,22 @@ export const api = {
     return call<IngestResult>(DIRECT[kind].path, { method: "POST", body: form });
   },
   vendors: () => call<VendorList>("/vendors"),
+  requestEvents: (id: string) => call<RequestEvents>(`/requests/${encodeURIComponent(id)}/events`),
+  emails: (month: number) => call<EmailRow[]>(`/emails?month=${month}`),
+  /** The original upload as a blob URL; the passcode goes in a header, never the URL. */
+  openOriginal: async (name: string, passcode: string) => {
+    let res: Response;
+    try {
+      res = await fetch(`${API_URL}/files/${encodeURIComponent(name)}`, { headers: { "X-Upload-Passcode": passcode }, cache: "no-store" });
+    } catch {
+      throw new ApiError(0, `Can't reach the Draw server at ${API_URL}.`);
+    }
+    if (!res.ok) {
+      const body = await res.json().catch(() => ({}));
+      throw new ApiError(res.status, typeof body.detail === "string" ? body.detail : `Couldn't open the original (${res.status}).`);
+    }
+    return URL.createObjectURL(await res.blob());
+  },
   createVendor: (body: NewVendor, passcode: string) =>
     call<{ id: string; legal_name: string }>("/vendors", {
       method: "POST",

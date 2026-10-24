@@ -1,10 +1,9 @@
-import { Check, CircleDashed, CircleDot } from "lucide-react";
+import { Check, CircleCheck, CircleDashed, CircleDot, X } from "lucide-react";
 import type { ComponentProps } from "react";
-import type { Status } from "@/lib/api";
-import { STATUS_LABEL } from "@/lib/labels";
+import { CATEGORY, type Category } from "@/lib/labels";
 import { cn } from "@/lib/utils";
 
-// lucide's Pause draws two outlined boxes; the design's hold mark is two plain bars.
+// lucide's Pause draws two outlined boxes; the design's waiting mark is two plain bars.
 function Pause(props: ComponentProps<"svg">) {
   return (
     <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth={2.4} strokeLinecap="round" {...props}>
@@ -13,22 +12,27 @@ function Pause(props: ComponentProps<"svg">) {
   );
 }
 
-// Amber means held or waiting on the owner; red is kept for a failed check (web/DESIGN.md).
-const LOOK: Record<Status, { icon: typeof Check | typeof Pause; className: string }> = {
-  ready: { icon: Check, className: "bg-pass-soft text-pass" },
-  needs_ok: { icon: CircleDot, className: "bg-hold-soft text-hold" },
-  on_hold: { icon: Pause, className: "bg-hold-soft text-hold" },
-  not_checked: { icon: CircleDashed, className: "bg-pending-soft text-pending" },
-  paid: { icon: Check, className: "bg-pass-soft text-pass" },
+const MARK: Record<Category, typeof Check | typeof Pause> = {
+  fraud: X,
+  paperwork: Pause,
+  ok: CircleDot,
+  unchecked: CircleDashed,
+  ready: Check,
+  paid: CircleCheck,
 };
 
-/** Status is said in words and an icon; color only repeats it. */
-export function StatusChip({ status, className }: { status: Status; className?: string }) {
-  const { icon: Icon, className: look } = LOOK[status];
+/** The category's upright mark; its word always sits beside it (or in sr-only text). */
+export function StatusMark({ category, className }: { category: Category; className?: string }) {
+  const Icon = MARK[category];
+  return <Icon className={cn("size-[15px] shrink-0", className)} strokeWidth={2.4} aria-hidden />;
+}
+
+/** Status is said in words and a mark; colour only repeats it. */
+export function StatusChip({ category, className }: { category: Category; className?: string }) {
   return (
-    <span className={cn("inline-flex h-7 items-center gap-1.5 rounded-lg px-2.5 text-[0.9375rem] font-semibold whitespace-nowrap", look, className)}>
-      <Icon className="size-[15px]" strokeWidth={2.4} aria-hidden />
-      {STATUS_LABEL[status]}
+    <span className={cn("inline-flex min-h-7 items-center gap-1.5 rounded-lg px-2.5 text-[0.9375rem] font-semibold", CATEGORY[category].chip, className)}>
+      <StatusMark category={category} />
+      {CATEGORY[category].label}
     </span>
   );
 }

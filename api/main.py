@@ -38,6 +38,7 @@ import hmac
 import io
 import json
 import os
+import re
 import secrets
 import time
 from datetime import date, datetime
@@ -46,12 +47,13 @@ from pathlib import Path
 
 from fastapi import FastAPI, File, Form, Header, HTTPException, Request, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import StreamingResponse
+from fastapi.responses import FileResponse, StreamingResponse
 from pydantic import BaseModel
 
 from events import log as events
 from events.replay import double_payments, in_month, month_end, replay, sync_ledger
 from fuzzer import run as fuzzer
+from shared.contract import load_contract
 from shared.schema import Action, Decision, LedgerKind
 
 DB = events.DEFAULT_PATH
@@ -161,20 +163,29 @@ def payments(state=None) -> dict[str, dict]:
     return paid
 
 
-def escalation_reason(req, state, decision: Decision) -> str:
-    """Why the owner's tap is needed, in words: over the limit, unsure review, new sub, new bank account."""
-    reasons = []
+WHY = {"over_limit": "it's over the auto-release limit", "unsure": "the automatic review wasn't sure",
+       "new_vendor": "it's the first payment to this sub", "new_bank": "the bank account is new"}
+
+
+def escalation_codes(req, state, decision: Decision) -> list[str]:
+    """Why the owner's tap is needed: over the limit, unsure review, new sub, new bank account."""
+    codes = []
     failed = {r.rule for r in decision.results if not r.passed}
     if "14_within_spend_authority" in failed:
-        reasons.append("it's over the auto-release limit")
+        codes.append("over_limit")
     if "15_confidence_floor" in failed:
-        reasons.append("the automatic review wasn't sure")
+        codes.append("unsure")
     payments = [e for e in state["ledger"] if e.kind == "sub_payment" and e.sub_id == req.sub_id]
     if not payments:
-        reasons.append("it's the first payment to this sub")
+        codes.append("new_vendor")
     elif req.bank_account != max(payments, key=lambda e: e.date).bank_account:
-        reasons.append("the bank account is new")
-    return " and ".join(reasons) or "the rules asked for a person to look"
+        codes.append("new_bank")
+    return codes
+
+
+def escalation_reason(req, state, decision: Decision) -> str:
+    """The same reasons, in words."""
+    return " and ".join(WHY[c] for c in escalation_codes(req, state, decision)) or "the rules asked for a person to look"
 
 
 def sentence(decision: Decision | None, vendor: str, amount: Decimal, reason: str | None = None) -> str:
@@ -200,10 +211,12 @@ def new_sub(state, req) -> bool:
 
 
 def row(req, state, decision, paid=None):
-    vendor = next(v.legal_name for v in state["vendors"] if v.id == req.sub_id)
+    vendor_record = next(v for v in state["vendors"] if v.id == req.sub_id)
+    vendor = vendor_record.legal_name
     fresh = new_sub(state, req)
     amount = req.g702.current_payment_due
-    reason = escalation_reason(req, state, decision) if decision and decision.action == Action.escalate and not paid else None
+    escalated = decision is not None and decision.action == Action.escalate and not paid
+    reason = escalation_reason(req, state, decision) if escalated else None
     return {
         "id": req.id, "sub_id": req.sub_id, "sub": vendor, "job_id": req.job_id,
         "job": next(j.name for j in state["jobs"] if j.id == req.job_id),
@@ -214,6 +227,11 @@ def row(req, state, decision, paid=None):
         "next_action": None if paid else (decision.next_action if decision else None),
         "new_sub": fresh,
         "new_sub_note": NEW_SUB_NOTE if fresh and not paid else None,
+        # for the dashboard's colour categories (web/lib/labels.ts) and short phrases
+        "failed_rules": sorted(r.rule[:2] for r in decision.results if not r.passed) if decision else [],
+        "crs_status": vendor_record.crs_status,
+        "limit": str(load_contract().get("auto_release_limit_usd", 0)),
+        "why": escalation_codes(req, state, decision) if escalated else [],
     }
 
 
@@ -244,13 +262,53 @@ def get_request(request_id: str):
         "lines": [{**l.model_dump(mode="json"),
                    "video_pct": str(site.estimates[l.item_no]) if site and l.item_no in site.estimates else None}
                   for l in req.lines],
-        "site_evidence": site.model_dump(mode="json") if site else None,
+        "site_evidence": {**site.model_dump(mode="json"), "sample": not READ_VIDEO.search(site.id)} if site else None,
         "bank_account": req.bank_account,
         "vendor": next({"legal_name": v.legal_name, "email_domain": v.email_domain}
                        for v in state["vendors"] if v.id == req.sub_id),
         "source_doc": req.source_doc,
+        # read from an uploaded file (named by its hash) or seeded; seeded numbers are labelled on screen
+        "sample_document": not HASHED.fullmatch(Path(req.source_doc).name),
+        "original": Path(req.source_doc).name if HASHED.fullmatch(Path(req.source_doc).name) else None,
         "trace": decision.model_dump(mode="json") if decision else None,  # behind "Show details"
     }
+
+
+@app.get("/requests/{request_id}/events")
+def request_events(request_id: str):
+    """The request's story from the append-only log, as summaries for the detail pane's timeline and
+    review panel. Raw payloads never leave: pay-request facts and signatures carry bank accounts."""
+    log = events.read(path=DB)
+    fact = next((e for e in log if e.kind == "fact" and e.table == "pay_requests" and e.data.get("id") == request_id), None)
+    if fact is None:
+        raise HTTPException(404, f"no pay request {request_id}")
+    when = lambda e: {"seq": e.seq, "at": e.at.isoformat(), "ts": e.ts.isoformat()}
+    steps = [{"kind": "received", **when(fact), "read_from_file": bool(HASHED.fullmatch(Path(fact.data.get("source_doc", "")).name))}]
+    amount = None
+    for e in (x for x in log if x.request_id == request_id):
+        if e.kind == "judgment":
+            answers = {q: {"value": a.get("value"), "confidence": a.get("confidence")} for q, a in e.data.get("answers", {}).items()}
+            steps.append({"kind": "reviewed", **when(e), "source": e.data.get("source"), "answers": answers,
+                          "errors": len(e.data.get("errors") or [])})
+        elif e.kind == "kernel_trace":
+            failed = sorted(r["rule"][:2] for r in e.data.get("results", []) if not r.get("passed"))
+            last = steps[-1]
+            if last["kind"] == "checked" and last["action"] == e.data.get("action") and last["failed_rules"] == failed:
+                last["times"] += 1  # replays that came to the same answer
+            else:
+                steps.append({"kind": "checked", **when(e), "action": e.data.get("action"), "failed_rules": failed, "times": 1})
+        elif e.kind == "signature":
+            steps.append({"kind": "signed", **when(e), "rejected": bool(e.data.get("rejected"))})
+        elif e.kind == "execution":
+            status = e.data.get("status", "paid")
+            if status == "started":
+                amount = e.data.get("amount")
+            elif status == "failed":
+                steps.append({"kind": "payment_failed", **when(e), "amount": amount})
+            elif status == "paid":
+                steps.append({"kind": "paid", **when(e), "amount": amount})
+    threshold = load_contract().get("escalation_confidence_threshold")
+    return {"steps": steps, "threshold": threshold}
 
 
 @app.get("/events")
@@ -531,6 +589,56 @@ def _require_passcode(given: str | None) -> None:
         raise HTTPException(401, "That upload passcode isn't right.")
 
 
+HASHED = re.compile(r"[0-9a-f]{64}\.(pdf|eml)")  # an upload's stored name (_save_upload)
+READ_VIDEO = re.compile(r"_\d{8}_[0-9a-f]{8}$")  # perception/video.py's evidence ids; seeded ones end in a month number
+
+
+@app.get("/files/{name}")
+def original_file(name: str, x_upload_passcode: str | None = Header(None)):
+    """An original upload, for the detail pane's "Open the original". Pay apps carry full bank
+    accounts and the dashboard has no logins, so it takes the upload passcode."""
+    if not HASHED.fullmatch(name):
+        raise HTTPException(404, "no such file")
+    _require_passcode(x_upload_passcode)
+    media = "application/pdf" if name.endswith(".pdf") else "message/rfc822"
+    headers = {"Content-Disposition": f'inline; filename="{name}"', "Cache-Control": "no-store"}
+    if os.environ.get("BLOB_READ_WRITE_TOKEN") or os.environ.get("BLOB_STORE_ID"):
+        from vercel.blob import sync as blob
+        try:  # opened before the response starts, so a missing file is still a 404
+            opened = blob.stream_blob(f"uploads/{name}", access="private")
+            download = opened.__enter__()
+        except blob.BlobNotFoundError:
+            raise HTTPException(404, "That original isn't in storage.")
+
+        def chunks():
+            try:
+                yield from download
+            finally:
+                opened.__exit__(None, None, None)
+        return StreamingResponse(chunks(), media_type=media, headers=headers)
+    path = UPLOADS / name
+    if not path.exists():
+        raise HTTPException(404, "That original isn't on this server.")
+    return FileResponse(path, media_type=media, headers=headers)
+
+
+@app.get("/emails")
+def list_emails(month: int = 6):
+    """The month's email, newest first, for "Waiting for documents". The sub is matched on the exact
+    domain only (perception.attachments.sender_sub), so a lookalike shows as unknown."""
+    from perception.attachments import sender_sub
+
+    state, end = events.state(path=DB), month_end(month)
+    out = []
+    for e in sorted(state["emails"], key=lambda e: e.sent_at, reverse=True):
+        if (e.sent_at.year, e.sent_at.month) != (end.year, end.month):
+            continue
+        v = sender_sub(state, e.from_domain)
+        out.append({"id": e.id, "from_addr": e.from_addr, "from_domain": e.from_domain, "subject": e.subject,
+                    "sent_at": e.sent_at.isoformat(), "sub_id": v.id if v else None, "sub": v.legal_name if v else None})
+    return out
+
+
 @app.get("/vendors")
 def list_vendors():
     """Every known sub (not only those billing this month), with the jobs they have a subcontract on."""
@@ -718,8 +826,7 @@ def _save_upload(upload: UploadFile, limit: int, suffix: str) -> tuple[Path, str
     UPLOADS.mkdir(parents=True, exist_ok=True)
     path = UPLOADS / f"{sha}{suffix}"
     path.write_bytes(data)
-    if not getattr(upload, "draw_archived", False):  # an /ingest file is already in the Blob store
-        _archive(data, f"{sha}{suffix}")
+    _archive(data, f"{sha}{suffix}")  # by hash, so GET /files can find any original from its record
     return path, sha
 
 
@@ -797,7 +904,6 @@ def ingest(body: IngestIn):
     name = body.pathname.rsplit("/", 1)[-1]
     with local.open("rb") as f:
         file = StarletteUpload(file=f, filename=name)
-        file.draw_archived = True
         try:
             if body.kind == "pay_app":
                 return upload_pay_app(file=file, sub_id=body.sub_id, job_id=body.job_id, g702=None)
@@ -974,7 +1080,6 @@ def _email_attachments(eml: bytes, email) -> list[dict]:
 
     def upload(path: Path, name: str):
         f = StarletteUpload(file=path.open("rb"), filename=name)
-        f.draw_archived = True  # the email itself is archived; don't store each attachment twice
         return f
 
     out = []
