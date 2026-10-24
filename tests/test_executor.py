@@ -60,27 +60,12 @@ def test_tampered_payload_fails(keypair):
     assert not verify_signature(tampered, sig_hex, pub_hex)
 
 
-def test_expired_approval_refused(keypair):
-    from decimal import Decimal
-
+def test_expired_approval_refused(keypair, tmp_path):
+    from tests.test_executor_gates import decided, signed
     from kernel.executor import execute
-    from shared.schema import Action, Decision, RuleResult
 
     priv, pub_hex = keypair
-    p = payload(expires_at=int(time.time()) - 1)
-    body = canonical_payload_bytes(p)
-    sig_hex = sign(priv, body)
-    approval = SignedApproval(payload=p, sig_hex=sig_hex, nonce=p["nonce"])
-
-    decision = Decision(request_id="pr_1", action=Action.escalate,
-                         results=[RuleResult(rule="01", passed=True, evidence={}, message="ok")])
-
-    class FakeRequest:
-        id = "pr_1"
-
-        class g702:
-            current_payment_due = Decimal("50000.00")
-
+    w, d, req = decided("pr_sub_10_6")  # escalated: over the limit
+    approval = signed(priv, req, expires_at=int(time.time()) - 1)
     with pytest.raises(ExecutionRefused, match="expired"):
-        execute(decision, FakeRequest(), auto_release_limit_usd=Decimal("25000"),
-                pubkey_hex=pub_hex, approval=approval)
+        execute(d, req, auto_release_limit_usd=25000, pubkey_hex=pub_hex, approval=approval, log_path=tmp_path / "e.db")
