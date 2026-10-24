@@ -17,6 +17,10 @@ from pydantic import BaseModel, Field
 MODEL = os.environ.get("PERCEPTION_MODEL", "claude-opus-5-5")
 EFFORT = os.environ.get("PERCEPTION_EFFORT", "medium")
 MAX_PDF_BYTES = 32 * 1024 * 1024
+# A long continuation sheet plus thinking can pass 16K tokens. The explicit timeout (inside the API's
+# 300 s limit) is what lets the SDK send a request this large without streaming.
+MAX_TOKENS = 32000
+TIMEOUT_S = 280
 
 
 class PerceptionLLMError(RuntimeError):
@@ -39,7 +43,8 @@ def _parse(client: anthropic.Anthropic, *, system: str, content: list, output_fo
     try:
         response = client.beta.messages.parse(
             model=MODEL,
-            max_tokens=16000,
+            max_tokens=MAX_TOKENS,
+            timeout=TIMEOUT_S,
             thinking={"type": "adaptive"},
             output_config={"effort": EFFORT},
             betas=["server-side-fallback-2026-07-01"],
@@ -51,6 +56,10 @@ def _parse(client: anthropic.Anthropic, *, system: str, content: list, output_fo
     except anthropic.AnthropicError as e:
         raise PerceptionLLMError(f"Claude request failed: {e}") from e
     except pydantic.ValidationError as e:  # the SDK parses inside .parse(): truncated or non-JSON output
+        first = e.errors()[0]
+        if first["type"] in ("json_invalid", "json_type"):
+            raise PerceptionLLMError("Claude's answer was cut off before it finished") from e
+        # field and pydantic's message only, never the input value: no document content reaches the screen
         detail = "; ".join(f"{'.'.join(str(p) for p in err['loc'])}: {err['msg']}" for err in e.errors())
         raise PerceptionLLMError(f"Claude's answer did not match the expected shape ({e.error_count()} errors): {detail}") from e
     except TypeError as e:  # what the SDK raises when no API key or other credential is configured
