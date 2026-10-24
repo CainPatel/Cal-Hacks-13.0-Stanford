@@ -10,6 +10,7 @@
   },
   "dependencies": {
     "@base-ui/react": "^1.9.0",
+    "@vercel/blob": "^2.8.2",
     "class-variance-authority": "^0.7.1",
     "cn": "^0.5.0",
     "lucide-react": "^1.61.0",
@@ -29,5 +30,10 @@
     "eslint-config-next": "16.4.3",
     "tailwindcss": "^4",
     "typescript": "^5"
+  },
+  "overrides": {
+    "@vercel/cli-config": {
+      "zod": "4.6.7"
+    }
   }
 }
