@@ -1,18 +1,32 @@
 "use client";
 
-import { ArrowLeft, Check, Hand, Mail, Phone, X } from "lucide-react";
 import Link from "next/link";
 import { useEffect, useState } from "react";
-import { Evidence } from "@/components/evidence";
+import { Evidence, failedRule, MarkRow } from "@/components/evidence";
 import { StatusChip } from "@/components/status-chip";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
-import { api, ApiError, money, type RequestDetail } from "@/lib/api";
-import { humanize, rowLine } from "@/lib/labels";
+import { api, ApiError, money, moneyShort, ruleNumber, type RequestDetail } from "@/lib/api";
+import { day, dayShort, humanize, rowLine, RULE_NAMES, shortName } from "@/lib/labels";
 import { cn } from "@/lib/utils";
 
 const ESCALATION_RULES = new Set(["14_within_spend_authority", "15_confidence_floor"]);
-const SHOWS_EVIDENCE = new Set(["07", "10", "11", "13"]);
+
+/** The status sentence, built from the evidence (names, numbers, dates all from the API); null when it can't be. */
+function say(d: RequestDetail): string | null {
+  if (d.status !== "on_hold") return null;
+  const name = shortName(d.sub);
+  const o = failedRule(d, "13")?.evidence.overstatements?.[0];
+  const line = o && d.lines.find((l) => l.item_no === o.item_no);
+  if (o && line && d.site_evidence)
+    return `On hold: ${name} billed ${line.description.toLowerCase()} at ${Number(o.claimed_pct)}%, but the site video from ${dayShort(d.site_evidence.date)} shows ${Number(o.video_estimate_pct)}%.`;
+  if (failedRule(d, "10") && failedRule(d, "11")?.evidence.mismatches?.length)
+    return `On hold: an email that looks like it's from ${name} asks us to pay a new bank account. It came from a lookalike domain.`;
+  const notices = failedRule(d, "07")?.evidence.unresolved ?? [];
+  if (notices.length === 1)
+    return `On hold: ${name}'s supplier, ${notices[0].supplier}, filed a notice to owner and hasn't released.`;
+  return null;
+}
 
 export function RequestDetailPanel({ id, version, backHref }: { id: string; version: number; backHref: string }) {
   const [data, setData] = useState<RequestDetail | null>(null);
@@ -33,114 +47,119 @@ export function RequestDetailPanel({ id, version, backHref }: { id: string; vers
   if (!data || data.id !== id) return <DetailSkeleton />;
 
   const results = data.trace?.results ?? [];
-  const holding = results.filter((r) => !r.passed && !ESCALATION_RULES.has(r.rule));
-  const period = new Date(`${data.period_end}T12:00:00`).toLocaleDateString("en-US", { month: "long", year: "numeric" });
+  const kind = (r: (typeof results)[number]) => (r.passed ? "pass" : ESCALATION_RULES.has(r.rule) ? "ok" : "fail");
+  const word = { pass: "Passed:", fail: "Didn't pass:", ok: "Needs the owner:" } as const;
+  const attention = results.filter((r) => !r.passed);
+  const passed = results.filter((r) => r.passed);
+  const flagged = new Set((failedRule(data, "13")?.evidence.overstatements ?? []).map((o) => o.item_no));
+  const limit = failedRule(data, "14")?.evidence.limit as string | undefined;
+  const sentence = say(data);
+
+  const item = (r: (typeof results)[number]) => {
+    const name = RULE_NAMES[ruleNumber(r.rule)];
+    return (
+      <MarkRow key={r.rule} kind={kind(r)} sr={word[kind(r)]}>
+        {name && <b className="font-semibold">{name}.</b>} {humanize(r.message)}
+      </MarkRow>
+    );
+  };
 
   return (
-    <article className="space-y-8">
-      <header className="space-y-4">
-        <Link href={backHref} className="inline-flex items-center gap-1.5 text-[15px] text-muted-foreground hover:text-foreground lg:hidden">
-          <ArrowLeft className="size-4" aria-hidden /> All pay requests
-        </Link>
-        <div className="grid gap-x-6 gap-y-3 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-start">
-          <div className="min-w-0 space-y-1">
-            <h2 className="text-2xl font-semibold tracking-tight text-balance">{data.sub}</h2>
-            <p className="text-[15px] text-muted-foreground">
-              {data.job} · application for {period}
-            </p>
-          </div>
-          <div className="sm:text-right">
-            <p className="font-mono text-3xl font-medium tnum tracking-tight">{money(data.amount)}</p>
-            <p className="text-sm text-muted-foreground">due this period</p>
-          </div>
+    <article aria-labelledby="d-title" className="-mx-4 bg-sheet px-4 py-4 sm:-mx-8 sm:px-8 lg:mx-0 lg:rounded-lg lg:border lg:p-8">
+      <Link href={backHref} className="mb-3 inline-flex min-h-11 items-center text-primary underline underline-offset-[3px] lg:hidden">
+        Back to pay requests
+      </Link>
+      <header className="flex flex-col gap-2">
+        <div>
+          <h2 id="d-title" className="text-title font-semibold tracking-tight text-balance">{data.sub}</h2>
+          <p className="text-muted-foreground">
+            {data.job}, period ending {day(data.period_end)}
+          </p>
         </div>
-        <div className="flex flex-wrap items-center gap-3">
-          <StatusChip status={data.status} />
-          <p className="text-[17px] leading-snug">{rowLine(data.status, data.sentence, data.reason)}</p>
-        </div>
-        <NextAction detail={data} />
+        <p className="font-mono text-amount font-medium tracking-tight tnum">
+          {money(data.amount)} <span className="font-sans text-[15px] font-normal tracking-normal text-muted-foreground">this period</span>
+        </p>
       </header>
-
-      {holding.length > 0 && (
-        <section aria-labelledby="proof" className="space-y-5 rounded-lg border bg-sheet p-5">
-          <h3 id="proof" className="text-lg font-semibold">What we found</h3>
-          {holding.map((r) => (
-            <div key={r.rule} className="space-y-3 border-t pt-4 first:border-t-0 first:pt-0">
-              <p className="font-medium">{humanize(r.message)}</p>
-              {SHOWS_EVIDENCE.has(r.rule.slice(0, 2)) && <Evidence result={r} lines={data.lines} />}
-            </div>
-          ))}
-        </section>
+      {sentence ? (
+        <p className="mt-5 max-w-[40ch] text-say font-medium">{sentence}</p>
+      ) : (
+        <div className="mt-5 flex flex-wrap items-center gap-3">
+          <StatusChip status={data.status} />
+          <p className="text-say font-medium">{rowLine(data.status, data.sentence, data.reason)}</p>
+        </div>
       )}
+      <div className="mt-5 flex flex-col items-start gap-2.5">
+        <NextAction detail={data} />
+        {data.status === "on_hold" && limit && (
+          <p className="max-w-[52ch] text-base text-muted-foreground">
+            Once that&apos;s settled, this still needs the owner&apos;s OK: it&apos;s over the {moneyShort(limit)} limit.
+          </p>
+        )}
+      </div>
+
+      <Evidence detail={data} />
 
       {results.length > 0 && (
-        <section aria-labelledby="checks" className="space-y-3">
-          <h3 id="checks" className="text-lg font-semibold">Every check</h3>
-          <ul className="divide-y rounded-lg border bg-sheet">
-            {results.map((r) => {
-              const ask = !r.passed && ESCALATION_RULES.has(r.rule);
-              const Icon = r.passed ? Check : ask ? Hand : X;
-              return (
-                <li key={r.rule} className="flex items-start gap-3 px-4 py-3">
-                  <Icon aria-hidden className={cn("mt-0.5 size-[18px] shrink-0", r.passed ? "text-pass" : ask ? "text-hold" : "text-fail")} />
-                  <p className={cn("text-[15px] leading-snug", r.passed && "text-muted-foreground")}>
-                    <span className="sr-only">{r.passed ? "Passed: " : ask ? "Needs your OK: " : "Failed: "}</span>
-                    {humanize(r.message)}
-                  </p>
-                </li>
-              );
-            })}
-          </ul>
+        <section aria-labelledby="checks" className="mt-8 border-t pt-6">
+          <h3 id="checks" className="mb-3.5 text-lg font-semibold">
+            {results.length} checks, {passed.length} passed
+          </h3>
+          {attention.length > 0 && (
+            <>
+              <p className="mb-1.5 text-base text-muted-foreground">Needs attention</p>
+              <ul className="border-t">{attention.map(item)}</ul>
+            </>
+          )}
+          {passed.length > 0 && (
+            <>
+              <p className={cn("mb-1.5 text-base text-muted-foreground", attention.length > 0 && "mt-[18px]")}>Passed</p>
+              <ul className="border-t">{passed.map(item)}</ul>
+            </>
+          )}
         </section>
       )}
 
-      <section aria-labelledby="lines" className="space-y-3">
-        <h3 id="lines" className="text-lg font-semibold">Line items</h3>
-        <div className="overflow-x-auto rounded-lg border bg-sheet">
-          <table className="w-full min-w-[340px] text-[15px] sm:min-w-[560px]">
+      <section aria-labelledby="lines" className="mt-8 border-t pt-6">
+        <h3 id="lines" className="mb-3.5 text-lg font-semibold">Lines on this request</h3>
+        <div className="overflow-x-auto">
+          <table className="w-full border-collapse text-base">
             <thead className="text-left text-sm text-muted-foreground">
-              <tr className="border-b">
-                <th className="px-4 py-2.5 font-medium">Work</th>
-                <th className="hidden px-4 py-2.5 text-right font-medium sm:table-cell">Contract</th>
-                <th className="px-4 py-2.5 text-right font-medium">This period</th>
-                <th className="px-4 py-2.5 text-right font-medium">Claimed</th>
-                <th className="px-4 py-2.5 text-right font-medium">Video</th>
+              <tr className="border-b border-foreground">
+                <th className="px-2 py-1.5 font-medium">Item</th>
+                <th className="px-2 py-1.5 font-medium">Description</th>
+                <th className="px-2 py-1.5 text-right font-medium">Billed</th>
+                <th className="px-2 py-1.5 text-right font-medium">Video</th>
+                <th className="px-2 py-1.5 text-right font-medium">To date</th>
               </tr>
             </thead>
-            <tbody className="divide-y">
+            <tbody>
               {data.lines.map((l) => {
-                const over = l.video_pct !== null && Number(l.pct_complete) - Number(l.video_pct) > 10;
+                const flag = flagged.has(l.item_no);
                 return (
-                  <tr key={l.item_no}>
-                    <td className="px-4 py-2.5">
-                      {l.description} <span className="text-sm text-muted-foreground">{l.item_no}</span>
+                  <tr key={l.item_no} className={cn("border-b", flag && "bg-hold-soft")}>
+                    <td className="px-2 py-[9px] font-mono whitespace-nowrap">{l.item_no}</td>
+                    <td className="px-2 py-[9px]">
+                      {l.description}
+                      {flag && <span className="sr-only"> (claims more than the site video shows)</span>}
                     </td>
-                    <td className="hidden px-4 py-2.5 text-right font-mono tnum sm:table-cell">{money(l.scheduled_value)}</td>
-                    <td className="px-4 py-2.5 text-right font-mono tnum">{money(l.this_period)}</td>
-                    <td className={cn("px-4 py-2.5 text-right font-mono tnum", over && "font-semibold text-fail")}>{Number(l.pct_complete).toFixed(0)}%</td>
-                    <td className="px-4 py-2.5 text-right font-mono tnum text-muted-foreground">
-                      {l.video_pct === null ? "no video" : `${Number(l.video_pct).toFixed(0)}%`}
-                    </td>
+                    <td className={cn("px-2 py-[9px] text-right font-mono whitespace-nowrap tnum", flag && "font-semibold text-hold")}>{Number(l.pct_complete)}%</td>
+                    <td className="px-2 py-[9px] text-right font-mono whitespace-nowrap tnum">{l.video_pct === null ? "none" : `${Number(l.video_pct)}%`}</td>
+                    <td className="px-2 py-[9px] text-right font-mono whitespace-nowrap tnum">{money(l.total_to_date)}</td>
                   </tr>
                 );
               })}
             </tbody>
           </table>
         </div>
-        {data.site_evidence && (
-          <p className="text-sm text-muted-foreground">
-            Video from the site walk on{" "}
-            {new Date(`${data.site_evidence.date}T12:00:00`).toLocaleDateString("en-US", { month: "long", day: "numeric" })}.
-          </p>
-        )}
+        {data.site_evidence && <p className="mt-2 text-sm text-muted-foreground">Video from the site walk on {day(data.site_evidence.date)}.</p>}
       </section>
 
       {data.trace && (
-        <details className="group rounded-lg border bg-sheet">
-          <summary className="cursor-pointer list-none px-4 py-3 text-[15px] font-medium select-none hover:bg-muted/60">
-            Show details <span className="text-muted-foreground">(the full rule trace)</span>
+        <details className="mt-8 border-t pt-6">
+          <summary className="flex min-h-12 cursor-pointer list-none items-center text-primary underline underline-offset-[3px] select-none [&::-webkit-details-marker]:hidden">
+            Show details
           </summary>
-          <pre className="max-h-[480px] overflow-auto border-t px-4 py-3 font-mono text-[13px] leading-relaxed whitespace-pre-wrap">
+          <pre className="mt-2 max-h-[480px] overflow-auto rounded-[4px] bg-muted p-4 font-mono text-[13px] leading-normal whitespace-pre-wrap">
             {JSON.stringify(data.trace, null, 2)}
           </pre>
         </details>
@@ -156,17 +175,17 @@ function NextAction({ detail }: { detail: RequestDetail }) {
   if (detail.status !== "on_hold" || !action) return null;
   if (/^hold\b/i.test(action)) {
     // some rules' next step is "keep holding", not something to send: say it, don't make it a button
-    return <p className="max-w-prose text-[15px] leading-snug text-muted-foreground">{action.replace(/^hold;?\s*/i, "Keep it on hold: ")}.</p>;
+    return <p className="max-w-[52ch] text-base text-muted-foreground">{action.replace(/^hold;?\s*/i, "Keep it on hold: ")}.</p>;
   }
 
   if (/call/i.test(action)) {
     return (
-      <div className="space-y-2">
+      <div className="flex flex-col items-start gap-2.5">
         <Button size="lg" onClick={() => setShown(true)}>
-          <Phone aria-hidden /> Call to verify the bank change
+          Call to verify the new bank details
         </Button>
         {shown && (
-          <p className="max-w-prose text-[15px] leading-snug">
+          <p className="max-w-[52ch] text-base text-muted-foreground">
             Call {detail.sub} at the number in your own records, not one from the email, and ask whether they changed banks.
           </p>
         )}
@@ -178,7 +197,7 @@ function NextAction({ detail }: { detail: RequestDetail }) {
   const to = /super/i.test(action) ? "" : `accounting@${detail.vendor.email_domain}`;
   return (
     <Button size="lg" nativeButton={false} render={<a href={`mailto:${to}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`} />}>
-      <Mail aria-hidden /> {action}
+      {action}
     </Button>
   );
 }

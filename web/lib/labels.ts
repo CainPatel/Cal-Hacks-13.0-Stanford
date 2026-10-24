@@ -60,3 +60,20 @@ export function rowLine(status: string, sentence: string, reason: string | null)
   if (status === "ready") return "Every check passed.";
   return humanize(sentence);
 }
+
+/** Short plain names for the checklist ("Bank details."), keyed by rule number. */
+export const RULE_NAMES: Record<string, string> = {
+  "01": "Billing continuity", "02": "Contract ceiling", "03": "Retainage", "04": "This month's lien release",
+  "05": "Last month's final waiver", "06": "Insurance", "07": "Supplier notices", "08": "Owner's draw",
+  "09": "Vendor identity", "10": "Bank details", "11": "Email sender", "12": "Duplicate check",
+  "13": "Progress against site video", "14": "Spend limit", "15": "Confidence",
+};
+
+/** "Summit Drywall LLC" -> "Summit Drywall", for sentences. */
+export const shortName = (name: string) => name.replace(/,?\s+(Inc\.|LLC)$/, "");
+
+const at = (s: string) => new Date(`${s.slice(0, 10)}T12:00:00`);
+/** "Oct 22, 2026" */
+export const day = (s: string) => at(s).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
+/** "Oct 22" */
+export const dayShort = (s: string) => at(s).toLocaleDateString("en-US", { month: "short", day: "numeric" });
