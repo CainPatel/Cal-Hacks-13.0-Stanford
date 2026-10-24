@@ -12,9 +12,9 @@ REPO=$(cd "$(dirname "$0")/.." && pwd)
 apt-get update
 apt-get install -y python3-venv python3-lgpio curl
 
-# --system-site-packages so the venv sees the apt lgpio.
+# --system-site-packages so the venv sees the apt lgpio. Device deps only: the rest of requirements.txt has no Pi wheels.
 sudo -u "$RUN_USER" python3 -m venv --system-site-packages "$REPO/.venv"
-sudo -u "$RUN_USER" "$REPO/.venv/bin/pip" install -r "$REPO/requirements.txt"
+sudo -u "$RUN_USER" "$REPO/.venv/bin/pip" install fastapi uvicorn gpiozero cryptography
 
 command -v tailscale >/dev/null || curl -fsSL https://tailscale.com/install.sh | sh
 

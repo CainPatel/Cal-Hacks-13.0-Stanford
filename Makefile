@@ -15,7 +15,7 @@ fuzz:
 	$(PY) -m fuzzer.run $(N)
 
 device:
-	DRAWKEY_MOCK=1 $(PY) -m uvicorn device.main:app --port 8000
+	DRAWKEY_MOCK=1 $(PY) -m uvicorn device.main:app --port 8001
 
 device-test:
 	$(PY) -m pytest -q device/test_device.py
