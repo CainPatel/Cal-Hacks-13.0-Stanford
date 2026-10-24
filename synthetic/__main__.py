@@ -1,17 +1,18 @@
-"""python -m synthetic [out_dir]     (default data/synthetic)
+"""python -m synthetic [out_dir] [--worlds N]     (default data/synthetic, N=0)
 
 Writes one folder per pay request, each holding what the GC would receive for it plus
 truth.json, the exact records the documents were rendered from:
 
     oct/<request_id>/       this month's 15 requests (incl. the 3 demo holds)
     cases/<NN>_<anomaly>/   the 25 planted anomalies (truth.json also has the Label)
+    companies/<s>/<id>/     --worlds N: every month of N more clean companies (90 requests each)
 
 Each folder: g703.pdf, g703.xlsx, release.pdf (if the sub sent one), coi.pdf,
 email_*.eml (if any). The PDF's number style is in truth.json["style"].
 """
+import argparse
 import json
 import random
-import sys
 from pathlib import Path
 
 from seed.anomalies import THIS_MONTH, cases, with_demo
@@ -51,7 +52,7 @@ def render_request(data, request_id, folder: Path, label=None) -> None:
     (folder / "truth.json").write_text(json.dumps(truth, indent=2))
 
 
-def main(out: Path) -> int:
+def main(out: Path, worlds: int = 0) -> int:
     data, _ = with_demo(generate())
     n = 0
     for req in data["pay_requests"]:
@@ -61,9 +62,17 @@ def main(out: Path) -> int:
     for i, (case_data, label) in enumerate(cases()):
         render_request(case_data, label.request_id, out / "cases" / f"{i:02d}_{label.anomaly}", label)
         n += 1
+    for s in range(1, worlds + 1):  # seed 0 is the demo company above
+        world = generate(rng_seed=s)
+        for req in world["pay_requests"]:
+            render_request(world, req.id, out / "companies" / str(s) / req.id)
+            n += 1
     return n
 
 
 if __name__ == "__main__":
-    out = Path(sys.argv[1] if len(sys.argv) > 1 else "data/synthetic")
-    print(f"rendered {main(out)} document sets into {out}")
+    ap = argparse.ArgumentParser()
+    ap.add_argument("out", nargs="?", default="data/synthetic", type=Path)
+    ap.add_argument("--worlds", type=int, default=0, help="also render every month of N more companies")
+    args = ap.parse_args()
+    print(f"rendered {main(args.out, args.worlds)} document sets into {args.out}")

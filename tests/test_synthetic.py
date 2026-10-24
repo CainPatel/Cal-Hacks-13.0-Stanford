@@ -52,3 +52,8 @@ def test_documents_follow_the_anomaly(out):
     vendor = json.loads((homoglyph / "truth.json").read_text())["vendor"]
     assert sender.split("@")[1] != vendor["email_domain"]
     assert all((f / "coi.pdf").exists() and (f / "g703.pdf").exists() for f in folders(out))
+
+
+def test_more_companies(tmp_path):
+    assert main(tmp_path, worlds=1) == 15 + 25 + 90
+    assert len(list((tmp_path / "companies" / "1").iterdir())) == 90
