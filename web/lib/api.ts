@@ -44,6 +44,12 @@ export type RequestDetail = RequestRow & {
   trace: { action: string; results: RuleResult[]; next_action: string | null } | null;
 };
 
+/** data/calibration.json from `python -m fuzzer.calibration` (report()). */
+export type Calibration = {
+  answers: number;
+  curve: { bins: { bin: string; n: number; mean_confidence: number; accuracy: number }[]; expected_calibration_error: number | null };
+};
+
 export type SweepPoint = {
   limit: number;
   button_presses_per_job_month: number;
@@ -144,6 +150,7 @@ export const api = {
   },
   replay: (through: number) => call<{ new_decisions: number }>(`/replay?through=${through}`, { method: "POST" }),
   scorecard: () => call<Scorecard>("/scorecard"),
+  calibration: () => call<Calibration>("/calibration"),
   attacks: () => call<{ name: string; about: string }[]>("/attacks"),
   attack: (name: string, target: string) =>
     call<AttackResult>("/attacks", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ name, target }) }),

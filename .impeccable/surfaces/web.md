@@ -7,7 +7,7 @@ related_targets: []
 
 Scope: web/ dashboard, three views (Pay requests with detail, Approve, Security). Mode: Operate.
 Audience/job: office manager reviewing this month's pay requests; owner approving escalations; judges on Security.
-Constraints: spec palette (light warm neutral, one accent; green pass, amber hold/escalate, red fail, gray pending; color carries nothing else), Geist Sans/Mono, big type and targets, phone-ready, dark only on Security.
+Constraints: spec palette (light warm neutral, one accent; green pass, amber hold/escalate, red fail, gray pending; color carries nothing else), Geist Sans/Mono, big type and targets, phone-ready, light everywhere, Security included.
 
 ## Direction contract
 THESIS: A month of pay requests read as one decision list, each line a plain sentence with its proof attached. Refuses the KPI-tile dashboard with a data grid.
