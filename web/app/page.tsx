@@ -55,11 +55,13 @@ function PayRequests() {
   const jobs = useMemo(() => {
     const byJob = new Map<string, RequestRow[]>();
     for (const r of rows ?? []) byJob.set(r.job, [...(byJob.get(r.job) ?? []), r]);
-    for (const list of byJob.values()) list.sort((a, b) => ORDER[a.status] - ORDER[b.status] || a.sub.localeCompare(b.sub));
+    for (const list of byJob.values()) list.sort((a, b) => ORDER[a.status] - ORDER[b.status] || Number(b.amount) - Number(a.amount));
     return [...byJob.entries()];
   }, [rows]);
 
   const count = (s: RequestRow["status"]) => rows?.filter((r) => r.status === s).length ?? 0;
+  const total = (list: RequestRow[]) => list.reduce((s, r) => s + Number(r.amount), 0);
+  const totalOf = (s: RequestRow["status"]) => total(rows?.filter((r) => r.status === s) ?? []);
   const unchecked = rows !== null && rows.length > 0 && count("not_checked") === rows.length;
 
   const check = async () => {
@@ -75,47 +77,50 @@ function PayRequests() {
   };
 
   return (
-    <main className="mx-auto grid w-full max-w-[1400px] flex-1 gap-8 px-4 py-6 sm:px-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,600px)] lg:px-8 lg:py-8">
-      <section aria-labelledby="month" className={cn("min-w-0 space-y-6", selected && "hidden lg:block")}>
-        <header className="space-y-3">
-          <div className="flex flex-wrap items-center justify-between gap-3">
-            <h1 id="month" className="text-3xl font-semibold tracking-tight">
-              {monthName(month)}
-            </h1>
-            <label className="flex items-center gap-2 text-[15px] text-muted-foreground">
-              Month
-              <select
-                value={month}
-                onChange={(e) => router.push(href({ m: Number(e.target.value), r: null }))}
-                className="h-10 rounded-md border bg-sheet px-3 text-[15px] text-foreground"
-              >
-                {MONTHS.map((name, i) => (
-                  <option key={name} value={i + 1}>
-                    {name}
-                  </option>
-                ))}
-              </select>
-            </label>
-          </div>
-          {rows && rows.length > 0 && !unchecked && (
-            <p className="text-[17px] leading-snug">
-              {rows.length} pay requests. <b className="font-semibold">{count("ready")}</b> ready to pay,{" "}
-              <b className="font-semibold">{count("needs_ok")}</b> need your OK,{" "}
-              <b className="font-semibold">{count("on_hold")}</b> on hold.
-              <span className="ml-2 text-sm text-muted-foreground">{connected ? "Updating live." : "Live updates paused."}</span>
-            </p>
-          )}
-        </header>
+    <main className="mx-auto grid w-full max-w-[1440px] flex-1 gap-10 px-4 py-6 sm:px-8 sm:py-10 lg:grid-cols-[minmax(0,4fr)_minmax(0,6fr)]">
+      <header className={cn("min-w-0 lg:col-span-2", selected && "hidden lg:block")}>
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <p className="text-meta text-muted-foreground">{monthName(month)}</p>
+          <label className="flex items-center gap-2 text-meta text-muted-foreground">
+            Month
+            <select
+              value={month}
+              onChange={(e) => router.push(href({ m: Number(e.target.value), r: null }))}
+              className="h-12 rounded-lg border border-border-strong bg-sheet px-3 text-body text-foreground"
+            >
+              {MONTHS.map((name, i) => (
+                <option key={name} value={i + 1}>
+                  {name}
+                </option>
+              ))}
+            </select>
+          </label>
+        </div>
+        <h1 id="month" className="mt-3 max-w-[26ch] text-[1.625rem] leading-tight font-semibold tracking-tight sm:text-lede">
+          {rows && rows.length > 0 && !unchecked
+            ? `${count("ready")} of ${rows.length} pay requests are ready to pay. ${count("needs_ok")} ${count("needs_ok") === 1 ? "needs" : "need"} your OK and ${count("on_hold")} ${count("on_hold") === 1 ? "is" : "are"} on hold.`
+            : monthName(month)}
+        </h1>
+        {rows && rows.length > 0 && !unchecked && (
+          <p className="mt-3 max-w-[60ch] text-muted-foreground">
+            Ready <span className="font-mono tnum">{money(totalOf("ready"))}</span>, waiting for your OK{" "}
+            <span className="font-mono tnum">{money(totalOf("needs_ok"))}</span>, on hold{" "}
+            <span className="font-mono tnum">{money(totalOf("on_hold"))}</span>.{" "}
+            {connected ? "Updating live." : "Live updates paused."}
+          </p>
+        )}
+      </header>
 
+      <section aria-labelledby="month" className={cn("min-w-0 space-y-12", selected && "hidden lg:block")}>
         {error && (
-          <div role="alert" className="rounded-lg border border-fail/30 bg-fail-soft p-4 text-[15px] text-fail">
+          <div role="alert" className="rounded-lg border border-fail bg-fail-soft p-4 text-fail">
             {error}
           </div>
         )}
 
         {unchecked && (
-          <div className="flex flex-wrap items-center justify-between gap-4 rounded-lg border bg-sheet p-5">
-            <p className="text-[17px]">These pay requests haven&apos;t been checked yet.</p>
+          <div className="flex flex-wrap items-center justify-between gap-4 rounded-lg border bg-sheet p-6">
+            <p>These pay requests haven&apos;t been checked yet.</p>
             <Button size="lg" onClick={check} disabled={checking}>
               {checking ? "Checking…" : `Check ${MONTHS[month - 1]}`}
             </Button>
@@ -125,18 +130,16 @@ function PayRequests() {
         {rows === null && !error && <ListSkeleton bare />}
 
         {rows !== null && rows.length === 0 && (
-          <p className="rounded-lg border bg-sheet p-5 text-[17px]">No pay requests have come in for {monthName(month)}.</p>
+          <p className="rounded-lg border bg-sheet p-6">No pay requests have come in for {monthName(month)}.</p>
         )}
 
         {jobs.map(([job, list]) => (
-          <section key={job} aria-label={job} className="space-y-2">
-            <h2 className="flex items-baseline justify-between gap-3 text-lg font-semibold">
-              {job}
-              <span className="font-mono text-[15px] font-normal tnum text-muted-foreground">
-                {money(list.reduce((s, r) => s + Number(r.amount), 0))}
-              </span>
-            </h2>
-            <ul className="divide-y overflow-hidden rounded-lg border bg-sheet">
+          <section key={job} aria-label={job}>
+            <div className="flex items-baseline justify-between gap-4 border-b-2 border-foreground pb-2.5">
+              <h2 className="text-[1.3125rem] font-semibold tracking-tight">{job}</h2>
+              <span className="text-base whitespace-nowrap text-muted-foreground">{list.length} requests</span>
+            </div>
+            <ul className="divide-y divide-border">
               {list.map((r) => (
                 <li key={r.id}>
                   <Link
@@ -144,20 +147,24 @@ function PayRequests() {
                     scroll={false}
                     aria-current={selected === r.id ? "true" : undefined}
                     className={cn(
-                      "grid grid-cols-[minmax(0,1fr)_auto] items-center gap-x-4 gap-y-1.5 px-4 py-3.5 transition-colors hover:bg-muted/60 sm:grid-cols-[minmax(0,1fr)_auto_9.5rem]",
-                      selected === r.id && "bg-accent hover:bg-accent",
+                      "grid grid-cols-[minmax(0,1fr)_auto] gap-x-6 gap-y-1.5 px-3 py-4 hover:bg-muted",
+                      selected === r.id && "bg-selected shadow-[inset_4px_0_0_var(--primary)] hover:bg-selected",
                     )}
                   >
-                    <span className="min-w-0">
-                      <span className="block truncate text-[17px] font-medium">{r.sub}</span>
-                      <span className="block text-[15px] leading-snug text-muted-foreground">{rowLine(r.status, r.sentence, r.reason)}</span>
+                    <span className="min-w-0 font-semibold">{r.sub}</span>
+                    <span className="text-right font-mono whitespace-nowrap tnum">{money(r.amount)}</span>
+                    <span className="col-span-2 flex flex-wrap items-center gap-x-3 gap-y-1.5 text-[1.0625rem]">
+                      <StatusChip status={r.status} />
+                      <span>{rowLine(r.status, r.sentence, r.reason)}</span>
                     </span>
-                    <span className="text-right font-mono text-[17px] tnum">{money(r.amount)}</span>
-                    <StatusChip status={r.status} className="col-span-2 justify-self-start sm:col-span-1 sm:justify-self-end" />
                   </Link>
                 </li>
               ))}
             </ul>
+            <div className="flex items-baseline justify-between gap-4 px-3 pt-2.5">
+              <span className="text-base text-muted-foreground">Total this period</span>
+              <span className="border-b-[3px] border-double border-foreground pb-0.5 font-mono whitespace-nowrap tnum">{money(total(list))}</span>
+            </div>
           </section>
         ))}
       </section>
@@ -167,7 +174,7 @@ function PayRequests() {
           {selected ? (
             <RequestDetailPanel id={selected} version={version} backHref={href({ r: null })} />
           ) : (
-            <div className="rounded-lg border border-dashed p-8 text-[17px] leading-relaxed text-muted-foreground">
+            <div className="rounded-lg border border-dashed border-border-strong p-8 leading-relaxed text-muted-foreground">
               Pick a pay request to see every check, the proof behind any hold, and what to do next.
             </div>
           )}

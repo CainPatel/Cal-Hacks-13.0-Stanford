@@ -1,0 +1,693 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Draw dashboard mockup</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&family=Geist+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+:root {
+  --ground: #f4f2ee; --sheet: #ffffff; --ink: #1c1a17; --quiet: #615c54; --rule: #dcd7ce; --rule-strong: #b9b2a5; --tint: #ebe7e0;
+  --accent: #1f4fa3; --accent-ink: #ffffff; --accent-soft: #e7edf8;
+  --pass: #2e6b3a; --pass-soft: #e2efe4; --hold: #8a5800; --hold-soft: #f5e6c3; --fail: #a3271b; --fail-soft: #f8e2de; --pending: #615c54;
+  --sans: "Geist", system-ui, -apple-system, sans-serif; --mono: "Geist Mono", ui-monospace, Menlo, monospace;
+  --r: 8px;
+}
+* { box-sizing: border-box; }
+html { -webkit-text-size-adjust: 100%; }
+body { margin: 0; background: var(--ground); color: var(--ink); font: 400 18px/1.5 var(--sans); }
+button, input, select, textarea { font: inherit; color: inherit; }
+h1, h2, h3, p { margin: 0; }
+.mono, .num { font-family: var(--mono); font-variant-numeric: tabular-nums; }
+.num { text-align: right; white-space: nowrap; }
+.quiet { color: var(--quiet); }
+.sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; border-radius: 4px; }
+
+/* Mockup-only switcher, outside the product */
+.mock { border-bottom: 1px dashed var(--rule-strong); font-size: 15px; }
+.mock .wrap { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 16px; padding-block: 6px; }
+.mock button { background: none; border: 0; padding: 8px 2px; min-height: 40px; cursor: pointer; color: var(--quiet); text-decoration: underline; text-underline-offset: 3px; }
+.mock button[aria-pressed="true"] { color: var(--ink); text-decoration-thickness: 2px; }
+
+.wrap { max-width: 1440px; margin: 0 auto; padding-inline: 32px; }
+@media (max-width: 719px) { .wrap { padding-inline: 16px; } body { font-size: 17px; } }
+
+/* Top bar */
+.top { border-bottom: 1px solid var(--rule); background: var(--sheet); }
+.top .wrap { display: flex; align-items: center; gap: 8px 32px; flex-wrap: wrap; min-height: 64px; }
+.brand { display: flex; flex-wrap: wrap; align-items: baseline; gap: 2px 12px; padding-block: 8px; }
+.brand > * { white-space: nowrap; }
+.brand b { font-size: 24px; font-weight: 700; letter-spacing: -0.02em; }
+.tabs { display: flex; gap: 4px; margin-left: auto; overflow-x: auto; }
+.tabs a { display: flex; align-items: center; min-height: 64px; padding: 0 14px; color: var(--quiet); text-decoration: none; border-bottom: 3px solid transparent; white-space: nowrap; font-weight: 500; }
+.tabs a[aria-current="page"] { color: var(--ink); border-bottom-color: var(--accent); }
+@media (max-width: 719px) { .tabs { margin-left: -14px; width: calc(100% + 28px); } .tabs a { min-height: 52px; } }
+
+main { padding-block: 40px 80px; }
+@media (max-width: 719px) { main { padding-block: 24px 64px; } }
+
+/* Buttons and chips */
+.btn { display: inline-flex; align-items: center; justify-content: center; gap: 10px; min-height: 52px; padding: 0 22px; border-radius: var(--r); border: 1px solid var(--accent); background: var(--accent); color: var(--accent-ink); font-weight: 600; font-size: 18px; cursor: pointer; text-align: center; }
+.btn.plain { background: transparent; color: var(--accent); }
+.btn[disabled] { opacity: .6; cursor: default; }
+.link { color: var(--accent); background: none; border: 0; padding: 0; text-decoration: underline; text-underline-offset: 3px; cursor: pointer; min-height: 44px; }
+.chip { display: inline-flex; align-items: center; gap: 6px; height: 28px; padding: 0 10px; border-radius: var(--r); font-size: 15px; font-weight: 600; white-space: nowrap; }
+.chip svg { width: 15px; height: 15px; flex: none; }
+.chip.ready { color: var(--pass); background: var(--pass-soft); }
+.chip.hold, .chip.ok { color: var(--hold); background: var(--hold-soft); }
+.chip.fail { color: var(--fail); background: var(--fail-soft); }
+
+/* Pay requests */
+.lede { font-size: 34px; line-height: 1.25; font-weight: 600; letter-spacing: -0.02em; max-width: 26ch; }
+.lede-sub { margin-top: 12px; color: var(--quiet); max-width: 60ch; }
+@media (max-width: 719px) { .lede { font-size: 26px; } }
+.pr { margin-top: 40px; }
+@media (min-width: 1100px) { .pr { display: grid; grid-template-columns: minmax(0, 4fr) minmax(0, 6fr); gap: 40px; align-items: start; } }
+
+.job + .job { margin-top: 48px; }
+.job-head { display: flex; align-items: baseline; justify-content: space-between; gap: 16px; padding-bottom: 10px; border-bottom: 2px solid var(--ink); }
+.job-head h2 { font-size: 21px; font-weight: 600; letter-spacing: -0.01em; }
+.job-total { padding: 10px 12px 0; display: flex; justify-content: space-between; gap: 16px; color: var(--quiet); font-size: 16px; }
+.job-total .num { color: var(--ink); border-bottom: 3px double var(--ink); padding-bottom: 2px; font-size: 18px; }
+.rows { list-style: none; margin: 0; padding: 0; }
+.rows li + li { border-top: 1px solid var(--rule); }
+.row { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 6px 24px; width: 100%; padding: 16px 12px; background: none; border: 0; text-align: left; }
+button.row { cursor: pointer; }
+button.row:hover { background: var(--tint); }
+.row[aria-current="true"] { background: var(--accent-soft); box-shadow: inset 4px 0 0 var(--accent); }
+.row .who { font-weight: 600; }
+.row .num { font-size: 18px; }
+.row .why { grid-column: 1 / -1; display: flex; flex-wrap: wrap; align-items: center; gap: 6px 12px; font-size: 17px; }
+
+/* Detail pane */
+.detail { background: var(--sheet); border: 1px solid var(--rule); border-radius: var(--r); padding: 32px; }
+@media (min-width: 1100px) { .detail { position: sticky; top: 16px; max-height: calc(100vh - 32px); overflow: auto; } .back { display: none !important; } }
+@media (max-width: 1099px) {
+  .detail { display: none; position: fixed; inset: 0; z-index: 20; border: 0; border-radius: 0; overflow: auto; padding: 16px 16px 64px; }
+  .detail.open { display: block; animation: rise .2s ease-out; }
+}
+@keyframes rise { from { transform: translateY(16px); opacity: 0; } }
+.back { margin-bottom: 12px; display: inline-flex; align-items: center; gap: 6px; }
+.d-head { display: flex; flex-direction: column; gap: 8px; }
+.d-head h2 { font-size: 24px; font-weight: 600; letter-spacing: -0.01em; }
+.d-amt { font-size: 32px; font-weight: 500; letter-spacing: -0.02em; }
+.d-say { margin-top: 20px; font-size: 21px; line-height: 1.4; font-weight: 500; max-width: 40ch; }
+.d-next { margin-top: 20px; display: flex; flex-direction: column; align-items: flex-start; gap: 10px; }
+.d-next p { font-size: 16px; color: var(--quiet); max-width: 52ch; }
+.section { margin-top: 32px; padding-top: 24px; border-top: 1px solid var(--rule); }
+.section > h3 { font-size: 18px; font-weight: 600; margin-bottom: 14px; }
+
+/* Signature: evidence line beside the source document */
+.evidence { display: grid; grid-template-columns: repeat(auto-fit, minmax(270px, 1fr)); gap: 28px; }
+.evidence > div { container-type: inline-size; min-width: 0; }
+.evidence h4 { margin: 0 0 12px; font-size: 16px; font-weight: 600; }
+.evidence h4 .mono { font-weight: 400; color: var(--quiet); font-size: 14px; display: block; }
+
+.scale { position: relative; height: 132px; margin: 0 14px; }
+.scale .track { position: absolute; left: 0; right: 0; top: 52px; height: 2px; background: var(--ink); }
+.scale .band { position: absolute; top: 40px; height: 26px; background: repeating-linear-gradient(135deg, var(--tint) 0 4px, var(--rule) 4px 5px); border: 1px solid var(--rule-strong); }
+.scale .gap { position: absolute; top: 50px; height: 6px; background: var(--hold); }
+.scale .mark { position: absolute; width: 2px; transform: translateX(-1px); }
+.scale .mark span { position: absolute; left: 50%; transform: translateX(-50%); white-space: nowrap; font-size: 15px; font-weight: 600; }
+.scale .claim { top: 22px; height: 44px; background: var(--hold); }
+.scale .claim span { top: -24px; color: var(--hold); }
+.scale .video { top: 40px; height: 40px; background: var(--ink); }
+.scale .video span { top: 42px; }
+.scale .tick { position: absolute; top: 110px; transform: translateX(-50%); font-size: 13px; color: var(--quiet); }
+.ev-note { margin-top: 6px; font-size: 16px; }
+.frames { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-top: 16px; }
+.frames div { aspect-ratio: 16 / 10; background: var(--tint); border: 1px solid var(--rule); display: grid; place-items: center; font-size: 13px; color: var(--quiet); }
+.frames + p { margin-top: 8px; font-size: 14px; color: var(--quiet); }
+
+.doc { border: 1px solid var(--rule-strong); border-radius: 4px; background: var(--sheet); font-size: 15px; }
+.doc .doc-name { padding: 8px 12px; border-bottom: 1px solid var(--rule-strong); background: var(--tint); font-family: var(--mono); font-size: 13px; color: var(--quiet); overflow-wrap: anywhere; }
+.g703 { width: 100%; border-collapse: collapse; }
+.g703 td { padding: 6px 10px; border-top: 1px solid var(--rule); vertical-align: top; }
+.g703 tr:first-child td { border-top: 0; }
+.g703 .col { width: 2.6em; font-family: var(--mono); color: var(--quiet); font-size: 13px; border-right: 1px solid var(--rule); text-align: center; padding-top: 8px; }
+.g703 .flag td { background: var(--hold-soft); }
+.g703 .flag .num { color: var(--hold); font-weight: 600; }
+.email dl { margin: 0; padding: 10px 12px; display: grid; grid-template-columns: 1fr; border-bottom: 1px solid var(--rule); }
+.email dt { color: var(--quiet); font-size: 13px; }
+.email dd + dt { margin-top: 6px; }
+.email dd { margin: 0; overflow-wrap: anywhere; }
+.email .body { padding: 12px; line-height: 1.55; }
+.bad { color: var(--fail); background: var(--fail-soft); outline: 2px solid var(--fail); border-radius: 2px; padding: 0 1px; }
+.rush { text-decoration: underline wavy var(--hold); text-underline-offset: 4px; }
+.notice dl { margin: 0; padding: 4px 12px 10px; display: grid; grid-template-columns: auto 1fr; gap: 0 16px; }
+.notice dt, .notice dd { margin: 0; padding: 6px 0; border-top: 1px solid var(--rule); }
+.notice dt { color: var(--quiet); }
+.notice dt:first-of-type, .notice dd:first-of-type { border-top: 0; }
+.notice h5 { margin: 0; padding: 12px 12px 4px; font-size: 17px; font-weight: 600; }
+
+.domain { font-family: var(--mono); font-size: clamp(14px, 5.4cqw, 26px); line-height: 1; }
+.domain .lbl { font-family: var(--sans); font-size: 15px; color: var(--quiet); margin: 0 0 6px; }
+.domain .letters { display: flex; }
+.domain .letters span { width: 1.2ch; text-align: center; padding: 6px 0; border-bottom: 1px solid var(--rule); }
+.domain .letters + .lbl { margin-top: 14px; }
+.domain .letters span.bad { outline-offset: -2px; }
+.acct { margin-top: 18px; padding-top: 14px; border-top: 1px solid var(--rule); }
+.acct .mono { font-size: 19px; }
+
+/* Checklist with margin ticks: one tick, cross or ring per check, in a ruled margin */
+.checks { list-style: none; margin: 0; padding: 0; border-top: 1px solid var(--rule); }
+.checks li { display: grid; grid-template-columns: 44px 1fr; border-bottom: 1px solid var(--rule); }
+.checks .m { border-right: 1px solid var(--rule-strong); display: flex; justify-content: center; padding-top: 12px; }
+.checks .m svg { width: 24px; height: 24px; fill: none; stroke-width: 2.6; stroke-linecap: round; stroke-linejoin: round; }
+.checks .pass svg { stroke: var(--pass); }
+.checks .fail svg { stroke: var(--fail); }
+.checks .ok svg { stroke: var(--hold); }
+.checks .t { padding: 11px 0 11px 14px; font-size: 17px; }
+.checks .t b { font-weight: 600; }
+.checks-group { font-size: 16px; color: var(--quiet); margin: 18px 0 6px; }
+.checks-group:first-child { margin-top: 0; }
+
+.lines { width: 100%; border-collapse: collapse; font-size: 16px; }
+.lines th { text-align: left; font-weight: 500; color: var(--quiet); font-size: 14px; padding: 6px 8px; border-bottom: 1px solid var(--ink); }
+.lines th.num { text-align: right; }
+.lines td { padding: 9px 8px; border-bottom: 1px solid var(--rule); }
+.lines tr.flag td { background: var(--hold-soft); }
+.lines tr.flag .claimed { color: var(--hold); font-weight: 600; }
+.scroll-x { overflow-x: auto; }
+
+details > summary { cursor: pointer; color: var(--accent); min-height: 48px; display: flex; align-items: center; list-style: none; text-decoration: underline; text-underline-offset: 3px; }
+details > summary::-webkit-details-marker { display: none; }
+pre.trace { margin: 8px 0 0; padding: 16px; background: var(--tint); border-radius: 4px; font: 13px/1.5 var(--mono); overflow-x: auto; white-space: pre; }
+
+/* Approve */
+.approve > * { max-width: 960px; }
+.sec > * { max-width: 1100px; }
+.approve h1, .sec h1 { font-size: 34px; line-height: 1.2; font-weight: 600; letter-spacing: -0.02em; }
+.approve > p { margin-top: 12px; max-width: 60ch; color: var(--quiet); }
+.ask { margin-top: 32px; background: var(--sheet); border: 1px solid var(--rule); border-radius: var(--r); padding: 32px; display: grid; gap: 32px; }
+@media (min-width: 860px) { .ask.lead { grid-template-columns: minmax(0, 1fr) 320px; } }
+@media (max-width: 719px) { .ask { padding: 20px 16px; } .approve h1, .sec h1 { font-size: 27px; } }
+.ask .big { font-family: var(--mono); font-variant-numeric: tabular-nums; font-size: clamp(40px, 9vw, 64px); font-weight: 500; letter-spacing: -0.03em; line-height: 1.05; }
+.ask .payee { margin-top: 12px; font-size: 22px; font-weight: 600; }
+.ask .why { margin-top: 16px; font-size: 18px; max-width: 46ch; }
+.ask .acts { margin-top: 24px; display: flex; flex-wrap: wrap; align-items: center; gap: 12px 24px; }
+.ask .status { margin-top: 16px; min-height: 1.5em; font-size: 18px; }
+.ask.small { padding: 20px 24px; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 12px 24px; }
+.ask.small .big { font-size: 30px; }
+.ask.small .payee { margin-top: 4px; font-size: 18px; }
+@media (max-width: 719px) { .ask.small { grid-template-columns: 1fr; } }
+.key { border: 2px solid var(--ink); border-radius: 14px; padding: 18px; background: var(--ground); align-self: start; }
+.key .cap { font-size: 14px; color: var(--quiet); margin-bottom: 12px; }
+.key .screen { background: var(--sheet); border: 1px solid var(--rule-strong); border-radius: 6px; padding: 16px; font-family: var(--mono); }
+.key .screen .k-amt { font-size: 30px; font-weight: 600; font-variant-numeric: tabular-nums; letter-spacing: -0.02em; }
+.key .screen p { font-size: 15px; margin-top: 4px; }
+.key .pads { display: flex; justify-content: space-around; margin-top: 16px; }
+.key .pad { display: flex; flex-direction: column; align-items: center; gap: 6px; font-size: 14px; font-weight: 600; }
+.key .pad i { width: 48px; height: 48px; border-radius: 50%; border: 3px solid currentColor; display: block; }
+.key .pad.g { color: var(--pass); } .key .pad.g i { background: var(--pass-soft); }
+.key .pad.r { color: var(--fail); } .key .pad.r i { background: var(--fail-soft); }
+.key.live .pad i { animation: pulse 1.4s ease-in-out infinite; }
+@keyframes pulse { 50% { box-shadow: 0 0 0 6px var(--tint); } }
+.payload { margin-top: 24px; }
+.payload dl { display: grid; grid-template-columns: auto 1fr; gap: 4px 16px; font-family: var(--mono); font-size: 14px; margin: 8px 0 0; }
+.payload dt { color: var(--quiet); }
+.payload dd { margin: 0; overflow-wrap: anywhere; }
+
+/* Security */
+.sec .head-say { margin-top: 16px; font-size: 21px; line-height: 1.55; max-width: 62ch; }
+.sec .head-say b { font-family: var(--mono); font-variant-numeric: tabular-nums; font-weight: 600; }
+.sec .head-say + p { margin-top: 12px; color: var(--quiet); }
+.sec section { margin-top: 56px; }
+.sec section > h2 { font-size: 22px; font-weight: 600; letter-spacing: -0.01em; }
+.sec section > h2 + p { margin-top: 8px; color: var(--quiet); max-width: 64ch; }
+.sec section > h2 ~ .body { margin-top: 20px; }
+.ledger { width: 100%; border-collapse: collapse; font-size: 17px; }
+.ledger th { text-align: left; font-weight: 500; color: var(--quiet); font-size: 15px; padding: 8px 12px; border-bottom: 2px solid var(--ink); }
+.ledger th.num, .lines th.num { text-align: right; font-family: var(--sans); }
+.ledger td { padding: 11px 12px; border-bottom: 1px solid var(--rule); }
+.ledger td.m { width: 44px; padding: 8px 0; text-align: center; border-right: 1px solid var(--rule-strong); }
+.ledger td.m svg { width: 22px; height: 22px; fill: none; stroke-width: 2.6; stroke-linecap: round; stroke-linejoin: round; stroke: var(--pass); vertical-align: middle; }
+.ledger tfoot td { border-bottom: 3px double var(--ink); font-weight: 600; }
+.ledger tr.cur td { background: var(--accent-soft); }
+@media (max-width: 719px) { .ledger { font-size: 15px; } .ledger td, .ledger th { padding-inline: 8px; } }
+
+.dial { display: grid; gap: 24px; }
+@media (min-width: 860px) { .dial { grid-template-columns: minmax(0, 5fr) minmax(0, 6fr); align-items: start; } }
+.dial label { display: block; font-weight: 600; }
+.dial .val { font-family: var(--mono); font-variant-numeric: tabular-nums; font-size: 44px; font-weight: 500; letter-spacing: -0.02em; margin-top: 4px; }
+.dial input[type=range] { width: 100%; height: 48px; accent-color: var(--accent); margin: 8px 0 0; }
+.dial .stops { display: flex; justify-content: space-between; font-family: var(--mono); font-size: 13px; color: var(--quiet); }
+.dial .say { margin-top: 16px; font-size: 18px; max-width: 48ch; }
+.dial .say + p { margin-top: 8px; font-size: 15px; color: var(--quiet); }
+
+.calib { border: 1px dashed var(--rule-strong); border-radius: var(--r); padding: 20px; max-width: 640px; }
+.calib svg { display: block; width: 100%; height: auto; }
+.calib svg text { fill: var(--quiet); font: 12px var(--sans); }
+.calib p { margin-top: 12px; }
+
+.console { display: grid; gap: 20px; }
+@media (min-width: 860px) { .console { grid-template-columns: 1fr 1fr; } }
+.console form { border: 1px solid var(--rule); border-radius: var(--r); background: var(--sheet); padding: 20px; display: flex; flex-direction: column; gap: 16px; align-items: flex-start; }
+.console label { display: block; width: 100%; }
+.console label span { display: block; font-size: 15px; color: var(--quiet); margin-bottom: 6px; }
+.console select, .console textarea { width: 100%; min-height: 48px; border: 1px solid var(--rule-strong); border-radius: 6px; background: var(--ground); padding: 10px 12px; font-size: 17px; }
+.console textarea { min-height: 120px; resize: vertical; line-height: 1.45; }
+.outcome { margin-top: 20px; border: 1px solid var(--rule); border-radius: var(--r); background: var(--sheet); padding: 20px; }
+.outcome .verdict { font-size: 21px; font-weight: 600; }
+.outcome .verdict.pass { color: var(--pass); }
+.outcome ul { list-style: none; margin: 12px 0 0; padding: 0; }
+.outcome li { display: grid; grid-template-columns: 5.5em 1fr; gap: 12px; padding: 8px 0; border-top: 1px solid var(--rule); }
+.outcome li .mono { color: var(--quiet); font-size: 15px; padding-top: 2px; }
+.outcome .from { margin-top: 12px; font-size: 15px; color: var(--quiet); }
+.foot { margin-top: 56px; font-size: 14px; color: var(--quiet); font-family: var(--mono); }
+
+@media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation: none !important; transition: none !important; } }
+</style>
+</head>
+<body>
+<div id="app"></div>
+<script id="draw-data" type="application/json">{"requests":[{"id":"pr_sub_01_6","sub_id":"sub_01","sub":"Coastal Concrete Inc.","job_id":"job_1","job":"Harbor Point Medical Office","amount":"105564.60","period_end":"2026-10-31","status":"on_hold","sentence":"On hold: 1 supplier(s) filed a notice to owner and haven't released.","reason":null,"next_action":"Ask the sub for their supplier's release."},{"id":"pr_sub_02_6","sub_id":"sub_02","sub":"Bayline Steel Co.","job_id":"job_1","job":"Harbor Point Medical Office","amount":"15644.70","period_end":"2026-10-31","status":"ready","sentence":"Ready to pay.","reason":null,"next_action":null},{"id":"pr_sub_03_6","sub_id":"sub_03","sub":"Summit Drywall LLC","job_id":"job_1","job":"Harbor Point Medical Office","amount":"145666.80","period_end":"2026-10-31","status":"on_hold","sentence":"On hold: 1 line(s) claim more progress than the site video shows.","reason":null,"next_action":"Ask the super to re-verify progress on site."},{"id":"pr_sub_04_6","sub_id":"sub_04","sub":"Brightline Electric Inc.","job_id":"job_1","job":"Harbor Point Medical Office","amount":"86835.60","period_end":"2026-10-31","status":"on_hold","sentence":"On hold: This request's bank account doesn't match the verified account on file.","reason":null,"next_action":"Call the sub at the number on file to verify the new bank details."},{"id":"pr_sub_05_6","sub_id":"sub_05","sub":"Delta Plumbing Corp.","job_id":"job_1","job":"Harbor Point Medical Office","amount":"23259.60","period_end":"2026-10-31","status":"ready","sentence":"Ready to pay.","reason":null,"next_action":null},{"id":"pr_sub_11_6","sub_id":"sub_11","sub":"Mission Masonry Inc.","job_id":"job_3","job":"Westgate Office Renovation","amount":"10917.90","period_end":"2026-10-31","status":"ready","sentence":"Ready to pay.","reason":null,"next_action":null},{"id":"pr_sub_12_6","sub_id":"sub_12","sub":"Keystone Drywall Co.","job_id":"job_3","job":"Westgate Office Renovation","amount":"20221.20","period_end":"2026-10-31","status":"ready","sentence":"Ready to pay.","reason":null,"next_action":null},{"id":"pr_sub_13_6","sub_id":"sub_13","sub":"Volt Electric LLC","job_id":"job_3","job":"Westgate Office Renovation","amount":"9171.90","period_end":"2026-10-31","status":"ready","sentence":"Ready to pay.","reason":null,"next_action":null},{"id":"pr_sub_14_6","sub_id":"sub_14","sub":"Clearwater Plumbing","job_id":"job_3","job":"Westgate Office Renovation","amount":"14998.50","period_end":"2026-10-31","status":"ready","sentence":"Ready to pay.","reason":null,"next_action":null},{"id":"pr_sub_15_6","sub_id":"sub_15","sub":"Airflow HVAC Inc.","job_id":"job_3","job":"Westgate Office Renovation","amount":"63723.60","period_end":"2026-10-31","status":"needs_ok","sentence":"Needs your OK because it's over the auto-release limit.","reason":"it's over the auto-release limit","next_action":null},{"id":"pr_sub_06_6","sub_id":"sub_06","sub":"Granite Ridge Concrete","job_id":"job_2","job":"Elm Street Retail Center","amount":"10834.20","period_end":"2026-10-31","status":"ready","sentence":"Ready to pay.","reason":null,"next_action":null},{"id":"pr_sub_07_6","sub_id":"sub_07","sub":"Ironworks West LLC","job_id":"job_2","job":"Elm Street Retail Center","amount":"18342.00","period_end":"2026-10-31","status":"ready","sentence":"Ready to pay.","reason":null,"next_action":null},{"id":"pr_sub_08_6","sub_id":"sub_08","sub":"Redwood Framing Co.","job_id":"job_2","job":"Elm Street Retail Center","amount":"10487.70","period_end":"2026-10-31","status":"ready","sentence":"Ready to pay.","reason":null,"next_action":null},{"id":"pr_sub_09_6","sub_id":"sub_09","sub":"Pacific Roofing Inc.","job_id":"job_2","job":"Elm Street Retail Center","amount":"14895.90","period_end":"2026-10-31","status":"ready","sentence":"Ready to pay.","reason":null,"next_action":null},{"id":"pr_sub_10_6","sub_id":"sub_10","sub":"Cascade Mechanical","job_id":"job_2","job":"Elm Street Retail Center","amount":"58711.50","period_end":"2026-10-31","status":"needs_ok","sentence":"Needs your OK because it's over the auto-release limit.","reason":"it's over the auto-release limit","next_action":null}],"details":{"pr_sub_01_6":{"id":"pr_sub_01_6","sub_id":"sub_01","sub":"Coastal Concrete Inc.","job_id":"job_1","job":"Harbor Point Medical Office","amount":"105564.60","period_end":"2026-10-31","status":"on_hold","sentence":"On hold: 1 supplier(s) filed a notice to owner and haven't released.","reason":null,"next_action":"Ask the sub for their supplier's release.","checklist":[{"rule":"01_cumulative_continuity","passed":true,"message":"Every line's starting balance matches our ledger."},{"rule":"02_scheduled_value_ceiling","passed":true,"message":"No line is billed past its scheduled value plus approved change orders."},{"rule":"03_retainage_math","passed":true,"message":"Retainage matches the contract's 10.00% rate."},{"rule":"04_conditional_release_present","passed":true,"message":"Signed conditional release on file through this period, covering the full payment."},{"rule":"05_prior_unconditional_received","passed":true,"message":"Last period's unconditional waiver is on file."},{"rule":"06_insurance_current","passed":true,"message":"Insurance is current through the expected payment date."},{"rule":"07_lower_tier_released","passed":false,"message":"1 supplier(s) filed a notice to owner and haven't released."},{"rule":"08_owner_draw_funded","passed":true,"message":"The owner's draw for this period has cleared."},{"rule":"09_vendor_verified","passed":true,"message":"Vendor identity is verified with CRS."},{"rule":"10_bank_details_unchanged","passed":true,"message":"Bank account matches the verified account on file."},{"rule":"11_sender_domain_authentic","passed":true,"message":"Every email on file matches the vendor's domain exactly."},{"rule":"12_not_a_duplicate","passed":true,"message":"No earlier request shares this period or these exact line totals."},{"rule":"13_progress_plausible","passed":true,"message":"Claimed progress is within tolerance of the site video."},{"rule":"14_within_spend_authority","passed":false,"message":"$105564.60 is over the $25000 auto-release limit; needs the owner's sign-off."},{"rule":"15_confidence_floor","passed":true,"message":"No automatic review ran on this request."}],"lines":[{"item_no":"03-10","description":"Footings and foundations","scheduled_value":"159000.00","previous_applications":"79500.00","this_period":"15900.00","stored_materials":"0.00","total_to_date":"95400.00","pct_complete":"60","balance_to_finish":"63600.00","retainage":"9540.00","video_pct":"61"},{"item_no":"03-20","description":"Slab on grade","scheduled_value":"320600.00","previous_applications":"128240.00","this_period":"25648.00","stored_materials":"0.00","total_to_date":"153888.00","pct_complete":"48","balance_to_finish":"166712.00","retainage":"15388.80","video_pct":"47"},{"item_no":"03-30","description":"Elevated decks","scheduled_value":"320100.00","previous_applications":"105633.00","this_period":"35211.00","stored_materials":"0.00","total_to_date":"140844.00","pct_complete":"44","balance_to_finish":"179256.00","retainage":"14084.40","video_pct":"47"},{"item_no":"03-40","description":"Site concrete","scheduled_value":"368500.00","previous_applications":"162140.00","this_period":"40535.00","stored_materials":"0.00","total_to_date":"202675.00","pct_complete":"55","balance_to_finish":"165825.00","retainage":"20267.50","video_pct":"58"}],"site_evidence":{"id":"site_job_1_6","job_id":"job_1","date":"2026-10-22","frames":["frames/job_1_202610_0.jpg","frames/job_1_202610_1.jpg","frames/job_1_202610_2.jpg"],"estimates":{"03-10":"61","03-20":"47","03-30":"47","03-40":"58","05-10":"75","05-20":"72","05-30":"59","09-10":"47","09-20":"45","09-30":"36","26-10":"91","26-20":"55","26-30":"45","22-10":"51","22-20":"72","22-30":"62","22-40":"62"}},"bank_account":"815311299:4152607373","vendor":{"legal_name":"Coastal Concrete Inc.","email_domain":"coastalconcrete.com"},"source_doc":"g703/sub_01_202610.xlsx","trace":{"request_id":"pr_sub_01_6","action":"hold","results":[{"rule":"01_cumulative_continuity","passed":true,"evidence":{"lines_checked":4},"message":"Every line's starting balance matches our ledger."},{"rule":"02_scheduled_value_ceiling","passed":true,"evidence":{"lines_checked":4},"message":"No line is billed past its scheduled value plus approved change orders."},{"rule":"03_retainage_math","passed":true,"evidence":{"rate":"0.10","lines_checked":4},"message":"Retainage matches the contract's 10.00% rate."},{"rule":"04_conditional_release_present","passed":true,"evidence":{"release_id":"rel_c_pr_sub_01_6","through_date":"2026-10-31","amount":"105564.60"},"message":"Signed conditional release on file through this period, covering the full payment."},{"rule":"05_prior_unconditional_received","passed":true,"evidence":{"prior_payment_id":"pay_pr_sub_01_5","waiver_id":"rel_u_pr_sub_01_5"},"message":"Last period's unconditional waiver is on file."},{"rule":"06_insurance_current","passed":true,"evidence":{"coi_id":"coi_sub_01","gl_expiry":"2027-03-28","wc_expiry":"2027-03-24"},"message":"Insurance is current through the expected payment date."},{"rule":"07_lower_tier_released","passed":false,"evidence":{"unresolved":[{"supplier":"Westside Ready-Mix","notice_date":"2026-10-09","released":false}]},"message":"1 supplier(s) filed a notice to owner and haven't released."},{"rule":"08_owner_draw_funded","passed":true,"evidence":{"draw_id":"draw_job_1_6","amount":"359593.16","date":"2026-11-05"},"message":"The owner's draw for this period has cleared."},{"rule":"09_vendor_verified","passed":true,"evidence":{"vendor_id":"sub_01","crs_status":"verified"},"message":"Vendor identity is verified with CRS."},{"rule":"10_bank_details_unchanged","passed":true,"evidence":{"bank_account":"815311299:4152607373","verification_status":"verified"},"message":"Bank account matches the verified account on file."},{"rule":"11_sender_domain_authentic","passed":true,"evidence":{"emails_checked":0,"vendor_domain":"coastalconcrete.com"},"message":"Every email on file matches the vendor's domain exactly."},{"rule":"12_not_a_duplicate","passed":true,"evidence":{"requests_checked":5},"message":"No earlier request shares this period or these exact line totals."},{"rule":"13_progress_plausible","passed":true,"evidence":{"tolerance":"10","lines_checked":4},"message":"Claimed progress is within tolerance of the site video."},{"rule":"14_within_spend_authority","passed":false,"evidence":{"amount":"105564.60","limit":"25000"},"message":"$105564.60 is over the $25000 auto-release limit; needs the owner's sign-off."},{"rule":"15_confidence_floor","passed":true,"evidence":{"checked":false},"message":"No automatic review ran on this request."}],"next_action":"Ask the sub for their supplier's release.","signature":null,"executed_at":null}},"pr_sub_03_6":{"id":"pr_sub_03_6","sub_id":"sub_03","sub":"Summit Drywall LLC","job_id":"job_1","job":"Harbor Point Medical Office","amount":"145666.80","period_end":"2026-10-31","status":"on_hold","sentence":"On hold: 1 line(s) claim more progress than the site video shows.","reason":null,"next_action":"Ask the super to re-verify progress on site.","checklist":[{"rule":"01_cumulative_continuity","passed":true,"message":"Every line's starting balance matches our ledger."},{"rule":"02_scheduled_value_ceiling","passed":true,"message":"No line is billed past its scheduled value plus approved change orders."},{"rule":"03_retainage_math","passed":true,"message":"Retainage matches the contract's 10.00% rate."},{"rule":"04_conditional_release_present","passed":true,"message":"Signed conditional release on file through this period, covering the full payment."},{"rule":"05_prior_unconditional_received","passed":true,"message":"Last period's unconditional waiver is on file."},{"rule":"06_insurance_current","passed":true,"message":"Insurance is current through the expected payment date."},{"rule":"07_lower_tier_released","passed":true,"message":"Every lower-tier supplier with a notice on file has released."},{"rule":"08_owner_draw_funded","passed":true,"message":"The owner's draw for this period has cleared."},{"rule":"09_vendor_verified","passed":true,"message":"Vendor identity is verified with CRS."},{"rule":"10_bank_details_unchanged","passed":true,"message":"Bank account matches the verified account on file."},{"rule":"11_sender_domain_authentic","passed":true,"message":"Every email on file matches the vendor's domain exactly."},{"rule":"12_not_a_duplicate","passed":true,"message":"No earlier request shares this period or these exact line totals."},{"rule":"13_progress_plausible","passed":false,"message":"1 line(s) claim more progress than the site video shows."},{"rule":"14_within_spend_authority","passed":false,"message":"$145666.80 is over the $25000 auto-release limit; needs the owner's sign-off."},{"rule":"15_confidence_floor","passed":true,"message":"No automatic review ran on this request."}],"lines":[{"item_no":"09-10","description":"Metal stud framing","scheduled_value":"74700.00","previous_applications":"29880.00","this_period":"5976.00","stored_materials":"0.00","total_to_date":"35856.00","pct_complete":"48","balance_to_finish":"38844.00","retainage":"3585.60","video_pct":"47"},{"item_no":"09-20","description":"Hang and tape","scheduled_value":"396800.00","previous_applications":"154752.00","this_period":"123008.00","stored_materials":"0.00","total_to_date":"277760.00","pct_complete":"70","balance_to_finish":"119040.00","retainage":"27776.00","video_pct":"45"},{"item_no":"09-30","description":"Ceilings","scheduled_value":"365200.00","previous_applications":"98604.00","this_period":"32868.00","stored_materials":"0.00","total_to_date":"131472.00","pct_complete":"36","balance_to_finish":"233728.00","retainage":"13147.20","video_pct":"36"}],"site_evidence":{"id":"site_job_1_6","job_id":"job_1","date":"2026-10-22","frames":["frames/job_1_202610_0.jpg","frames/job_1_202610_1.jpg","frames/job_1_202610_2.jpg"],"estimates":{"03-10":"61","03-20":"47","03-30":"47","03-40":"58","05-10":"75","05-20":"72","05-30":"59","09-10":"47","09-20":"45","09-30":"36","26-10":"91","26-20":"55","26-30":"45","22-10":"51","22-20":"72","22-30":"62","22-40":"62"}},"bank_account":"899669390:9061716976","vendor":{"legal_name":"Summit Drywall LLC","email_domain":"summitdrywall.com"},"source_doc":"g703/sub_03_202610.xlsx","trace":{"request_id":"pr_sub_03_6","action":"hold","results":[{"rule":"01_cumulative_continuity","passed":true,"evidence":{"lines_checked":3},"message":"Every line's starting balance matches our ledger."},{"rule":"02_scheduled_value_ceiling","passed":true,"evidence":{"lines_checked":3},"message":"No line is billed past its scheduled value plus approved change orders."},{"rule":"03_retainage_math","passed":true,"evidence":{"rate":"0.10","lines_checked":3},"message":"Retainage matches the contract's 10.00% rate."},{"rule":"04_conditional_release_present","passed":true,"evidence":{"release_id":"rel_c_pr_sub_03_6","through_date":"2026-10-31","amount":"145666.80"},"message":"Signed conditional release on file through this period, covering the full payment."},{"rule":"05_prior_unconditional_received","passed":true,"evidence":{"prior_payment_id":"pay_pr_sub_03_5","waiver_id":"rel_u_pr_sub_03_5"},"message":"Last period's unconditional waiver is on file."},{"rule":"06_insurance_current","passed":true,"evidence":{"coi_id":"coi_sub_03","gl_expiry":"2027-06-28","wc_expiry":"2027-05-05"},"message":"Insurance is current through the expected payment date."},{"rule":"07_lower_tier_released","passed":true,"evidence":{"notices_checked":0},"message":"Every lower-tier supplier with a notice on file has released."},{"rule":"08_owner_draw_funded","passed":true,"evidence":{"draw_id":"draw_job_1_6","amount":"359593.16","date":"2026-11-05"},"message":"The owner's draw for this period has cleared."},{"rule":"09_vendor_verified","passed":true,"evidence":{"vendor_id":"sub_03","crs_status":"verified"},"message":"Vendor identity is verified with CRS."},{"rule":"10_bank_details_unchanged","passed":true,"evidence":{"bank_account":"899669390:9061716976","verification_status":"verified"},"message":"Bank account matches the verified account on file."},{"rule":"11_sender_domain_authentic","passed":true,"evidence":{"emails_checked":0,"vendor_domain":"summitdrywall.com"},"message":"Every email on file matches the vendor's domain exactly."},{"rule":"12_not_a_duplicate","passed":true,"evidence":{"requests_checked":5},"message":"No earlier request shares this period or these exact line totals."},{"rule":"13_progress_plausible","passed":false,"evidence":{"overstatements":[{"item_no":"09-20","claimed_pct":"70.0","printed_pct":"70","video_estimate_pct":"45","gap":"25","tolerance":"10"}]},"message":"1 line(s) claim more progress than the site video shows."},{"rule":"14_within_spend_authority","passed":false,"evidence":{"amount":"145666.80","limit":"25000"},"message":"$145666.80 is over the $25000 auto-release limit; needs the owner's sign-off."},{"rule":"15_confidence_floor","passed":true,"evidence":{"checked":false},"message":"No automatic review ran on this request."}],"next_action":"Ask the super to re-verify progress on site.","signature":null,"executed_at":null}},"pr_sub_04_6":{"id":"pr_sub_04_6","sub_id":"sub_04","sub":"Brightline Electric Inc.","job_id":"job_1","job":"Harbor Point Medical Office","amount":"86835.60","period_end":"2026-10-31","status":"on_hold","sentence":"On hold: This request's bank account doesn't match the verified account on file.","reason":null,"next_action":"Call the sub at the number on file to verify the new bank details.","checklist":[{"rule":"01_cumulative_continuity","passed":true,"message":"Every line's starting balance matches our ledger."},{"rule":"02_scheduled_value_ceiling","passed":true,"message":"No line is billed past its scheduled value plus approved change orders."},{"rule":"03_retainage_math","passed":true,"message":"Retainage matches the contract's 10.00% rate."},{"rule":"04_conditional_release_present","passed":true,"message":"Signed conditional release on file through this period, covering the full payment."},{"rule":"05_prior_unconditional_received","passed":true,"message":"Last period's unconditional waiver is on file."},{"rule":"06_insurance_current","passed":true,"message":"Insurance is current through the expected payment date."},{"rule":"07_lower_tier_released","passed":true,"message":"Every lower-tier supplier with a notice on file has released."},{"rule":"08_owner_draw_funded","passed":true,"message":"The owner's draw for this period has cleared."},{"rule":"09_vendor_verified","passed":true,"message":"Vendor identity is verified with CRS."},{"rule":"10_bank_details_unchanged","passed":false,"message":"This request's bank account doesn't match the verified account on file."},{"rule":"11_sender_domain_authentic","passed":false,"message":"1 email(s) claim to be from brightlineelectric.com but the sending domain doesn't match exactly."},{"rule":"12_not_a_duplicate","passed":true,"message":"No earlier request shares this period or these exact line totals."},{"rule":"13_progress_plausible","passed":true,"message":"Claimed progress is within tolerance of the site video."},{"rule":"14_within_spend_authority","passed":false,"message":"$86835.60 is over the $25000 auto-release limit; needs the owner's sign-off."},{"rule":"15_confidence_floor","passed":true,"message":"No automatic review ran on this request."}],"lines":[{"item_no":"26-10","description":"Underground and rough-in","scheduled_value":"239300.00","previous_applications":"179475.00","this_period":"35895.00","stored_materials":"0.00","total_to_date":"215370.00","pct_complete":"90","balance_to_finish":"23930.00","retainage":"21537.00","video_pct":"91"},{"item_no":"26-20","description":"Switchgear","scheduled_value":"349200.00","previous_applications":"157140.00","this_period":"31428.00","stored_materials":"0.00","total_to_date":"188568.00","pct_complete":"54","balance_to_finish":"160632.00","retainage":"18856.80","video_pct":"55"},{"item_no":"26-30","description":"Branch wiring","scheduled_value":"265100.00","previous_applications":"87483.00","this_period":"29161.00","stored_materials":"0.00","total_to_date":"116644.00","pct_complete":"44","balance_to_finish":"148456.00","retainage":"11664.40","video_pct":"45"}],"site_evidence":{"id":"site_job_1_6","job_id":"job_1","date":"2026-10-22","frames":["frames/job_1_202610_0.jpg","frames/job_1_202610_1.jpg","frames/job_1_202610_2.jpg"],"estimates":{"03-10":"61","03-20":"47","03-30":"47","03-40":"58","05-10":"75","05-20":"72","05-30":"59","09-10":"47","09-20":"45","09-30":"36","26-10":"91","26-20":"55","26-30":"45","22-10":"51","22-20":"72","22-30":"62","22-40":"62"}},"bank_account":"447712782:5071050724","vendor":{"legal_name":"Brightline Electric Inc.","email_domain":"brightlineelectric.com"},"source_doc":"g703/sub_04_202610.xlsx","trace":{"request_id":"pr_sub_04_6","action":"hold","results":[{"rule":"01_cumulative_continuity","passed":true,"evidence":{"lines_checked":3},"message":"Every line's starting balance matches our ledger."},{"rule":"02_scheduled_value_ceiling","passed":true,"evidence":{"lines_checked":3},"message":"No line is billed past its scheduled value plus approved change orders."},{"rule":"03_retainage_math","passed":true,"evidence":{"rate":"0.10","lines_checked":3},"message":"Retainage matches the contract's 10.00% rate."},{"rule":"04_conditional_release_present","passed":true,"evidence":{"release_id":"rel_c_pr_sub_04_6","through_date":"2026-10-31","amount":"86835.60"},"message":"Signed conditional release on file through this period, covering the full payment."},{"rule":"05_prior_unconditional_received","passed":true,"evidence":{"prior_payment_id":"pay_pr_sub_04_5","waiver_id":"rel_u_pr_sub_04_5"},"message":"Last period's unconditional waiver is on file."},{"rule":"06_insurance_current","passed":true,"evidence":{"coi_id":"coi_sub_04","gl_expiry":"2027-10-28","wc_expiry":"2027-09-07"},"message":"Insurance is current through the expected payment date."},{"rule":"07_lower_tier_released","passed":true,"evidence":{"notices_checked":0},"message":"Every lower-tier supplier with a notice on file has released."},{"rule":"08_owner_draw_funded","passed":true,"evidence":{"draw_id":"draw_job_1_6","amount":"359593.16","date":"2026-11-05"},"message":"The owner's draw for this period has cleared."},{"rule":"09_vendor_verified","passed":true,"evidence":{"vendor_id":"sub_04","crs_status":"verified"},"message":"Vendor identity is verified with CRS."},{"rule":"10_bank_details_unchanged","passed":false,"evidence":{"on_file":"820189063:5799024869","requested":"447712782:5071050724","verification_status":"unverified"},"message":"This request's bank account doesn't match the verified account on file."},{"rule":"11_sender_domain_authentic","passed":false,"evidence":{"mismatches":[{"email_id":"em_sub_04_bank","claimed_domain":"brightIineelectric.com","vendor_domain":"brightlineelectric.com","differences":[{"position":6,"claimed":"I","vendor":"l","confusable":true}]}]},"message":"1 email(s) claim to be from brightlineelectric.com but the sending domain doesn't match exactly."},{"rule":"12_not_a_duplicate","passed":true,"evidence":{"requests_checked":5},"message":"No earlier request shares this period or these exact line totals."},{"rule":"13_progress_plausible","passed":true,"evidence":{"tolerance":"10","lines_checked":3},"message":"Claimed progress is within tolerance of the site video."},{"rule":"14_within_spend_authority","passed":false,"evidence":{"amount":"86835.60","limit":"25000"},"message":"$86835.60 is over the $25000 auto-release limit; needs the owner's sign-off."},{"rule":"15_confidence_floor","passed":true,"evidence":{"checked":false},"message":"No automatic review ran on this request."}],"next_action":"Call the sub at the number on file to verify the new bank details.","signature":null,"executed_at":null}},"pr_sub_15_6":{"id":"pr_sub_15_6","sub_id":"sub_15","sub":"Airflow HVAC Inc.","job_id":"job_3","job":"Westgate Office Renovation","amount":"63723.60","period_end":"2026-10-31","status":"needs_ok","sentence":"Needs your OK because it's over the auto-release limit.","reason":"it's over the auto-release limit","next_action":null,"checklist":[{"rule":"01_cumulative_continuity","passed":true,"message":"Every line's starting balance matches our ledger."},{"rule":"02_scheduled_value_ceiling","passed":true,"message":"No line is billed past its scheduled value plus approved change orders."},{"rule":"03_retainage_math","passed":true,"message":"Retainage matches the contract's 10.00% rate."},{"rule":"04_conditional_release_present","passed":true,"message":"Signed conditional release on file through this period, covering the full payment."},{"rule":"05_prior_unconditional_received","passed":true,"message":"Last period's unconditional waiver is on file."},{"rule":"06_insurance_current","passed":true,"message":"Insurance is current through the expected payment date."},{"rule":"07_lower_tier_released","passed":true,"message":"Every lower-tier supplier with a notice on file has released."},{"rule":"08_owner_draw_funded","passed":true,"message":"The owner's draw for this period has cleared."},{"rule":"09_vendor_verified","passed":true,"message":"Vendor identity is verified with CRS."},{"rule":"10_bank_details_unchanged","passed":true,"message":"Bank account matches the verified account on file."},{"rule":"11_sender_domain_authentic","passed":true,"message":"Every email on file matches the vendor's domain exactly."},{"rule":"12_not_a_duplicate","passed":true,"message":"No earlier request shares this period or these exact line totals."},{"rule":"13_progress_plausible","passed":true,"message":"Claimed progress is within tolerance of the site video."},{"rule":"14_within_spend_authority","passed":false,"message":"$63723.60 is over the $25000 auto-release limit; needs the owner's sign-off."},{"rule":"15_confidence_floor","passed":true,"message":"No automatic review ran on this request."}],"lines":[{"item_no":"23-10","description":"Ductwork","scheduled_value":"132400.00","previous_applications":"99300.00","this_period":"19860.00","stored_materials":"0.00","total_to_date":"119160.00","pct_complete":"90","balance_to_finish":"13240.00","retainage":"11916.00","video_pct":"90"},{"item_no":"23-20","description":"Rooftop units","scheduled_value":"239200.00","previous_applications":"119600.00","this_period":"23920.00","stored_materials":"0.00","total_to_date":"143520.00","pct_complete":"60","balance_to_finish":"95680.00","retainage":"14352.00","video_pct":"63"},{"item_no":"23-30","description":"Controls","scheduled_value":"48800.00","previous_applications":"11712.00","this_period":"3904.00","stored_materials":"0.00","total_to_date":"15616.00","pct_complete":"32","balance_to_finish":"33184.00","retainage":"1561.60","video_pct":"33"},{"item_no":"23-40","description":"Test and balance","scheduled_value":"289000.00","previous_applications":"115600.00","this_period":"23120.00","stored_materials":"0.00","total_to_date":"138720.00","pct_complete":"48","balance_to_finish":"150280.00","retainage":"13872.00","video_pct":"46"}],"site_evidence":{"id":"site_job_3_6","job_id":"job_3","date":"2026-10-22","frames":["frames/job_3_202610_0.jpg","frames/job_3_202610_1.jpg","frames/job_3_202610_2.jpg"],"estimates":{"04-10":"64","04-20":"33","04-30":"21","09-10":"82","09-20":"48","09-30":"85","09-40":"22","26-10":"44","26-20":"43","26-30":"57","22-10":"48","22-20":"46","22-30":"33","22-40":"43","23-10":"90","23-20":"63","23-30":"33","23-40":"46"}},"bank_account":"439651334:9631125099","vendor":{"legal_name":"Airflow HVAC Inc.","email_domain":"airflowhvac.com"},"source_doc":"g703/sub_15_202610.xlsx","trace":{"request_id":"pr_sub_15_6","action":"escalate","results":[{"rule":"01_cumulative_continuity","passed":true,"evidence":{"lines_checked":4},"message":"Every line's starting balance matches our ledger."},{"rule":"02_scheduled_value_ceiling","passed":true,"evidence":{"lines_checked":4},"message":"No line is billed past its scheduled value plus approved change orders."},{"rule":"03_retainage_math","passed":true,"evidence":{"rate":"0.10","lines_checked":4},"message":"Retainage matches the contract's 10.00% rate."},{"rule":"04_conditional_release_present","passed":true,"evidence":{"release_id":"rel_c_pr_sub_15_6","through_date":"2026-10-31","amount":"63723.60"},"message":"Signed conditional release on file through this period, covering the full payment."},{"rule":"05_prior_unconditional_received","passed":true,"evidence":{"prior_payment_id":"pay_pr_sub_15_5","waiver_id":"rel_u_pr_sub_15_5"},"message":"Last period's unconditional waiver is on file."},{"rule":"06_insurance_current","passed":true,"evidence":{"coi_id":"coi_sub_15","gl_expiry":"2027-08-28","wc_expiry":"2027-07-02"},"message":"Insurance is current through the expected payment date."},{"rule":"07_lower_tier_released","passed":true,"evidence":{"notices_checked":0},"message":"Every lower-tier supplier with a notice on file has released."},{"rule":"08_owner_draw_funded","passed":true,"evidence":{"draw_id":"draw_job_3_6","amount":"136888.06","date":"2026-11-05"},"message":"The owner's draw for this period has cleared."},{"rule":"09_vendor_verified","passed":true,"evidence":{"vendor_id":"sub_15","crs_status":"verified"},"message":"Vendor identity is verified with CRS."},{"rule":"10_bank_details_unchanged","passed":true,"evidence":{"bank_account":"439651334:9631125099","verification_status":"verified"},"message":"Bank account matches the verified account on file."},{"rule":"11_sender_domain_authentic","passed":true,"evidence":{"emails_checked":0,"vendor_domain":"airflowhvac.com"},"message":"Every email on file matches the vendor's domain exactly."},{"rule":"12_not_a_duplicate","passed":true,"evidence":{"requests_checked":5},"message":"No earlier request shares this period or these exact line totals."},{"rule":"13_progress_plausible","passed":true,"evidence":{"tolerance":"10","lines_checked":4},"message":"Claimed progress is within tolerance of the site video."},{"rule":"14_within_spend_authority","passed":false,"evidence":{"amount":"63723.60","limit":"25000"},"message":"$63723.60 is over the $25000 auto-release limit; needs the owner's sign-off."},{"rule":"15_confidence_floor","passed":true,"evidence":{"checked":false},"message":"No automatic review ran on this request."}],"next_action":null,"signature":null,"executed_at":null}}},"scorecard":{"kernel":"kernel.runner","cases":5000,"mutated":4012,"clean":988,"wrongful_if_every_button_approved":0,"rule_catch_rate":1.0,"wrongful_releases":0,"escalated_mutated":0,"catch_rate":1.0,"false_hold_rate":0.0,"dollars_protected":"214312145.91","dollars_delayed":"0","by_anomaly":{"bank_change_email":{"n":96,"caught":96,"wrongful":0,"right_rule":96},"bank_change_email+draw_not_cleared":{"n":8,"caught":8,"wrongful":0,"right_rule":8},"bank_change_email+supplier_notice_unreleased":{"n":5,"caught":5,"wrongful":0,"right_rule":5},"bank_change_homoglyph":{"n":125,"caught":125,"wrongful":0,"right_rule":125},"bank_change_homoglyph+draw_not_cleared":{"n":7,"caught":7,"wrongful":0,"right_rule":7},"bank_change_homoglyph+supplier_notice_unreleased":{"n":18,"caught":18,"wrongful":0,"right_rule":18},"draw_not_cleared":{"n":211,"caught":211,"wrongful":0,"right_rule":211},"duplicate_new_number":{"n":253,"caught":253,"wrongful":0,"right_rule":253},"duplicate_this_month":{"n":217,"caught":217,"wrongful":0,"right_rule":217},"expired_wc":{"n":242,"caught":242,"wrongful":0,"right_rule":242},"expired_wc+bank_change_email":{"n":7,"caught":7,"wrongful":0,"right_rule":7},"expired_wc+bank_change_homoglyph":{"n":10,"caught":10,"wrongful":0,"right_rule":10},"expired_wc+draw_not_cleared":{"n":22,"caught":22,"wrongful":0,"right_rule":22},"expired_wc+supplier_notice_unreleased":{"n":29,"caught":29,"wrongful":0,"right_rule":29},"inflated_payment_due":{"n":211,"caught":211,"wrongful":0,"right_rule":211},"inflated_scheduled_value":{"n":214,"caught":214,"wrongful":0,"right_rule":214},"missing_conditional_release":{"n":263,"caught":263,"wrongful":0,"right_rule":263},"missing_conditional_release+bank_change_email":{"n":15,"caught":15,"wrongful":0,"right_rule":15},"missing_conditional_release+bank_change_homoglyph":{"n":9,"caught":9,"wrongful":0,"right_rule":9},"missing_conditional_release+draw_not_cleared":{"n":22,"caught":22,"wrongful":0,"right_rule":22},"missing_conditional_release+expired_wc":{"n":23,"caught":23,"wrongful":0,"right_rule":23},"missing_conditional_release+supplier_notice_unreleased":{"n":17,"caught":17,"wrongful":0,"right_rule":17},"missing_prior_unconditional":{"n":227,"caught":227,"wrongful":0,"right_rule":227},"new_sub_ein_mismatch":{"n":226,"caught":226,"wrongful":0,"right_rule":226},"overbill_pct":{"n":207,"caught":207,"wrongful":0,"right_rule":207},"overbill_pct+bank_change_email":{"n":8,"caught":8,"wrongful":0,"right_rule":8},"overbill_pct+bank_change_homoglyph":{"n":10,"caught":10,"wrongful":0,"right_rule":10},"overbill_pct+draw_not_cleared":{"n":19,"caught":19,"wrongful":0,"right_rule":19},"overbill_pct+expired_wc":{"n":29,"caught":29,"wrongful":0,"right_rule":29},"overbill_pct+missing_conditional_release":{"n":20,"caught":20,"wrongful":0,"right_rule":20},"overbill_pct+past_sov_no_co":{"n":17,"caught":17,"wrongful":0,"right_rule":17},"overbill_pct+retainage_slip":{"n":29,"caught":29,"wrongful":0,"right_rule":29},"overbill_pct+supplier_notice_unreleased":{"n":22,"caught":22,"wrongful":0,"right_rule":22},"past_sov_no_co":{"n":206,"caught":206,"wrongful":0,"right_rule":206},"past_sov_no_co+bank_change_email":{"n":17,"caught":17,"wrongful":0,"right_rule":17},"past_sov_no_co+bank_change_homoglyph":{"n":9,"caught":9,"wrongful":0,"right_rule":9},"past_sov_no_co+draw_not_cleared":{"n":25,"caught":25,"wrongful":0,"right_rule":25},"past_sov_no_co+expired_wc":{"n":18,"caught":18,"wrongful":0,"right_rule":18},"past_sov_no_co+missing_conditional_release":{"n":14,"caught":14,"wrongful":0,"right_rule":14},"past_sov_no_co+retainage_slip":{"n":28,"caught":28,"wrongful":0,"right_rule":28},"past_sov_no_co+supplier_notice_unreleased":{"n":25,"caught":25,"wrongful":0,"right_rule":25},"release_amount_short":{"n":231,"caught":231,"wrongful":0,"right_rule":231},"retainage_slip":{"n":239,"caught":239,"wrongful":0,"right_rule":239},"retainage_slip+bank_change_email":{"n":15,"caught":15,"wrongful":0,"right_rule":15},"retainage_slip+bank_change_homoglyph":{"n":12,"caught":12,"wrongful":0,"right_rule":12},"retainage_slip+draw_not_cleared":{"n":19,"caught":19,"wrongful":0,"right_rule":19},"retainage_slip+expired_wc":{"n":13,"caught":13,"wrongful":0,"right_rule":13},"retainage_slip+missing_conditional_release":{"n":26,"caught":26,"wrongful":0,"right_rule":26},"retainage_slip+supplier_notice_unreleased":{"n":32,"caught":32,"wrongful":0,"right_rule":32},"supplier_notice_unreleased":{"n":225,"caught":225,"wrongful":0,"right_rule":225},"supplier_notice_unreleased+draw_not_cleared":{"n":20,"caught":20,"wrongful":0,"right_rule":20}},"misses":[],"button_presses_per_job_month":1.83,"auto_released_share":0.6333,"held_share_clean":0.0,"limit_sweep":[{"limit":10000,"button_presses_per_job_month":4.79,"auto_released_share":0.0417,"attacks_auto_paid":0,"dollars_auto_paid":"0"},{"limit":15000,"button_presses_per_job_month":3.54,"auto_released_share":0.2917,"attacks_auto_paid":0,"dollars_auto_paid":"0"},{"limit":25000,"button_presses_per_job_month":1.83,"auto_released_share":0.6333,"attacks_auto_paid":0,"dollars_auto_paid":"0"},{"limit":50000,"button_presses_per_job_month":1.46,"auto_released_share":0.7083,"attacks_auto_paid":0,"dollars_auto_paid":"0"},{"limit":100000,"button_presses_per_job_month":0.25,"auto_released_share":0.95,"attacks_auto_paid":0,"dollars_auto_paid":"0"}]},"facts":[{"seq":352,"ts":"2026-10-24T00:53:47","at":"2026-10-09T00:00:00","kind":"fact","request_id":null,"table":"lower_tier_notices","data":{"id":"nto_sub_01_oct","supplier":"Westside Ready-Mix","sub_id":"sub_01","job_id":"job_1","notice_date":"2026-10-09","released":false}},{"seq":386,"ts":"2026-10-24T00:53:47","at":"2026-10-22T09:14:00","kind":"fact","request_id":null,"table":"emails","data":{"id":"em_sub_04_bank","from_addr":"accounting@brightIineelectric.com","from_domain":"brightIineelectric.com","sent_at":"2026-10-22T09:14:00","subject":"Updated remittance details","body":"Hi, we've moved our accounts to a new bank. Effective immediately please send all payments to account 447712782:5071050724. We need this updated before Friday's payment run. Thanks!","claims":{"bank_change":true,"new_account":"447712782:5071050724","urgency":true}}}]}</script>
+<script>
+"use strict";
+const D = JSON.parse(document.getElementById("draw-data").textContent);
+const LIMIT = Number(D.details.pr_sub_15_6.trace.results.find(r => r.rule.startsWith("14")).evidence.limit);
+
+/* ---------- words and numbers ---------- */
+const esc = s => String(s).replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+const money = s => Number(s).toLocaleString("en-US", { style: "currency", currency: "USD" });
+const cents = s => Number(s).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+const whole = n => Number(n).toLocaleString("en-US");
+const pct = (x, d = 0) => `${(x * 100).toFixed(d)}%`;
+const day = s => new Date(s.slice(0, 10) + "T12:00:00").toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
+const dayShort = s => new Date(s.slice(0, 10) + "T12:00:00").toLocaleDateString("en-US", { month: "short", day: "numeric" });
+const ending = acct => `ending ${acct.slice(-4)}`;
+const short = name => name.replace(/,?\s+(Inc\.|LLC)$/, "");
+
+const RULE_NAMES = {
+  "01": "Billing continuity", "02": "Contract ceiling", "03": "Retainage", "04": "This month's lien release",
+  "05": "Last month's final waiver", "06": "Insurance", "07": "Supplier notices", "08": "Owner's draw",
+  "09": "Vendor identity", "10": "Bank details", "11": "Email sender", "12": "Duplicate check",
+  "13": "Progress against site video", "14": "Spend limit", "15": "Confidence",
+};
+const ESCALATE = new Set(["14", "15"]);
+const ATTACKS = {
+  overbill_pct: "Bills more progress than the site video shows",
+  retainage_slip: "Withholds less retainage than the contract",
+  missing_conditional_release: "No lien release for this month",
+  missing_prior_unconditional: "Last month's final waiver never came in",
+  expired_wc: "Workers' comp has expired",
+  past_sov_no_co: "Bills past the contract with no approved change order",
+  duplicate_new_number: "Resubmits last month's paid request",
+  duplicate_this_month: "Submits this month's request twice",
+  bank_change_email: "Email asks to pay a new bank account",
+  bank_change_homoglyph: "New bank account, from a lookalike domain",
+  supplier_notice_unreleased: "Supplier filed a notice and hasn't released",
+  draw_not_cleared: "Owner's draw hasn't cleared yet",
+  new_sub_ein_mismatch: "New sub whose tax ID doesn't match",
+  inflated_scheduled_value: "Inflates the contract value to hide over-billing",
+  inflated_payment_due: "Pads the amount due on the summary page",
+  release_amount_short: "Lien release covers less than the payment",
+};
+// Rule-level results we have real traces for: this month's holds are these same attacks.
+const EXAMPLE = { bank_change_homoglyph: "pr_sub_04_6", overbill_pct: "pr_sub_03_6", supplier_notice_unreleased: "pr_sub_01_6" };
+
+/** Rule messages come from code: "1 line(s)" -> "1 line", "$86835.60" -> "$86,835.60" (as web/lib/labels.ts). */
+function humanize(msg) {
+  const verbs = { claim: "claims", have: "has", "haven't": "hasn't", "don't": "doesn't", are: "is" };
+  if (/\b1 \w+\(s\)/.test(msg)) msg = msg.replace(/\b(claim|have|haven't|don't|are)\b/, v => verbs[v]);
+  return msg.replace(/\b1 (\w+)\(s\)/g, "1 $1").replace(/\b(\d+) (\w+?)\(s\)/g, "$1 $2s")
+    .replace(/\$(\d{4,})(\.\d+)?/g, (_, w, c = "") => `$${Number(w).toLocaleString("en-US")}${c}`);
+}
+
+const ICON = {
+  ready: '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 8.5l3 3 7-7"/></svg>',
+  hold: '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" aria-hidden="true"><path d="M5.5 3.5v9M10.5 3.5v9"/></svg>',
+  ok: '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="8" cy="8" r="5.5"/><circle cx="8" cy="8" r="1.6" fill="currentColor"/></svg>',
+};
+const MARK = {
+  pass: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 13.5l5 5.5L20.5 5"/></svg>',
+  fail: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg>',
+  ok: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3.5c5 0 8.5 3.6 8.5 8.4s-3.8 8.6-8.6 8.6S3.4 16.6 3.5 12 7 3.6 12.6 3.8"/></svg>',
+};
+const STATUS = { ready: ["ready", "Ready"], needs_ok: ["ok", "Needs your OK"], on_hold: ["hold", "On hold"] };
+const chip = status => { const [k, w] = STATUS[status]; return `<span class="chip ${k}">${ICON[k === "ok" ? "ok" : k]}${w}</span>`; };
+
+const ev = (d, rule) => d.trace.results.find(r => r.rule.startsWith(rule));
+const failed = (d, rule) => !ev(d, rule).passed;
+
+/** The plain sentence for a row, built from the rule evidence (no chip word). */
+function why(r) {
+  const d = D.details[r.id];
+  if (r.status === "ready") return "Every check passed.";
+  if (r.status === "needs_ok") return `Over the ${money(LIMIT).replace(".00", "")} limit, so the owner presses the key.`;
+  if (!d) return r.sentence;
+  if (failed(d, "07")) { const u = ev(d, "07").evidence.unresolved[0]; return `${u.supplier} filed a notice to owner on ${dayShort(u.notice_date)} and hasn't released.`; }
+  if (failed(d, "13")) { const o = ev(d, "13").evidence.overstatements[0], l = d.lines.find(x => x.item_no === o.item_no); return `Billed ${l.description.toLowerCase()} at ${Number(o.claimed_pct)}%; the site video shows ${o.video_estimate_pct}%.`; }
+  if (failed(d, "11")) return "An email from a lookalike of their domain asks to pay a new bank account.";
+  if (failed(d, "10")) return "The bank account doesn't match the one on file.";
+  return r.sentence;
+}
+
+/* ---------- state ---------- */
+const SCREENS = {
+  drywall: { tab: "requests", sel: "pr_sub_03_6", label: "1. Drywall over-billing hold" },
+  bank: { tab: "requests", sel: "pr_sub_04_6", label: "2. Bank-change hold" },
+  approve: { tab: "approve", label: "3. Approve" },
+  security: { tab: "security", label: "4. Security" },
+};
+const S = { tab: "requests", sel: "pr_sub_03_6", sheet: true, attack: "bank_change_homoglyph", target: "sub_04", ran: "pick", limitIdx: 2, waiting: null };
+
+function go(screen) {
+  const s = SCREENS[screen] || SCREENS.drywall;
+  Object.assign(S, { tab: s.tab, sheet: s.tab === "requests" }, s.sel ? { sel: s.sel } : {});
+  history.replaceState(null, "", "#" + screen);
+  render();
+  scrollTo(0, 0);
+}
+function currentScreen() {
+  if (S.tab !== "requests") return S.tab;
+  return S.sel === "pr_sub_04_6" ? "bank" : S.sel === "pr_sub_03_6" ? "drywall" : null;
+}
+
+/* ---------- screens ---------- */
+function topbar() {
+  const tab = (id, w) => `<a href="#${id === "requests" ? "drywall" : id}" data-tab="${id}" ${S.tab === id ? 'aria-current="page"' : ""}>${w}</a>`;
+  return `
+  <nav class="mock" aria-label="Mockup screens"><div class="wrap">
+    <span class="quiet">Mockup only, not part of Draw:</span>
+    ${Object.entries(SCREENS).map(([k, s]) => `<button data-screen="${k}" aria-pressed="${currentScreen() === k}">${s.label}</button>`).join("")}
+  </div></nav>
+  <header class="top"><div class="wrap">
+    <div class="brand"><b>Draw</b><span class="quiet">October 2026</span><span class="quiet" style="font-size:15px">Sample company, synthetic data</span></div>
+    <nav class="tabs" aria-label="Draw">${tab("requests", "Pay requests")}${tab("approve", "Approve")}${tab("security", "Security")}</nav>
+  </div></header>`;
+}
+
+function requestsScreen() {
+  const rows = D.requests;
+  const by = s => rows.filter(r => r.status === s);
+  const sum = list => list.reduce((a, r) => a + Number(r.amount), 0);
+  const order = { on_hold: 0, needs_ok: 1, ready: 2 };
+  const jobs = [...new Map(rows.map(r => [r.job_id, r.job])).entries()];
+  const ready = by("ready"), ok = by("needs_ok"), hold = by("on_hold");
+
+  const list = jobs.map(([id, name]) => {
+    const rs = rows.filter(r => r.job_id === id).sort((a, b) => order[a.status] - order[b.status] || b.amount - a.amount);
+    return `<section class="job" aria-labelledby="job-${id}">
+      <div class="job-head"><h2 id="job-${id}">${esc(name)}</h2><span class="quiet" style="font-size:16px">${rs.length} requests</span></div>
+      <ul class="rows">${rs.map(r => {
+        const open = D.details[r.id];
+        const inner = `<span class="who">${esc(r.sub)}</span><span class="num">${money(r.amount)}</span><span class="why">${chip(r.status)}<span>${esc(why(r))}</span></span>`;
+        return `<li>${open ? `<button class="row" data-open="${r.id}" ${S.sel === r.id ? 'aria-current="true"' : ""}>${inner}</button>` : `<div class="row">${inner}</div>`}</li>`;
+      }).join("")}</ul>
+      <div class="job-total"><span>Total this period</span><span class="num">${money(sum(rs))}</span></div>
+    </section>`;
+  }).join("");
+
+  return `<main class="wrap">
+    <h1 class="lede">${ready.length} of ${rows.length} pay requests are ready to pay. ${ok.length} need your OK and ${hold.length} are on hold.</h1>
+    <p class="lede-sub">Ready <span class="mono">${money(sum(ready))}</span>, waiting for your OK <span class="mono">${money(sum(ok))}</span>, on hold <span class="mono">${money(sum(hold))}</span>. Every request was checked against the same ${Object.keys(RULE_NAMES).length} rules.</p>
+    <div class="pr"><div>${list}</div>${detail(D.details[S.sel])}</div>
+  </main>`;
+}
+
+function detail(d) {
+  const r = D.requests.find(x => x.id === d.id);
+  const name = short(d.sub);
+  const overLimit = failed(d, "14");
+  let say, next, nextNote = "", evidence = "";
+
+  if (d.status === "on_hold" && failed(d, "13")) {
+    const o = ev(d, "13").evidence.overstatements[0], l = d.lines.find(x => x.item_no === o.item_no);
+    const claimed = Number(o.claimed_pct), video = Number(o.video_estimate_pct), tol = Number(o.tolerance);
+    say = `On hold: ${name} billed ${l.description.toLowerCase()} at ${claimed}%, but the site video from ${dayShort(d.site_evidence.date)} shows ${video}%.`;
+    next = "Ask the super to re-verify progress";
+    evidence = `<div class="evidence">
+      <div><h4>Line ${esc(l.item_no)}, ${esc(l.description.toLowerCase())}, against the site video</h4>
+        <div class="scale" role="img" aria-label="Billed ${claimed} percent. Site video ${video} percent. Allowed within ${tol} points of the video.">
+          <div class="band" style="left:${video - tol}%;width:${2 * tol}%"></div>
+          <div class="track"></div>
+          <div class="gap" style="left:${video}%;width:${claimed - video}%"></div>
+          <div class="mark video" style="left:${video}%"><span>Video ${video}%</span></div>
+          <div class="mark claim" style="left:${claimed}%"><span>Billed ${claimed}%</span></div>
+          ${[0, 25, 50, 75, 100].map(t => `<span class="tick mono" style="left:${t}%">${t}</span>`).join("")}
+        </div>
+        <p class="ev-note">${Number(o.gap)} points apart. Up to ${tol} is allowed (the shaded band).</p>
+        <div class="frames" aria-hidden="true">${d.site_evidence.frames.map((_, i) => `<div>Frame ${i + 1}</div>`).join("")}</div>
+        <p>Site video, ${day(d.site_evidence.date)}, ${d.site_evidence.frames.length} frames. The images aren't in the mockup data.</p>
+      </div>
+      <div><h4>Their G703, line ${esc(l.item_no)}</h4>
+        <div class="doc"><div class="doc-name">${esc(d.source_doc)}</div>
+          <table class="g703"><tbody>
+            <tr><td class="col">A</td><td>Item</td><td class="num">${esc(l.item_no)}</td></tr>
+            <tr><td class="col">B</td><td>Description</td><td class="num" style="font-family:var(--sans)">${esc(l.description)}</td></tr>
+            <tr><td class="col">C</td><td>Scheduled value</td><td class="num">${cents(l.scheduled_value)}</td></tr>
+            <tr><td class="col">D</td><td>From previous applications</td><td class="num">${cents(l.previous_applications)}</td></tr>
+            <tr><td class="col">E</td><td>This period</td><td class="num">${cents(l.this_period)}</td></tr>
+            <tr><td class="col">F</td><td>Materials stored</td><td class="num">${cents(l.stored_materials)}</td></tr>
+            <tr><td class="col">G</td><td>Completed and stored to date</td><td class="num">${cents(l.total_to_date)}</td></tr>
+            <tr class="flag"><td class="col">G÷C</td><td>Percent complete <span class="sr">(this is the claim the video disputes)</span></td><td class="num">${esc(o.printed_pct)}%</td></tr>
+            <tr><td class="col">H</td><td>Balance to finish</td><td class="num">${cents(l.balance_to_finish)}</td></tr>
+            <tr><td class="col">I</td><td>Retainage</td><td class="num">${cents(l.retainage)}</td></tr>
+          </tbody></table></div>
+      </div></div>`;
+  } else if (d.status === "on_hold" && failed(d, "10")) {
+    const b = ev(d, "10").evidence, m = failed(d, "11") ? ev(d, "11").evidence.mismatches[0] : null;
+    const email = D.facts.find(f => f.table === "emails" && f.data.id === (m && m.email_id))?.data;
+    const pos = m ? m.differences[0].position : -1, diff = m && m.differences[0];
+    const letters = (s, bad) => `<div class="letters">${[...s].map((c, i) => `<span${bad && i === pos ? ' class="bad"' : ""}>${esc(c)}</span>`).join("")}</div>`;
+    const glyph = c => `<span class="mono" style="font-size:1.15em">${esc(c)}</span>`; // in sans, I and l look the same
+    const saidAs = c => /[A-Z]/.test(c) ? `a capital ${glyph(c)}` : /[a-z]/.test(c) ? `a lowercase ${glyph(c)}` : glyph(c);
+    say = `On hold: an email that looks like it's from ${name} asks us to pay a new bank account. It came from a lookalike domain.`;
+    next = "Call to verify the new bank details";
+    nextNote = `Use the number on file for ${name}, not one from the email.`;
+    const body = email ? esc(email.body).replace(esc(email.claims.new_account), `<span class="mono">${ending(email.claims.new_account)}</span>`)
+      .replace(esc("before Friday's payment run"), m => `<span class="rush">${m}</span>`) : "";
+    const from = email ? esc(email.from_addr).replace(esc(m.claimed_domain), [...m.claimed_domain].map((c, i) => i === pos ? `<span class="bad">${esc(c)}</span>` : esc(c)).join("")) : "";
+    evidence = `<div class="evidence">
+      <div><h4>Where the email came from</h4>
+        ${m ? `<div class="domain"><p class="lbl">The email</p>${letters(m.claimed_domain, true)}<p class="lbl">${esc(name)}'s real domain</p>${letters(m.vendor_domain, false)}</div>
+        <p class="ev-note">Letter ${pos + 1} is ${saidAs(diff.claimed)}, not ${saidAs(diff.vendor)}. On most screens they look the same.</p>` : ""}
+        <div class="acct"><p class="quiet" style="font-size:15px">Bank account</p>
+          <p class="mono">${ending(b.on_file)} → ${ending(b.requested)}</p>
+          <p class="ev-note">The new account hasn't been verified.</p></div>
+      </div>
+      ${email ? `<div><h4>The email</h4>
+        <div class="doc email"><dl>
+          <dt>From</dt><dd class="mono" style="font-size:14px">${from}</dd>
+          <dt>Subject</dt><dd>${esc(email.subject)}</dd>
+          <dt>Sent</dt><dd>${day(email.sent_at)}, ${new Date(email.sent_at).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" })}</dd>
+        </dl><div class="body">${body}</div></div>
+        <p class="ev-note quiet" style="font-size:15px">Underlined: a rush, which is how these usually read.</p>
+      </div>` : ""}</div>`;
+  } else if (d.status === "on_hold" && failed(d, "07")) {
+    const u = ev(d, "07").evidence.unresolved[0];
+    const fact = D.facts.find(f => f.table === "lower_tier_notices" && f.data.supplier === u.supplier && f.data.notice_date === u.notice_date)?.data;
+    say = `On hold: ${name}'s supplier, ${u.supplier}, filed a notice to owner and hasn't released.`;
+    next = "Ask for the supplier's release";
+    evidence = `<div class="evidence">
+      <div><h4>What's missing</h4>
+        <ul class="checks"><li><span class="m pass">${MARK.pass}<span class="sr">Done:</span></span><span class="t">Notice to owner filed ${day(u.notice_date)}</span></li>
+        <li><span class="m fail">${MARK.fail}<span class="sr">Missing:</span></span><span class="t">${esc(u.supplier)}'s release: not received</span></li></ul>
+        <p class="ev-note">Until it comes in, ${esc(u.supplier)} can claim against the property for what ${name} owes them.</p></div>
+      <div><h4>Notice to owner</h4>
+        <div class="doc notice"><h5>${esc(u.supplier)}</h5><dl>
+          <dt>Supplying</dt><dd>${esc(d.sub)}</dd>
+          <dt>Job</dt><dd>${esc(d.job)}</dd>
+          <dt>Filed</dt><dd>${day(u.notice_date)}</dd>
+          <dt>Released</dt><dd>No</dd>
+        </dl>${fact ? `<div class="doc-name" style="border-top:1px solid var(--rule-strong);border-bottom:0">${esc(fact.id)}</div>` : ""}</div></div></div>`;
+  } else {
+    say = `Needs your OK: every check passed, but ${money(d.amount)} is over the ${money(LIMIT).replace(".00", "")} auto-release limit.`;
+    next = "Send to the approval key";
+  }
+  if (d.status === "on_hold" && overLimit) nextNote = (nextNote ? nextNote + " " : "") + `Once that's settled, this still needs the owner's OK: it's over the ${money(LIMIT).replace(".00", "")} limit.`;
+
+  const results = d.trace.results;
+  const kind = x => x.passed ? "pass" : ESCALATE.has(x.rule.slice(0, 2)) ? "ok" : "fail";
+  const word = { pass: "Passed", fail: "Didn't pass", ok: "Needs the owner" };
+  const item = x => { const k = kind(x); return `<li><span class="m ${k}">${MARK[k]}<span class="sr">${word[k]}:</span></span><span class="t"><b>${RULE_NAMES[x.rule.slice(0, 2)]}.</b> ${esc(humanize(x.message))}</span></li>`; };
+  const attention = results.filter(x => !x.passed), passed = results.filter(x => x.passed);
+  const flagged = new Set((ev(d, "13").evidence.overstatements || []).map(o => o.item_no));
+
+  return `<article class="detail ${S.sheet ? "open" : ""}" aria-labelledby="d-title">
+    <button class="link back" data-close>Back to pay requests</button>
+    <div class="d-head"><div><h2 id="d-title" tabindex="-1">${esc(d.sub)}</h2><p class="quiet">${esc(d.job)}, period ending ${day(d.period_end)}</p></div>
+      <p class="d-amt mono">${money(d.amount)} <span class="quiet" style="font: 15px var(--sans)">this period</span></p></div>
+    <p class="d-say">${esc(say)}</p>
+    <div class="d-next"><button class="btn" ${d.status === "needs_ok" ? 'data-tab="approve"' : ""}>${next}</button>${nextNote ? `<p>${esc(nextNote)}</p>` : ""}</div>
+    ${evidence ? `<div class="section">${evidence}</div>` : ""}
+    <div class="section"><h3>${results.length} checks, ${passed.length} passed</h3>
+      ${attention.length ? `<p class="checks-group">Needs attention</p><ul class="checks">${attention.map(item).join("")}</ul>` : ""}
+      <p class="checks-group">Passed</p><ul class="checks">${passed.map(item).join("")}</ul></div>
+    <div class="section"><h3>Lines on this request</h3><div class="scroll-x"><table class="lines">
+      <thead><tr><th>Item</th><th>Description</th><th class="num">Billed</th><th class="num">Video</th><th class="num">To date</th></tr></thead>
+      <tbody>${d.lines.map(l => `<tr class="${flagged.has(l.item_no) ? "flag" : ""}"><td class="mono">${esc(l.item_no)}</td><td>${esc(l.description)}</td><td class="num claimed">${esc(l.pct_complete)}%</td><td class="num">${l.video_pct == null ? "none" : esc(l.video_pct) + "%"}</td><td class="num">${cents(l.total_to_date)}</td></tr>`).join("")}</tbody>
+    </table></div></div>
+    <div class="section"><details><summary>Show details</summary><pre class="trace">${esc(JSON.stringify(d.trace, null, 2))}</pre></details></div>
+  </article>`;
+}
+
+function approveScreen() {
+  const asks = D.requests.filter(r => r.status === "needs_ok").sort((a, b) => b.amount - a.amount);
+  const [lead, ...rest] = asks;
+  const d = D.details[lead.id];
+  const others = d.trace.results.filter(x => x.passed).length;
+  const w = S.waiting;
+  const status = w == null ? "" : w > 0
+    ? `Press green on the key to pay, red to refuse. It waits <span class="mono">${w}</span> more seconds.`
+    : "The key wasn't pressed in time, so nothing was paid. Send it again when you're at your desk.";
+  return `<main class="wrap approve">
+    <h1>Payments waiting for your OK</h1>
+    <p>Every check passed on these. They need you because of their size, a new sub, or new bank details. Nothing goes out until you press green on the approval key on your desk.</p>
+    <article class="ask lead" aria-labelledby="a-${lead.id}">
+      <div>
+        <p class="big">${money(lead.amount)}</p>
+        <p class="payee" id="a-${lead.id}">${esc(lead.sub)}</p>
+        <p class="quiet">${esc(lead.job)}, period ending ${day(lead.period_end)}</p>
+        <p class="why">You're asked because it's over the ${money(LIMIT).replace(".00", "")} auto-release limit. The other ${others} checks passed.</p>
+        <div class="acts">
+          <button class="btn" data-send ${w > 0 ? "disabled" : ""}>${w > 0 ? "Waiting for the key" : "Send to the approval key"}</button>
+          <button class="link" data-open-tab="${lead.id}">See every check</button>
+        </div>
+        <p class="status" aria-live="polite">${status}</p>
+        <details class="payload"><summary>What your tap signs</summary>
+          <dl><dt>request_id</dt><dd>${esc(lead.id)}</dd><dt>payee</dt><dd>${esc(lead.sub)}</dd><dt>amount</dt><dd>${esc(lead.amount)}</dd><dt>job</dt><dd>${esc(lead.job)}</dd>
+          <dt>nonce</dt><dd class="quiet">made when you press Send</dd><dt>expires_at</dt><dd class="quiet">90 seconds after sending</dd></dl>
+          <p class="quiet" style="font-size:15px;margin-top:8px">The signature covers this exact payee and amount and pays once.</p></details>
+      </div>
+      <figure class="key ${w > 0 ? "live" : ""}" style="margin:0" aria-label="What the approval key on your desk shows">
+        <figcaption class="cap">What the key on your desk shows</figcaption>
+        <div class="screen"><p class="k-amt">${money(lead.amount)}</p><p>${esc(lead.sub)}</p><p class="quiet">${esc(lead.job)}</p></div>
+        <div class="pads" aria-hidden="true"><span class="pad g"><i></i>Pay</span><span class="pad r"><i></i>Refuse</span></div>
+      </figure>
+    </article>
+    ${rest.map(r => `<article class="ask small"><div><p class="big">${money(r.amount)}</p><p class="payee">${esc(r.sub)}</p><p class="quiet">${esc(r.job)}</p></div>
+      <button class="btn plain" disabled title="One at a time: the key shows one payment">Send after the one above</button></article>`).join("")}
+  </main>`;
+}
+
+function securityScreen() {
+  const c = D.scorecard;
+  const singles = Object.entries(c.by_anomaly).filter(([k]) => !k.includes("+"));
+  const combos = Object.entries(c.by_anomaly).filter(([k]) => k.includes("+"));
+  const add = (list, key) => list.reduce((a, [, v]) => a + v[key], 0);
+  const stopped = c.mutated - c.wrongful_if_every_button_approved;
+  const L = c.limit_sweep, cur = L[S.limitIdx];
+  const contractIdx = L.findIndex(x => x.limit === LIMIT);
+
+  const ledgerRow = (label, v) => `<tr><td class="m">${v.wrongful === 0 && v.right_rule === v.n ? MARK.pass : ""}<span class="sr">${v.wrongful === 0 ? "Caught" : "Got through"}</span></td><td>${esc(label)}</td><td class="num">${whole(v.n)}</td><td class="num">${whole(v.right_rule)}</td><td class="num">${whole(v.wrongful)}</td></tr>`;
+
+  const a = S.attack, stat = c.by_anomaly[a], ex = EXAMPLE[a] && D.details[EXAMPLE[a]];
+  const targetSub = D.requests.find(r => r.sub_id === S.target);
+  let out = "";
+  if (S.ran === "pick") {
+    const fired = ex ? ex.trace.results.filter(x => !x.passed) : [];
+    out = `<div class="outcome" aria-live="polite">
+      ${ex ? `<p class="verdict pass">Stopped by the rules.</p>
+        <ul>${fired.map(x => `<li><span class="mono">rule ${x.rule.slice(0, 2)}</span><span><b>${RULE_NAMES[x.rule.slice(0, 2)]}.</b> ${esc(humanize(x.message))}${ESCALATE.has(x.rule.slice(0, 2)) ? " This one alone would only ask the owner." : ""}</span></li>`).join("")}</ul>
+        <p class="from">Mockup: this is the real trace of the same attack on ${esc(ex.sub)}'s request this month${targetSub && targetSub.sub_id !== ex.sub_id ? `, not a run against ${esc(targetSub.sub)}` : ""}.</p>`
+      : `<p class="verdict">This mockup has rule-level results for three attacks only.</p>`}
+      <p class="from">In the fuzz run this attack was tried ${whole(stat.n)} times. The right rule caught it ${whole(stat.right_rule)} times; it was paid ${whole(stat.wrongful)} times.</p>
+    </div>`;
+  } else if (S.ran === "text") {
+    out = `<div class="outcome" aria-live="polite"><p class="verdict">Not available in the mockup.</p><p class="from">In Draw, Claude maps what you wrote to one of the attacks on the list, then runs it through the same pipeline.</p></div>`;
+  }
+
+  return `<main class="wrap sec">
+    <h1>How often can Draw be robbed?</h1>
+    <p class="head-say">We sent <b>${whole(c.mutated)}</b> forged or broken pay requests through the real pipeline. The rules stopped <b>${pct(c.rule_catch_rate)}</b> of them on their own (${whole(stopped)}). <b>${whole(c.wrongful_if_every_button_approved)}</b> would have been paid even if the owner tapped approve without reading, and <b>${whole(c.wrongful_releases)}</b> went out with no tap at all. Of ${whole(c.clean)} honest requests, <b>${pct(c.false_hold_rate)}</b> were held by mistake.</p>
+    <p>That stopped <span class="mono">${money(c.dollars_protected)}</span> in bad payments and held up <span class="mono">${money(c.dollars_delayed)}</span> of good ones. ${c.misses.length ? "" : "No attack got through in this run."}</p>
+
+    <section aria-labelledby="s-ledger"><h2 id="s-ledger">Every kind of attack we tried</h2>
+      <div class="body scroll-x"><table class="ledger">
+        <thead><tr><th><span class="sr">Caught</span></th><th>Attack</th><th class="num">Tried</th><th class="num">Caught by the right rule</th><th class="num">Paid with no tap</th></tr></thead>
+        <tbody>${singles.sort((x, y) => ATTACKS[x[0]].localeCompare(ATTACKS[y[0]])).map(([k, v]) => ledgerRow(ATTACKS[k] || k, v)).join("")}
+          ${ledgerRow("Two of these at once", { n: add(combos, "n"), right_rule: add(combos, "right_rule"), wrongful: add(combos, "wrongful") })}</tbody>
+        <tfoot><tr><td></td><td>All attacks</td><td class="num">${whole(c.mutated)}</td><td class="num">${whole(add(Object.entries(c.by_anomaly), "right_rule"))}</td><td class="num">${whole(c.wrongful_releases)}</td></tr></tfoot>
+      </table></div></section>
+
+    <section aria-labelledby="s-dial"><h2 id="s-dial">The auto-release limit is a dial</h2>
+      <p>Lower, and the owner taps the key more often. Higher, and more honest requests go out on the rules alone.</p>
+      <div class="body dial">
+        <div>
+          <label for="limit">Auto-release limit</label>
+          <p class="val" id="limit-val">${money(cur.limit).replace(".00", "")}</p>
+          <input id="limit" type="range" min="0" max="${L.length - 1}" step="1" value="${S.limitIdx}" aria-valuetext="${money(cur.limit).replace(".00", "")}">
+          <div class="stops" aria-hidden="true">${L.map(x => `<span>${x.limit / 1000}k</span>`).join("")}</div>
+          <p class="say">At ${money(cur.limit).replace(".00", "")}, the owner taps the key about <span class="mono">${cur.button_presses_per_job_month}</span> times per job each month, <span class="mono">${pct(cur.auto_released_share)}</span> of honest requests pay on the rules alone, and ${cur.attacks_auto_paid === 0 ? "no attack gets paid without a tap" : `${cur.attacks_auto_paid} attacks get paid without a tap`}.</p>
+          <p>${S.limitIdx === contractIdx ? "This is your contract's limit today." : `Your contract says ${money(LIMIT).replace(".00", "")}. Moving the dial here only previews it.`}</p>
+        </div>
+        <div class="scroll-x"><table class="ledger">
+          <thead><tr><th>Limit</th><th class="num">Taps per job a month</th><th class="num">Paid on rules alone</th><th class="num">Attacks paid</th></tr></thead>
+          <tbody>${L.map((x, i) => `<tr class="${i === S.limitIdx ? "cur" : ""}"><td class="mono">${money(x.limit).replace(".00", "")}${i === contractIdx ? ' <span class="quiet" style="font-family:var(--sans);font-size:14px">contract</span>' : ""}</td><td class="num">${x.button_presses_per_job_month}</td><td class="num">${pct(x.auto_released_share)}</td><td class="num">${x.attacks_auto_paid}</td></tr>`).join("")}</tbody>
+        </table></div>
+      </div></section>
+
+    <section aria-labelledby="s-calib"><h2 id="s-calib">Is Jev's confidence honest?</h2>
+      <p>When Jev says it's 80% sure, it should be right about 80% of the time. That's what makes the escalation threshold mean something.</p>
+      <div class="body calib">
+        <svg viewBox="0 0 600 300" role="img" aria-label="Empty chart: no calibration run yet">
+          <line x1="50" y1="260" x2="580" y2="260" stroke="var(--rule-strong)"/><line x1="50" y1="20" x2="50" y2="260" stroke="var(--rule-strong)"/>
+          <line x1="50" y1="260" x2="580" y2="20" stroke="var(--rule-strong)" stroke-dasharray="6 6"/>
+          ${[0, 50, 100].map(t => `<text x="${50 + t * 5.3}" y="280" text-anchor="middle">${t}%</text><text x="40" y="${264 - t * 2.4}" text-anchor="end">${t}%</text>`).join("")}
+          <text x="315" y="298" text-anchor="middle">How sure Jev said it was</text>
+          <text x="440" y="70" text-anchor="middle">Honest confidence</text>
+        </svg>
+        <p>No calibration run yet. It shows up here after <span class="mono">python -m fuzzer.calibration</span> runs on the server.</p>
+      </div></section>
+
+    <section aria-labelledby="s-console"><h2 id="s-console">Your turn: try to get paid</h2>
+      <p>Pick an attack and a sub, or describe one in your own words. It runs through the same pipeline.</p>
+      <div class="body">
+        <div class="console">
+          <form data-run="pick">
+            <label><span>Attack</span><select id="attack">${Object.entries(ATTACKS).map(([k, w]) => `<option value="${k}" ${k === a ? "selected" : ""}>${esc(w)}</option>`).join("")}</select></label>
+            <label><span>Against</span><select id="target">${D.requests.map(r => `<option value="${r.sub_id}" ${r.sub_id === S.target ? "selected" : ""}>${esc(r.sub)}</option>`).join("")}</select></label>
+            <button class="btn" type="submit">Run this attack</button>
+          </form>
+          <form data-run="text">
+            <label><span>Or describe it</span><textarea id="describe">The electrician says the owner told them retainage is waived this month.</textarea></label>
+            <button class="btn" type="submit">Run what I described</button>
+          </form>
+        </div>
+        ${out}
+      </div></section>
+
+    <p class="foot">${esc(c.kernel)}, ${whole(c.cases)} cases from make fuzz. Sample company, synthetic data.</p>
+  </main>`;
+}
+
+/* ---------- render and events ---------- */
+let timer = null;
+function render() {
+  const screen = S.tab === "approve" ? approveScreen() : S.tab === "security" ? securityScreen() : requestsScreen();
+  document.getElementById("app").innerHTML = topbar() + screen;
+  const small = matchMedia("(max-width: 1099px)").matches;
+  document.body.style.overflow = S.tab === "requests" && S.sheet && small ? "hidden" : "";
+}
+
+document.addEventListener("click", e => {
+  const t = e.target.closest("[data-screen],[data-tab],[data-open],[data-close],[data-send],[data-open-tab]");
+  if (!t) return;
+  if (t.dataset.screen) return go(t.dataset.screen);
+  if (t.dataset.tab) { e.preventDefault(); return go(t.dataset.tab === "requests" ? "drywall" : t.dataset.tab); }
+  if (t.dataset.open) { S.sel = t.dataset.open; S.sheet = true; history.replaceState(null, "", "#" + (currentScreen() || "drywall")); render(); document.getElementById("d-title").focus(); return; }
+  if (t.dataset.openTab) { S.tab = "requests"; S.sel = t.dataset.openTab; S.sheet = true; history.replaceState(null, "", "#drywall"); render(); scrollTo(0, 0); return; }
+  if ("close" in t.dataset) { S.sheet = false; render(); document.querySelector(`[data-open="${S.sel}"]`)?.focus(); return; }
+  if ("send" in t.dataset) {
+    S.waiting = 90; render(); clearInterval(timer);
+    timer = setInterval(() => { S.waiting--; if (S.waiting <= 0) clearInterval(timer); if (S.tab === "approve") render(); }, 1000);
+  }
+});
+document.addEventListener("input", e => {
+  if (e.target.id === "limit") { S.limitIdx = Number(e.target.value); render(); document.getElementById("limit").focus(); }
+});
+document.addEventListener("change", e => {
+  if (e.target.id === "attack") { S.attack = e.target.value; const ex = EXAMPLE[S.attack]; if (ex) S.target = D.details[ex].sub_id; S.ran = null; render(); document.getElementById("attack").focus(); }
+  if (e.target.id === "target") { S.target = e.target.value; S.ran = null; render(); document.getElementById("target").focus(); }
+});
+document.addEventListener("submit", e => { e.preventDefault(); S.ran = e.target.dataset.run; render(); });
+
+go(location.hash.slice(1) || "drywall");
+</script>
+</body>
+</html>
