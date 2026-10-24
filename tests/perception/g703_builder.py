@@ -60,6 +60,7 @@ def build_g703(
     totals_override: dict[str, Decimal] | None = None,
     extra_rows: list[list] | None = None,
     repeat_header: bool = True,
+    grid: bool = True,
 ) -> Path:
     """extra_rows are inserted after the line items, before the grand total, as raw cell lists."""
     has_ret = retainage_rate is not None
@@ -99,7 +100,7 @@ def build_g703(
     widths = [0.5, 2.0, 0.9, 0.9, 0.8, 0.9, 0.9, 0.6, 0.9] + ([0.8] if has_ret else [])
     table = Table(data, colWidths=[w * inch for w in widths], repeatRows=3 if repeat_header else 0)
     table.setStyle(TableStyle([
-        ("GRID", (0, 0), (-1, -1), 0.5, colors.black),
+        *([("GRID", (0, 0), (-1, -1), 0.5, colors.black)] if grid else []),
         ("SPAN", (3, 0), (4, 0)),
         ("SPAN", (0, 0), (0, 1)), ("SPAN", (1, 0), (1, 1)), ("SPAN", (2, 0), (2, 1)),
         ("SPAN", (5, 0), (5, 1)), ("SPAN", (6, 0), (6, 1)), ("SPAN", (7, 0), (7, 1)), ("SPAN", (8, 0), (8, 1)),

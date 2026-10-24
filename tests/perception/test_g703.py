@@ -222,3 +222,25 @@ def test_misaligned_columns_detected():
     shifted = li("100", "10", "0", "20", "80", "0")  # every value moved one column right
     assert not _looks_misaligned([good, good, shifted])
     assert _looks_misaligned([shifted, shifted, good])
+
+
+def test_borderless_table_goes_to_fallback_rather_than_guessing(tmp_path):
+    with pytest.raises(ExtractionError, match="text layer unusable"):
+        extract(build_g703(tmp_path / "a.pdf", standard_lines(), grid=False))
+
+
+def test_ocr_layer_over_scan_is_not_trusted(tmp_path):
+    from PIL import Image
+    from reportlab.lib.pagesizes import landscape, letter
+    from reportlab.pdfgen import canvas
+
+    img = tmp_path / "scan.png"
+    Image.new("RGB", (1100, 850), "white").save(img)
+    path = tmp_path / "ocr.pdf"
+    c = canvas.Canvas(str(path), pagesize=landscape(letter))
+    w, h = landscape(letter)
+    c.drawImage(str(img), 0, 0, width=w, height=h)
+    c.drawString(72, 500, "ITEM NO. DESCRIPTION OF WORK SCHEDULED VALUE")  # stands in for an OCR layer
+    c.save()
+    with pytest.raises(ExtractionError, match="OCR"):
+        extract(path)
