@@ -3,7 +3,7 @@
 # ///
 """Send a fake payment to the device and check its signature, the same way the executor will.
 
-    uv run firmware/test_device.py <device-ip>
+    uv run firmware/check_device.py <device-ip>
 """
 import json
 import secrets

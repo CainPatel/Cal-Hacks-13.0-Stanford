@@ -54,7 +54,7 @@ Red light on and nothing printing means it can't join the WiFi.
 From the repo folder, on a laptop on the same WiFi:
 
 ```
-uv run firmware/test_device.py 10.0.0.42
+uv run firmware/check_device.py 10.0.0.42
 ```
 
 Open `http://10.0.0.42:8080` in a browser, press green on the device, and the script prints

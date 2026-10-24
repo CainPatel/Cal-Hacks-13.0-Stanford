@@ -5,4 +5,4 @@ seed:
 	$(PY) -m seed.generate
 
 test:
-	$(PY) -m pytest -q
+	$(PY) -m pytest -q tests
