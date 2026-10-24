@@ -33,6 +33,7 @@ make demo PORT=8010         # if 8000 is taken
 | `make fuzz N=5000` | attack the pipeline N times, write `data/scorecard.json` |
 | `make api` | dashboard API on `:8000` (see `api/main.py` for endpoints) |
 | `make synthetic W=10` | render pay apps, releases, COIs, emails + `truth.json` for perception |
+| `make benchmark` | score perception's extractor on `data/synthetic` (no Claude calls) |
 | `make test` | all tests |
 
 ## How a pay request flows
