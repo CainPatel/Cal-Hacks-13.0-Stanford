@@ -24,9 +24,14 @@ def is_over_limit(state: KernelState, request: PayRequest) -> bool:
     return request.g702.current_payment_due > Decimal(str(limit))
 
 
+# Rules whose failure means "a person should look", not "something is wrong": they escalate
+# to the approval key instead of holding (spec, rule 15: "else escalate").
+ESCALATE_ONLY = {"15_confidence_floor"}
+
+
 def next_action_for(results: list[RuleResult]) -> str | None:
     """One concrete thing the office manager can do about the first failing rule."""
-    failing = next((r for r in results if not r.passed), None)
+    failing = next((r for r in results if not r.passed and r.rule not in ESCALATE_ONLY), None)
     if failing is None:
         return None
     return {
@@ -47,11 +52,12 @@ def next_action_for(results: list[RuleResult]) -> str | None:
 
 def decide(state: KernelState, request: PayRequest) -> Decision:
     results = [rule(state, request) for rule in ALL_RULES]
-    all_passed = all(r.passed for r in results)
+    holding = [r for r in results if not r.passed and r.rule not in ESCALATE_ONLY]
+    unsure = any(not r.passed and r.rule in ESCALATE_ONLY for r in results)
 
-    if not all_passed:
+    if holding:
         action = Action.hold
-    elif is_over_limit(state, request) or is_new_vendor(state) or is_bank_change(state, request):
+    elif unsure or is_over_limit(state, request) or is_new_vendor(state) or is_bank_change(state, request):
         action = Action.escalate
     else:
         action = Action.release

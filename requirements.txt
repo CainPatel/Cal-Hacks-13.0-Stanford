@@ -13,3 +13,4 @@ numpy>=2.0
 pyyaml>=6
 cryptography>=43
 requests>=2.32
+python-multipart>=0.0.9
