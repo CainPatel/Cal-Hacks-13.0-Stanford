@@ -17,7 +17,8 @@ ECDSA P-256 over SHA-256. Returned as hex of raw `r || s` (64 bytes, 128 hex cha
 |---|---|
 | `GET /pubkey` | Hex of the uncompressed point `04 || X || Y`. Goes in `config/contract.yaml`. Pi only: `?format=pem` gives PEM. |
 | `POST /approve` | Body as above. Blocks until a button. `200 {"sig", "nonce"}` approve · `200 {"rejected": true, "sig"}` reject · `408 {"error":"timeout"}` after 90 s · `409 {"error":"busy"}` if one is already waiting. Pi also: `400` for bad JSON, missing fields, or already expired. Pi alias: `POST /request`. |
-| `GET /` | Phone approval page. ESP32 serves it on `:8080`; the Pi serves it on the same port as the API. |
+| `GET /` | Phone approval page. ESP32 serves it on `:8080`; the Pi serves it on the same port as the API. Pi with `DRAWKEY_BUTTONS_ONLY=1` (set by the systemd service): read-only, no buttons, "Press the green or red button on the key." |
+| `POST /decide/{approve\|reject}` | Pi only: the page's buttons. `200 {"ok": true}`. `403` and no effect when `DRAWKEY_BUTTONS_ONLY=1`, so only a physical press decides. |
 
 The executor still owns nonce-replay and expiry checks; the device doesn't remember nonces.
 

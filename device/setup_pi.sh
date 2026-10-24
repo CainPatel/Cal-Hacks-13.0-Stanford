@@ -28,6 +28,7 @@ After=network-online.target
 User=$RUN_USER
 SupplementaryGroups=gpio
 WorkingDirectory=$REPO
+Environment=DRAWKEY_BUTTONS_ONLY=1
 ExecStart=$REPO/.venv/bin/uvicorn device.main:app --host 0.0.0.0 --port 8000
 Restart=always
 RestartSec=2

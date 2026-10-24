@@ -70,8 +70,25 @@ def test_reject_physical_button(dev):
 
 
 def test_approve_page_button(dev):
+    assert 'go(\'approve\')' in dev[1].get("/").text
     _, _, resp = run(dev, lambda main: dev[1].post("/decide/approve"))
     assert "rejected" not in resp
+
+
+def test_buttons_only_refuses_page_and_takes_gpio(dev, monkeypatch):
+    main, client = dev
+    monkeypatch.setattr(main, "BUTTONS_ONLY", True)
+    page = client.get("/").text
+    assert "Press the green or red button on the key." in page and "<button" not in page
+
+    def press(main):
+        for what in ("approve", "reject"):
+            assert client.post(f"/decide/{what}").status_code == 403
+        assert client.get("/pending").json()  # still waiting: the page decided nothing
+        physical("approve_btn")(main)
+
+    _, payload, resp = run(dev, press)
+    assert resp == {"sig": resp["sig"], "nonce": payload["nonce"]}
 
 
 def test_bad_and_expired_payloads(dev):

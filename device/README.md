@@ -19,6 +19,8 @@ GPIO27 ── reject button  ── GND      GPIO23 ── resistor ── red L
 8. Back up `~/.drawkey/private.pem` somewhere off the repo (USB stick, password manager). If it's lost, a new key is generated and step 7 has to be redone. Never commit it.
 9. Updating code later: `git pull && sudo systemctl restart drawkey`.
 
+**Buttons only.** The service sets `DRAWKEY_BUTTONS_ONLY=1`, because the page can be reached through Tailscale Funnel. In that mode the page at `/` shows the waiting payment (payee, amount, job) read-only and says "Press the green or red button on the key."; `POST /decide/approve` and `/decide/reject` return 403. Only the physical buttons decide. A Pi set up before this needs `sudo ./device/setup_pi.sh` again (or add `Environment=DRAWKEY_BUTTONS_ONLY=1` to `/etc/systemd/system/drawkey.service`, then `sudo systemctl daemon-reload && sudo systemctl restart drawkey`). Without the variable (`make device`), the page keeps its Approve/Reject buttons.
+
 On a Mac: `make device` (port 8001, so it runs beside `make api` on 8000), then type `a` + Enter to approve, `r` + Enter to reject. LED changes print.
 The first run makes `~/.drawkey/private.pem` (mode 600). It never leaves the machine; back it up or the pubkey in `config/contract.yaml` changes.
 
