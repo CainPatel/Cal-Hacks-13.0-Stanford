@@ -12,3 +12,6 @@ anthropic>=2.3
 av>=19.0
 pillow>=13.0
 numpy>=2.0
+pyyaml>=6
+requests>=2.32
+python-multipart>=0.0.9

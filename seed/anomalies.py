@@ -164,6 +164,24 @@ def duplicate_new_number(data, sub_id, rng, new_period=False):
     return data, label(dup, "duplicate_new_number", "rule_12")
 
 
+def duplicate_this_month(data, sub_id, rng):
+    """Submit this month's request a second time under a new number, so it gets paid twice. Rule 12."""
+    data = copy(data)
+    orig = oct_request(data, sub_id)
+    dup = orig.model_copy(update=dict(id=f"{orig.id}_again", number=THIS_MONTH + 1,
+                                      submitted_at=datetime(2026, 10, 27, 8, 0),
+                                      source_doc=f"g703/{sub_id}_202610_v2.pdf"))
+    data["pay_requests"].append(dup)
+    return data, label(dup, "duplicate_this_month", "rule_12")
+
+
+def missing_prior_unconditional(data, sub_id, rng):
+    """Last month's payment cleared but its unconditional waiver never came in. Rule 5."""
+    data = copy(data)
+    remove(data["releases"], f"rel_u_pr_{sub_id}_{THIS_MONTH - 1}")
+    return data, label(oct_request(data, sub_id), "missing_prior_unconditional", "rule_05")
+
+
 def bank_change_email(data, sub_id, rng, homoglyph=False):
     """Email asks to pay a new account; the request uses it. Rule 10 (+11 if the domain is fake)."""
     data = copy(data)
@@ -183,17 +201,13 @@ def bank_change_email(data, sub_id, rng, homoglyph=False):
 
 
 def supplier_notice_unreleased(data, sub_id, rng, supplier="Bay Area Lumber Supply"):
-    """A supplier filed a notice to owner and hasn't released. Rule 7."""
+    """A supplier filed a notice to owner this month and hasn't released. Rule 7."""
     data = copy(data)
-    nto_id = f"nto_{sub_id}"
-    if any(n.id == nto_id for n in data["lower_tier_notices"]):
-        update(data["lower_tier_notices"], nto_id, released=False)
-    else:
-        req = oct_request(data, sub_id)
-        data["lower_tier_notices"].append(LowerTierNotice(
-            id=nto_id, supplier=supplier, sub_id=sub_id, job_id=req.job_id,
-            notice_date=date(2026, 9, 18), released=False))
-    return data, label(oct_request(data, sub_id), "supplier_notice_unreleased", "rule_07")
+    req = oct_request(data, sub_id)
+    data["lower_tier_notices"].append(LowerTierNotice(
+        id=f"nto_{sub_id}_oct", supplier=supplier, sub_id=sub_id, job_id=req.job_id,
+        notice_date=date(2026, 10, 9), released=False))  # after September's decisions: only October is affected
+    return data, label(req, "supplier_notice_unreleased", "rule_07")
 
 
 def draw_not_cleared(data, sub_id, rng):
@@ -243,7 +257,7 @@ def new_sub_ein_mismatch(data, job_id, rng, name="Apex Concrete Services LLC", d
 DEMO = [
     (overbill_pct, "sub_03", dict(item_no="09-20", claim=70, video=45)),  # Summit Drywall: 70% claimed, video ~45%
     (bank_change_email, "sub_04", dict(homoglyph=True)),                  # Brightline Electric: capital I for l
-    (supplier_notice_unreleased, "sub_01", {}),                           # Coastal Concrete: Westside Ready-Mix
+    (supplier_notice_unreleased, "sub_01", dict(supplier="Westside Ready-Mix")),  # Coastal Concrete's supplier
 ]
 
 PLANTED = DEMO + [

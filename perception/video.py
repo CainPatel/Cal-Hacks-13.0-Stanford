@@ -19,7 +19,7 @@ import av
 from PIL import Image
 
 from perception import llm
-from shared.schema import LineItem, SiteEvidence
+from shared.schema import LineItem, SiteEvidence, SOVLine
 
 MAX_EDGE_PX = 1568  # larger images are downscaled by the API anyway
 DEFAULT_FRAMES = 10
@@ -128,7 +128,7 @@ def build_site_evidence(
     *,
     job_id: str,
     upload_date: date,
-    line_items: list[LineItem],
+    line_items: list[LineItem | SOVLine],
     frames_dir: str | Path,
     n_frames: int = DEFAULT_FRAMES,
     min_confidence: float = DEFAULT_MIN_CONFIDENCE,
@@ -136,8 +136,9 @@ def build_site_evidence(
 ) -> EvidenceResult:
     """Estimate visible progress for a job's line items from one walkthrough video.
 
-    line_items is the job's schedule of values, used only for item numbers and
-    descriptions; the sub's claimed percentages are deliberately not shown to
+    line_items names the work to look for: only item numbers and descriptions are
+    used. Prefer the GC's subcontract SOV lines over a sub's G703 lines, so no
+    sub-written text reaches the prompt. Claimed percentages are never shown to
     the model, so the estimate is independent of the claim it will be checked against.
     """
     if not line_items:

@@ -79,3 +79,13 @@ def test_demo_db_labels_every_request():
     assert sorted(l.request_id for l in labels if l.anomaly) == ["pr_sub_01_6", "pr_sub_03_6", "pr_sub_04_6"]
     drywall = req(data, "pr_sub_03_6")
     assert next(x for x in drywall.lines if x.item_no == "09-20").pct_complete == 70
+
+
+def test_attacks_beyond_the_spec_list():
+    from seed.anomalies import duplicate_this_month, missing_prior_unconditional
+    import random
+    data, lab = duplicate_this_month(CLEAN, "sub_02", random.Random(0))
+    dup, orig = req(data, lab.request_id), req(data, "pr_sub_02_6")
+    assert dup.lines == orig.lines and dup.number != orig.number and lab.rules == ["rule_12"]
+    data, lab = missing_prior_unconditional(CLEAN, "sub_02", random.Random(0))
+    assert not any(r.id == "rel_u_pr_sub_02_5" for r in data["releases"]) and lab.rules == ["rule_05"]

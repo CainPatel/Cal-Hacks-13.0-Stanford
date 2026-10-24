@@ -87,3 +87,11 @@ def test_replay_decides_each_request_once_seeing_only_the_past(path):
 def test_what_if_writes_nothing(path):
     assert len(replay(6, write=False, decide=hold, path=path)) == 15 * 6
     assert events.read(kind="kernel_trace", path=path) == []
+
+
+def test_demo_history_is_clean_and_october_holds_the_story(path):
+    """Replayed through the real kernel, May-Sep are never held; the demo holds land in October only."""
+    pytest.importorskip("kernel.runner")
+    held = {d.request_id for d in replay(6, path=path) if d.action == Action.hold}
+    assert held and all(rid.endswith("_6") for rid in held), held
+    assert "pr_sub_01_6" in held  # Coastal Concrete's supplier notice

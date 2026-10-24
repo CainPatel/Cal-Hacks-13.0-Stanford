@@ -1,4 +1,4 @@
-.PHONY: seed test fuzz events replay api synthetic demo device device-test
+.PHONY: seed test fuzz events replay api synthetic demo benchmark device device-test
 PY = .venv/bin/python
 N ?= 500
 M ?= 6
@@ -31,6 +31,9 @@ api:
 
 synthetic:
 	$(PY) -m synthetic --worlds $(W)
+
+benchmark:
+	$(PY) -m synthetic.benchmark
 
 # One-command demo reset: archive the old log (never delete it), load the seed,
 # decide May-October, score 5,000 attacks, serve the API.

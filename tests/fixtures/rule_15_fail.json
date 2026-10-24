@@ -1,0 +1,221 @@
+{
+  "state": {
+    "job": {
+      "id": "job_1",
+      "name": "Harbor Point Medical Office",
+      "owner": "Harbor Point Health LLC",
+      "lender": "First Pacific Bank",
+      "architect": "Okafor + Lin Architects",
+      "contract_sum": "500000.00",
+      "retainage_rate": "0.10",
+      "pay_when_paid": true
+    },
+    "subcontract": {
+      "id": "sc_sub_01",
+      "sub_id": "sub_01",
+      "job_id": "job_1",
+      "sov": [
+        {
+          "item_no": "09-10",
+          "description": "Metal stud framing",
+          "scheduled_value": "100000.00"
+        }
+      ],
+      "retainage_rate": "0.10"
+    },
+    "vendor": {
+      "id": "sub_01",
+      "legal_name": "Summit Drywall LLC",
+      "ein": "12-3456789",
+      "email_domain": "summitdrywall.com",
+      "bank_account": "021000021:123456789",
+      "first_paid": "2026-06-10",
+      "crs_status": "verified"
+    },
+    "change_orders": [],
+    "prior_requests": [
+      {
+        "id": "pr_sub_01_3",
+        "number": 3,
+        "sub_id": "sub_01",
+        "job_id": "job_1",
+        "period_end": "2026-07-31",
+        "lines": [
+          {
+            "item_no": "09-10",
+            "description": "Metal stud framing",
+            "scheduled_value": "100000.00",
+            "previous_applications": "20000.00",
+            "this_period": "10000.00",
+            "stored_materials": "0.00",
+            "total_to_date": "30000.00",
+            "pct_complete": "30",
+            "balance_to_finish": "70000.00",
+            "retainage": "3000.00"
+          }
+        ],
+        "g702": {
+          "original_contract_sum": "100000.00",
+          "net_change_orders": "0.00",
+          "contract_sum_to_date": "100000.00",
+          "total_completed_stored": "30000.00",
+          "retainage": "3000.00",
+          "total_earned_less_retainage": "27000.00",
+          "less_previous_certificates": "18000.00",
+          "current_payment_due": "9000.00"
+        },
+        "bank_account": "021000021:123456789",
+        "submitted_at": "2026-07-25T10:00:00",
+        "source_doc": "g703/sub_01_202607.xlsx"
+      }
+    ],
+    "all_requests": [
+      {
+        "id": "pr_sub_01_3",
+        "number": 3,
+        "sub_id": "sub_01",
+        "job_id": "job_1",
+        "period_end": "2026-07-31",
+        "lines": [
+          {
+            "item_no": "09-10",
+            "description": "Metal stud framing",
+            "scheduled_value": "100000.00",
+            "previous_applications": "20000.00",
+            "this_period": "10000.00",
+            "stored_materials": "0.00",
+            "total_to_date": "30000.00",
+            "pct_complete": "30",
+            "balance_to_finish": "70000.00",
+            "retainage": "3000.00"
+          }
+        ],
+        "g702": {
+          "original_contract_sum": "100000.00",
+          "net_change_orders": "0.00",
+          "contract_sum_to_date": "100000.00",
+          "total_completed_stored": "30000.00",
+          "retainage": "3000.00",
+          "total_earned_less_retainage": "27000.00",
+          "less_previous_certificates": "18000.00",
+          "current_payment_due": "9000.00"
+        },
+        "bank_account": "021000021:123456789",
+        "submitted_at": "2026-07-25T10:00:00",
+        "source_doc": "g703/sub_01_202607.xlsx"
+      }
+    ],
+    "releases": [
+      {
+        "id": "rel_c_pr_sub_01_4",
+        "sub_id": "sub_01",
+        "job_id": "job_1",
+        "kind": "conditional_progress",
+        "through_date": "2026-08-31",
+        "amount": "13500.00",
+        "signed": true,
+        "received_at": "2026-08-25"
+      },
+      {
+        "id": "rel_u_pr_sub_01_3",
+        "sub_id": "sub_01",
+        "job_id": "job_1",
+        "kind": "unconditional_progress",
+        "through_date": "2026-07-31",
+        "amount": "9000.00",
+        "signed": true,
+        "received_at": "2026-08-15"
+      }
+    ],
+    "lower_tier_notices": [
+      {
+        "id": "nto_1",
+        "supplier": "Westside Ready-Mix",
+        "sub_id": "sub_01",
+        "job_id": "job_1",
+        "notice_date": "2026-06-12",
+        "released": true
+      }
+    ],
+    "coi": {
+      "id": "coi_sub_01",
+      "sub_id": "sub_01",
+      "gl_expiry": "2027-06-30",
+      "wc_expiry": "2027-06-30",
+      "additional_insured": true
+    },
+    "ledger": [
+      {
+        "id": "pay_pr_sub_01_3",
+        "job_id": "job_1",
+        "kind": "sub_payment",
+        "amount": "9000.00",
+        "date": "2026-08-10",
+        "period_end": "2026-07-31",
+        "sub_id": "sub_01",
+        "request_id": "pr_sub_01_3",
+        "bank_account": "021000021:123456789"
+      }
+    ],
+    "emails": [],
+    "site_evidence": null,
+    "known_bank_account": "021000021:123456789",
+    "contract": {
+      "escalation_confidence_threshold": 0.85
+    },
+    "proposal": {
+      "action": "release",
+      "confidences": {
+        "release_form_correct": 0.95,
+        "bank_change_suspicious": 0.6,
+        "progress_plausible": 0.95,
+        "duplicate_likelihood": 0.95,
+        "proposed_action": 0.95
+      },
+      "reasons": [
+        "fixture"
+      ],
+      "answers": {
+        "release_form_correct": "correct",
+        "bank_change_suspicious": 0.05,
+        "progress_plausible": "plausible",
+        "duplicate_likelihood": 0.0,
+        "proposed_action": "release"
+      }
+    }
+  },
+  "request": {
+    "id": "pr_sub_01_4",
+    "number": 4,
+    "sub_id": "sub_01",
+    "job_id": "job_1",
+    "period_end": "2026-08-31",
+    "lines": [
+      {
+        "item_no": "09-10",
+        "description": "Metal stud framing",
+        "scheduled_value": "100000.00",
+        "previous_applications": "30000.00",
+        "this_period": "15000.00",
+        "stored_materials": "0.00",
+        "total_to_date": "45000.00",
+        "pct_complete": "45",
+        "balance_to_finish": "55000.00",
+        "retainage": "4500.00"
+      }
+    ],
+    "g702": {
+      "original_contract_sum": "100000.00",
+      "net_change_orders": "0.00",
+      "contract_sum_to_date": "100000.00",
+      "total_completed_stored": "45000.00",
+      "retainage": "4500.00",
+      "total_earned_less_retainage": "40500.00",
+      "less_previous_certificates": "27000.00",
+      "current_payment_due": "13500.00"
+    },
+    "bank_account": "021000021:123456789",
+    "submitted_at": "2026-08-25T10:00:00",
+    "source_doc": "g703/sub_01_202608.xlsx"
+  }
+}
