@@ -59,8 +59,22 @@ def test_attack_console(client):
     assert client.post("/attacks", json={"name": "nope", "target": "sub_02"}).status_code == 404
 
 
-def test_scorecard_missing(client):
-    assert client.get("/scorecard").status_code == 404
+def test_scorecard_scored_on_first_request(client, monkeypatch):
+    monkeypatch.setenv("SCORECARD_CASES", "40")
+    card = client.get("/scorecard").json()
+    assert card["cases"] == 40 and "limit_sweep" in card
+    assert main.SCORECARD.exists()  # cached for the next request
+
+
+def test_uploads_archived_privately_when_blob_is_connected(client, monkeypatch):
+    from vercel.blob import sync as blob
+    stored = []
+    monkeypatch.setenv("BLOB_READ_WRITE_TOKEN", "test-token")
+    monkeypatch.setattr(blob, "put_blob", lambda path, data, **kw: stored.append((path, kw)) or type("R", (), {"pathname": path})())
+    assert main._archive(b"%PDF-1.4 test", "abc.pdf") == "uploads/abc.pdf"
+    assert stored == [("uploads/abc.pdf", {"access": "private", "allow_overwrite": True})]
+    monkeypatch.delenv("BLOB_READ_WRITE_TOKEN")
+    assert main._archive(b"x", "abc.pdf") is None  # no store connected: local only
     assert client.get("/calibration").status_code == 404
 
 

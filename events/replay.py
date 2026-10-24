@@ -39,9 +39,7 @@ def load_seed(data: dict[str, list], path=events.DEFAULT_PATH) -> int:
     """Append every seed row as a fact, in the order the GC would have learned it."""
     facts = sorted(((as_datetime(KNOWN_AT[t](row)), t, row) for t in events.TABLES for row in data.get(t, [])),
                    key=lambda f: f[0])
-    for at, table, row in facts:
-        events.append("fact", row, at=at, table=table, path=path)
-    return len(facts)
+    return events.append_facts(facts, path=path)
 
 
 def replay(through: int, write: bool = True, decide=None, path=events.DEFAULT_PATH, judge=None) -> list:

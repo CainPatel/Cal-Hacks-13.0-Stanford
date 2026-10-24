@@ -11,6 +11,7 @@ from collections import Counter
 from pathlib import Path
 
 import pipeline
+from events import log as events
 from events.replay import load_seed, replay
 from seed.anomalies import with_demo
 from seed.generate import generate
@@ -19,15 +20,15 @@ PATH = Path("data/events.db")
 
 cmd = sys.argv[1] if len(sys.argv) > 1 else ""
 if cmd == "load":
-    if PATH.exists():  # never wipe a log that may hold real decisions and signatures
-        sys.exit(f"{PATH} already exists. Delete it yourself to start a fresh log.")
+    if not events.is_empty(PATH):  # never wipe a log that may hold real decisions and signatures
+        sys.exit(f"{events.where(PATH)} already has events. Start a fresh log yourself (delete the file or the table).")
     data, _ = with_demo(generate())
-    print(f"loaded {load_seed(data, path=PATH)} facts into {PATH}")
+    print(f"loaded {load_seed(data, path=PATH)} facts into {events.where(PATH)}")
 elif cmd == "replay":
     args = [a for a in sys.argv[2:] if not a.startswith("--")]
     month = int(args[0]) if args else 6
-    if not PATH.exists():
-        sys.exit(f"No log at {PATH}. Run `make events` first.")
+    if events.is_empty(PATH):
+        sys.exit(f"No events in {events.where(PATH)}. Run `make events` first.")
     judge = None
     if "--judge" in sys.argv:
         from judgment import judge
@@ -46,8 +47,8 @@ elif cmd == "nessie-setup":
 elif cmd == "nessie-sync":
     from events.replay import sync_ledger
     from kernel.executor import NessieError, nessie_ledger
-    if not PATH.exists():
-        sys.exit(f"No log at {PATH}. Run `make events` first.")
+    if events.is_empty(PATH):
+        sys.exit(f"No events in {events.where(PATH)}. Run `make events` first.")
     from events.replay import double_payments
     try:
         entries, skipped = nessie_ledger()

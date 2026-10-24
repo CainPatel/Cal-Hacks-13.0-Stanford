@@ -11,6 +11,7 @@ moment the fact or decision belongs to (defaults to `ts`). Replay filters on `at
     events.append("signature", {...}, request_id=req.id)        # what kernel/executor.py does
 """
 import json
+import os
 import sqlite3
 from datetime import date, datetime
 from pathlib import Path
@@ -56,6 +57,62 @@ def _ts(at: date | datetime) -> str:
     return at.replace(tzinfo=None).isoformat(timespec="seconds")  # fixed width: string order is time order
 
 
+# Deployed (Vercel), the log is Neon Postgres: same table, same append-only guarantee, enforced
+# by triggers. Only the main log goes there; any explicit path (tests, the fuzzer) stays SQLite.
+PG_SCHEMA = """
+SELECT pg_advisory_xact_lock(4242);
+CREATE TABLE IF NOT EXISTS events (
+    seq BIGSERIAL PRIMARY KEY,
+    ts TEXT NOT NULL,
+    at TEXT NOT NULL,
+    kind TEXT NOT NULL,
+    request_id TEXT,
+    tbl TEXT,
+    payload TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS events_at ON events(at);
+CREATE OR REPLACE FUNCTION events_append_only() RETURNS trigger LANGUAGE plpgsql AS
+    $$ BEGIN RAISE EXCEPTION 'events are append-only'; END $$;
+CREATE OR REPLACE TRIGGER events_no_change BEFORE UPDATE OR DELETE ON events
+    FOR EACH ROW EXECUTE FUNCTION events_append_only();
+CREATE OR REPLACE TRIGGER events_no_truncate BEFORE TRUNCATE ON events
+    FOR EACH STATEMENT EXECUTE FUNCTION events_append_only();
+"""
+_pg_ready: set[str] = set()
+
+
+def _postgres_url(path: Path) -> str | None:
+    url = os.environ.get("DATABASE_URL")
+    return url if url and Path(path) == DEFAULT_PATH else None
+
+
+def _run(path: Path, sql: str, args=(), insert: bool = False):
+    """One statement against the log: rows for a SELECT, the new seq for an insert."""
+    url = _postgres_url(path)
+    if url is None:
+        with _connect(path) as db:
+            cur = db.execute(sql, args)
+            return cur.lastrowid if insert else cur.fetchall()
+    import psycopg
+    with psycopg.connect(url) as db:
+        if url not in _pg_ready:
+            db.execute(PG_SCHEMA)
+            _pg_ready.add(url)
+        cur = db.execute(sql.replace("?", "%s") + (" RETURNING seq" if insert else ""), args)
+        return cur.fetchone()[0] if insert else cur.fetchall()
+
+
+def is_empty(path: Path = DEFAULT_PATH) -> bool:
+    if _postgres_url(path) is None and not Path(path).exists():
+        return True
+    return not _run(path, "SELECT 1 FROM events LIMIT 1")
+
+
+def where(path: Path = DEFAULT_PATH) -> str:
+    """Where the log lives, for messages (never prints credentials)."""
+    return "the Postgres log (DATABASE_URL)" if _postgres_url(path) else str(path)
+
+
 def _connect(path: Path) -> sqlite3.Connection:
     """A connection per call, so the log is safe to share across API threads."""
     path = Path(path)
@@ -75,11 +132,33 @@ def append(kind: str, payload: BaseModel | dict, request_id: str | None = None, 
         raise ValueError("facts need a state table; other kinds must not have one")
     data = payload.model_dump(mode="json") if isinstance(payload, BaseModel) else payload
     now = _ts(datetime.now())
-    with _connect(path) as db:
-        cur = db.execute(
-            "INSERT INTO events (ts, at, kind, request_id, tbl, payload) VALUES (?, ?, ?, ?, ?, ?)",
-            (now, _ts(at) if at else now, kind, request_id, table, json.dumps(data)))
-        return cur.lastrowid
+    return _run(path, "INSERT INTO events (ts, at, kind, request_id, tbl, payload) VALUES (?, ?, ?, ?, ?, ?)",
+                (now, _ts(at) if at else now, kind, request_id, table, json.dumps(data)), insert=True)
+
+
+def append_facts(facts: list[tuple[datetime, str, BaseModel]], path: Path = DEFAULT_PATH) -> int:
+    """Append many facts (at, table, row) in one transaction: loading a seed into a remote
+    Postgres one connection per row would take minutes."""
+    now = _ts(datetime.now())
+    rows = []
+    for at, table, row in facts:
+        if table not in TABLES:
+            raise ValueError(f"unknown state table {table!r}")
+        rows.append((now, _ts(at), "fact", None, table, json.dumps(row.model_dump(mode="json"))))
+    sql = "INSERT INTO events (ts, at, kind, request_id, tbl, payload) VALUES (?, ?, ?, ?, ?, ?)"
+    url = _postgres_url(path)
+    if url is None:
+        with _connect(path) as db:
+            db.executemany(sql, rows)
+        return len(rows)
+    import psycopg
+    with psycopg.connect(url) as db:
+        if url not in _pg_ready:
+            db.execute(PG_SCHEMA)
+            _pg_ready.add(url)
+        with db.cursor() as cur:
+            cur.executemany(sql.replace("?", "%s"), rows)
+    return len(rows)
 
 
 def read(after: int = 0, kind: str | None = None, as_of: date | datetime | None = None,
@@ -91,8 +170,7 @@ def read(after: int = 0, kind: str | None = None, as_of: date | datetime | None 
             sql, args = sql + f" AND {col} = ?", args + [val]
     if as_of:
         sql, args = sql + " AND at <= ?", args + [_ts(as_of)]
-    with _connect(path) as db:
-        rows = db.execute(sql + " ORDER BY seq", args).fetchall()
+    rows = _run(path, sql + " ORDER BY seq", args)
     return [Event(seq=s, ts=datetime.fromisoformat(t), at=datetime.fromisoformat(a), kind=k,
                   request_id=r, table=tb, data=json.loads(d)) for s, t, a, k, r, tb, d in rows]
 
