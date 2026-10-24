@@ -182,6 +182,14 @@ export default function UploadPage() {
   );
 }
 
+const ATTACHMENT_SAYS: Record<NonNullable<IngestResult["attachments"]>[number]["status"], string> = {
+  recorded: "filed.",
+  used: "read with the pay application.",
+  needs_person: "needs you to look at it.",
+  duplicate: "already on file.",
+  unreadable: "couldn't be read.",
+};
+
 function Result({ result, sub }: { result: IngestResult; sub?: string }) {
   const [checking, setChecking] = useState(false);
   const [checked, setChecked] = useState(false);
@@ -193,7 +201,9 @@ function Result({ result, sub }: { result: IngestResult; sub?: string }) {
       : result.coi_id
         ? `Recorded ${sub ?? "the sub"}'s insurance certificate.`
         : result.email_id
-          ? "Recorded the email."
+          ? result.attachments?.length
+            ? `Recorded the email and its ${result.attachments.length} PDF${result.attachments.length === 1 ? "" : "s"}.`
+            : "Recorded the email."
           : "Read the site video.";
   return (
     <div className="space-y-3 rounded-lg border bg-sheet p-5">
@@ -210,6 +220,23 @@ function Result({ result, sub }: { result: IngestResult; sub?: string }) {
         <ul className="list-disc space-y-1 pl-5 text-[15px]">
           {result.notes.map((n, i) => (
             <li key={i}>{n.message}</li>
+          ))}
+        </ul>
+      )}
+      {result.attachments && result.attachments.length > 0 && (
+        <ul className="space-y-1.5 text-[15px]">
+          {result.attachments.map((a, i) => (
+            <li key={i} className="flex items-start gap-2">
+              {a.status === "recorded" || a.status === "used" ? (
+                <CircleCheck className="mt-0.5 size-4 shrink-0 text-pass" aria-hidden />
+              ) : (
+                <CircleX className="mt-0.5 size-4 shrink-0 text-hold" aria-hidden />
+              )}
+              <span>
+                <b className="font-medium">{a.filename}</b>: {a.status === "used" ? a.detail : ATTACHMENT_SAYS[a.status]}
+                {a.detail && a.status !== "used" ? ` ${a.detail}` : ""}
+              </span>
+            </li>
           ))}
         </ul>
       )}

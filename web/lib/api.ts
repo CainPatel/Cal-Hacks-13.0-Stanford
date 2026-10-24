@@ -111,6 +111,8 @@ export type IngestResult = {
   fallback_reason?: string | null;
   notes?: { code: string; message: string; item_no: string | null }[];
   pay_request?: { number: number; period_end: string; g702: { current_payment_due: string } };
+  /** Email only: what happened to each PDF attached to it. */
+  attachments?: { filename: string; kind: string | null; status: "recorded" | "used" | "needs_person" | "duplicate" | "unreadable"; detail?: string; sub?: string }[];
 };
 
 const DIRECT: Record<DocKind, { path: string; fields: ("sub_id" | "job_id")[] }> = {
