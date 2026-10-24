@@ -1,6 +1,7 @@
 "use client";
 
 import { Suspense } from "react";
+import Image from "next/image";
 import Link from "next/link";
 import { usePathname, useSearchParams } from "next/navigation";
 import { monthName } from "@/lib/api";
@@ -26,8 +27,8 @@ export function TopBar() {
     <header className="sticky top-0 z-20 border-b bg-sheet">
       <div className="mx-auto flex min-h-16 max-w-[1440px] flex-wrap items-center gap-x-8 gap-y-2 px-4 sm:px-8">
         <div className="flex flex-wrap items-baseline gap-x-3 gap-y-0.5 py-2 *:whitespace-nowrap">
-          <Link href="/" className="text-2xl font-bold tracking-[-0.02em]">
-            Draw
+          <Link href="/" className="flex items-center">
+            <Image src="/imgs/draw-logo.png" alt="Draw" width={1108} height={372} priority className="h-8 w-auto" />
           </Link>
           <span className="text-muted-foreground">
             <Suspense fallback={monthName(6)}>
