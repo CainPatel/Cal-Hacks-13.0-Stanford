@@ -419,3 +419,10 @@ def test_fraction_sheet_with_a_line_past_its_scheduled_value(tmp_path):
     r = extract(build_g703(tmp_path / "a.pdf", lines))
     assert r.pay_request.lines[1].pct_complete == D("112")
     assert r.pay_request.lines[2].pct_complete == D("60")
+
+
+def test_underscores_are_not_mistaken_for_hidden_text(tmp_path):
+    lines = standard_lines()
+    lines[0].description = "General conditions SUB_01 ______"
+    r = extract(build_g703(tmp_path / "a.pdf", lines))
+    assert "hidden_text" not in codes(r) and r.pay_request.lines[0].description == lines[0].description

@@ -9,7 +9,6 @@ evidence for the kernel, so they are reported and passed through.
 """
 
 import hashlib
-import math
 import re
 import uuid
 from dataclasses import dataclass, field
@@ -18,11 +17,11 @@ from decimal import Decimal
 from pathlib import Path
 
 import anthropic
-import numpy as np
 import pdfplumber
 import pdfplumber.utils.exceptions
 
 from perception import llm
+from perception.common import ExtractionError, Note, UseFallback as _UseFallback, visible_page
 from perception.numbers import CellParseError, parse_date, parse_money, parse_pct
 from shared.schema import G702, LineItem, PayRequest
 
@@ -49,23 +48,8 @@ MONEY_TOLERANCE = Decimal("0.01")
 PCT_TOLERANCE = Decimal("0.5")  # printed percentages are usually rounded
 
 
-class ExtractionError(RuntimeError):
-    """The document could not be turned into a PayRequest by any path."""
-
-
 class NotAG703(ExtractionError):
     pass
-
-
-class _UseFallback(Exception):
-    """Internal: the text layer can't be trusted for this document."""
-
-
-@dataclass
-class Note:
-    code: str
-    message: str
-    item_no: str | None = None
 
 
 @dataclass
@@ -162,43 +146,6 @@ def _is_letter_row(cells: list[str]) -> bool:
     return bool(filled) and all(_LETTER_CELL.match(c) for c in filled)
 
 
-_INK_RESOLUTION = 144
-_INK_CONTRAST = 60  # grey levels between darkest and lightest pixel inside a glyph's box
-_MAX_HIDDEN_SHARE = 0.2
-
-
-def _char_key(c: dict) -> tuple:
-    return (c["text"], round(c["x0"], 2), round(c["top"], 2))
-
-
-def _inked_char_keys(page) -> tuple[set[tuple], int]:
-    """Keys of characters that actually show up when the page is rendered.
-
-    A text layer can hold characters a person never sees: invisible render
-    mode, white or near-white fill, zero alpha, or glyphs covered by a shape.
-    Rendering the page and looking for ink inside each glyph's box catches all
-    of these at once, so the parser reads what the GC sees on screen.
-    """
-    img = np.asarray(page.to_image(resolution=_INK_RESOLUTION).original.convert("L"), dtype=np.int16)
-    scale = _INK_RESOLUTION / 72
-    keep, hidden = set(), 0
-    for c in page.chars:
-        key = _char_key(c)
-        if c["text"].isspace():
-            keep.add(key)
-            continue
-        # Trim the box edges so ink bleeding in from a neighbouring glyph doesn't count.
-        dx, dy = (c["x1"] - c["x0"]) * 0.15, (c["bottom"] - c["top"]) * 0.1
-        x0, x1 = int((c["x0"] + dx) * scale), math.ceil((c["x1"] - dx) * scale)
-        y0, y1 = int((c["top"] + dy) * scale), math.ceil((c["bottom"] - dy) * scale)
-        crop = img[max(y0, 0):y1, max(x0, 0):x1]
-        if crop.size and int(crop.max()) - int(crop.min()) >= _INK_CONTRAST and c.get("size", 12) >= 3:
-            keep.add(key)
-        else:
-            hidden += 1
-    return keep, hidden
-
-
 _DATE_TOKEN = r"(\d{1,2}/\d{1,2}/\d{2,4}|\d{4}-\d{2}-\d{2}|[A-Z][a-z]{2,8}\.? \d{1,2}, \d{4})"
 _HEADER_PATTERNS = {
     "application_no": re.compile(r"APPLICATION\s+NO\.?\s*:?\s*([A-Z0-9\-]*\d[A-Z0-9\-]*)", re.I),
@@ -262,24 +209,9 @@ def _read_text_layer(path: Path) -> RawSheet:
 
     with pdfplumber.open(path) as pdf:
         for page_no, page in enumerate(pdf.pages, start=1):
-            raw_chars = len(page.chars)
-            area = float(page.width * page.height)
-            image_area = sum(float(im["width"] * im["height"]) for im in page.images)
-            if raw_chars == 0:
-                if page.images:
-                    raise _UseFallback(f"page {page_no} is a scanned image with no text layer")
+            page = visible_page(page, page_no, st.notes)
+            if page is None:
                 continue  # blank page
-            if image_area > 0.5 * area:
-                # Text over a page-sized image is usually an OCR layer, which can misread digits.
-                raise _UseFallback(f"page {page_no} looks like a scan with an OCR text layer")
-
-            keep, hidden = _inked_char_keys(page)
-            if hidden:
-                printable = sum(1 for c in page.chars if not c["text"].isspace())
-                if hidden > _MAX_HIDDEN_SHARE * printable:
-                    raise _UseFallback(f"page {page_no}: text layer does not match the rendered page")
-                st.notes.append(Note("hidden_text", f"page {page_no}: ignored {hidden} characters that are not visible on the page"))
-                page = page.filter(lambda o: o.get("object_type") != "char" or _char_key(o) in keep)
 
             text = page.extract_text() or ""
             text_lines.extend(text.splitlines())
