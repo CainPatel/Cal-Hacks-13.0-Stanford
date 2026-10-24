@@ -1,6 +1,6 @@
 # Draw — CLAUDE.md
 
-AI accounts-payable clerk for small general contractors. The model can only *propose* a payment; a deterministic policy kernel, a calibrated decision layer, and a hardware-held signing key decide whether money moves. Built at Cal Hacks 13.0, Oct 23–25 2026. Full spec: see `docs/spec.md` (or the shared Claude doc). This file is the operating contract for every human and every Claude Code session in this repo.
+AI accounts-payable clerk for small general contractors. The model can only *propose* a payment; a deterministic policy kernel, a calibrated decision layer, and a hardware-held signing key decide whether money moves. Built at Cal Hacks 13.0, Oct 23–25 2026. Full spec: see `docs/spec.pdf` (or the shared Claude doc). This file is the operating contract for every human and every Claude Code session in this repo.
 
 ## Hard rules (never violate; if a task requires it, stop and ask)
 
