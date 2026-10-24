@@ -113,9 +113,16 @@ def where(path: Path = DEFAULT_PATH) -> str:
     return "the Postgres log (DATABASE_URL)" if _postgres_url(path) else str(path)
 
 
+class LogNotConfigured(RuntimeError):
+    """Deployed with no database: the SQLite fallback can't live on a read-only, throwaway disk."""
+
+
 def _connect(path: Path) -> sqlite3.Connection:
     """A connection per call, so the log is safe to share across API threads."""
     path = Path(path)
+    if os.environ.get("VERCEL") and path == DEFAULT_PATH:
+        raise LogNotConfigured("The event log isn't connected: add Neon to this Vercel project "
+                               "(Storage → Neon → Connect), redeploy, then load the demo data.")
     path.parent.mkdir(parents=True, exist_ok=True)
     db = sqlite3.connect(path)
     db.execute("PRAGMA journal_mode=WAL")  # readers (SSE) don't block the writer

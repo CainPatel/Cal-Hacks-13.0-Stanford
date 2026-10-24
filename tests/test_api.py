@@ -119,3 +119,16 @@ def test_approve_flow(client, monkeypatch, tmp_path):
 
 def test_event_stream_from_now(client):
     assert client.get("/events", params={"after": -1, "follow": False}).text == ""
+
+
+def test_status_page_and_unconfigured_log(client, monkeypatch):
+    body = client.get("/").json()
+    assert body["event_log"] == "sqlite" and body["log_has_events"] is True
+    assert all(isinstance(v, bool) for k, v in body["configured"].items() if k != "cors_origins")  # never values
+    from events import log as events
+    monkeypatch.setenv("VERCEL", "1")
+    monkeypatch.delenv("DATABASE_URL", raising=False)
+    monkeypatch.setattr(main, "DB", events.DEFAULT_PATH)
+    r = client.get("/requests")
+    assert r.status_code == 503 and "Neon" in r.json()["detail"]
+    assert client.get("/").json()["event_log"] == "not connected"
