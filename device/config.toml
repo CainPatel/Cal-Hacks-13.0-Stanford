@@ -1,0 +1,6 @@
+# BCM pin numbers. Buttons wire pin -> button -> GND (internal pull-up).
+approve_pin = 17
+reject_pin = 27
+green_led = 22
+red_led = 23
+wait_seconds = 90

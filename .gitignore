@@ -13,3 +13,7 @@ __pycache__/
 node_modules/
 .next/
 .DS_Store
+
+# device keys (approval key private key lives in ~/.drawkey, never here)
+.drawkey/
+wifi_secrets.h

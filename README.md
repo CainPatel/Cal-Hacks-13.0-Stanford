@@ -4,13 +4,14 @@ An AI accounts-payable clerk for small general contractors. The model can only *
 payment; a deterministic policy kernel, a calibrated judgment layer, and a hardware-held
 signing key decide whether money moves. Built at Cal Hacks 13.0.
 
-Spec: [`docs/spec.pdf`](docs/spec.pdf). Team rules: [`CLAUDE.md`](CLAUDE.md).
+Spec: [`docs/spec.pdf`](docs/spec.pdf). Team rules: [`CLAUDE.md`](CLAUDE.md). Secrets: [`SECURITY.md`](SECURITY.md) (public repo; read before adding any key).
 
 ## Setup
 
 ```
 uv venv .venv && uv pip install -p .venv -r requirements.txt
-cp .env.example .env        # fill in keys; .env is gitignored, share values by DM
+cp .env.example .env && chmod 600 .env   # fill in keys; never commit; share by DM (SECURITY.md)
+make hooks                  # once per clone: blocks commits that contain secrets
 make test
 ```
 
