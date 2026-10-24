@@ -132,3 +132,11 @@ def test_status_page_and_unconfigured_log(client, monkeypatch):
     r = client.get("/requests")
     assert r.status_code == 503 and "Neon" in r.json()["detail"]
     assert client.get("/").json()["event_log"] == "not connected"
+
+
+def test_setup_demo_only_into_an_empty_log(client, tmp_path, monkeypatch):
+    assert client.post("/setup/demo").status_code == 409  # fixture already loaded the seed
+    monkeypatch.setattr(main, "DB", tmp_path / "fresh.db")
+    assert client.post("/setup/demo").json() == {"facts_loaded": 419, "decisions": 90}
+    assert len(client.get("/requests").json()) == 15
+    assert client.post("/setup/demo").status_code == 409  # once only

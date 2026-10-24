@@ -45,19 +45,19 @@ Redeploy both after adding variables (`NEXT_PUBLIC_*` is baked in at build time)
 
 ## 3. Load the demo company into Neon (once)
 
-From your laptop, in the repo:
+After Neon is connected and `draw-api` redeployed:
 
 ```
-npm i -g vercel
-vercel link                 # pick the draw-api project
-vercel env pull .env.local  # gitignored; contains DATABASE_URL
-set -a; . ./.env.local; set +a
-.venv/bin/python -m events load       # 419 facts; refuses if the log already has events
-.venv/bin/python -m events replay 6   # decide May-October (90 decisions)
+curl -X POST https://drawapi.vercel.app/setup/demo
 ```
 
-To start over, drop the table in the Neon console (`DROP TABLE events;`). The log refuses
-UPDATE, DELETE and TRUNCATE by trigger, on purpose.
+It loads 419 facts and decides May-October (90 decisions), on Vercel itself, so the database URL never
+leaves Vercel. It only works on an empty log (409 otherwise), so it can't overwrite real data. To start
+over, drop the table in the Neon console (`DROP TABLE events;`); the log refuses UPDATE, DELETE and
+TRUNCATE by trigger, on purpose.
+
+When connecting Neon, set the **Custom Prefix to `DATABASE`** so the variable is `DATABASE_URL` (Draw
+reads that name), and untick Preview under "Create database branch for deployment".
 
 ## 4. The approval key (Pi)
 
