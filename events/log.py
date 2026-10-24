@@ -215,6 +215,46 @@ def append_facts(facts: list[tuple[datetime, str, BaseModel]], path: Path = DEFA
     return len(rows)
 
 
+def copy_to_sqlite(dst: Path, path: Path = DEFAULT_PATH) -> int:
+    """Copy every row of the log (the Postgres log when DATABASE_URL is set) into a new SQLite file,
+    seq and both clocks unchanged: an offline copy of the shared log, for when there's no network."""
+    dst = Path(dst)
+    if dst.exists():
+        raise FileExistsError(f"{dst} already exists; move it aside first")
+    rows = _run(path, "SELECT seq, ts, at, kind, request_id, tbl, payload FROM events ORDER BY seq")
+    with _connect(dst) as db:
+        db.executemany("INSERT INTO events (seq, ts, at, kind, request_id, tbl, payload) VALUES (?, ?, ?, ?, ?, ?, ?)",
+                       rows)
+    return len(rows)
+
+
+def archive(path: Path = DEFAULT_PATH) -> str:
+    """Set the whole log aside and start an empty one; nothing is deleted. Postgres renames the table
+    (with its index and sequence) to events_archive_<time> and creates a fresh `events` in the same
+    transaction, so a running API never sees a missing table. SQLite renames the files beside it.
+    Returns where the old log went."""
+    stamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    url = _postgres_url(path)
+    if url is None:
+        path = Path(path)
+        moved = path.with_name(f"archive-{stamp}-{path.name}")
+        for suffix in ("", "-wal", "-shm"):
+            if Path(f"{path}{suffix}").exists():
+                Path(f"{path}{suffix}").rename(f"{moved}{suffix}")
+        return str(moved)
+    import psycopg
+    old = f"events_archive_{stamp}"
+    with psycopg.connect(url) as db:  # one transaction: commits on success, rolls back on any error
+        db.execute("SELECT pg_advisory_xact_lock(4242)")
+        db.execute(f"ALTER TABLE events RENAME TO {old}")
+        db.execute(f"ALTER INDEX events_pkey RENAME TO {old}_pkey")
+        db.execute(f"ALTER INDEX events_at RENAME TO {old}_at")
+        db.execute(f"ALTER SEQUENCE events_seq_seq RENAME TO {old}_seq_seq")
+        db.execute(PG_SCHEMA)
+    _pg_ready.add(url)
+    return f"Postgres table {old}"
+
+
 def read(after: int = 0, kind: str | None = None, as_of: date | datetime | None = None,
          request_id: str | None = None, path: Path = DEFAULT_PATH) -> list[Event]:
     """Events in write order. `after` is a seq (for SSE tails); `as_of` caps business time."""

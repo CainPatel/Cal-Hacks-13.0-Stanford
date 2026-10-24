@@ -130,16 +130,22 @@ def test_site_video_for_unknown_job(client, tmp_path):
 def test_replay_can_put_judgment_in_the_loop(client, monkeypatch):
     calls = {}
 
-    def fake_replay(through, path, judge=None):
-        calls.update(through=through, judge=judge)
+    def fake_replay(through, path, judge=None, redo=False):
+        calls.update(through=through, judge=judge, redo=redo)
         return []
 
     monkeypatch.setattr(main, "replay", fake_replay)
     client.post("/replay", params={"through": 6})
-    assert calls["judge"] is None
-    client.post("/replay", params={"through": 6, "judge": "true"})
+    assert calls["judge"] is None  # no model configured: rules only
+    assert client.post("/replay", params={"through": 6, "judge": "true"}).status_code == 503
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "test")  # a model can answer: it reviews by default
     from judgment import judge
+    client.post("/replay", params={"through": 6})
     assert calls["judge"] is judge
+    client.post("/replay", params={"through": 6, "judge": "false"})
+    assert calls["judge"] is None
+    client.post("/replay", params={"through": 6, "redo": "true"})
+    assert calls["redo"] is True
 
 
 # --- releases, certificates, emails, separate G702 ------------------------------

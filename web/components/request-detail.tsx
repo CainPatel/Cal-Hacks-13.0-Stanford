@@ -92,6 +92,12 @@ export function RequestDetailPanel({ id, version, backHref }: { id: string; vers
 
       <div className="mt-5 flex flex-col items-start gap-2.5">
         <NextStep detail={data} />
+        {data.status === "ready" && <PayNow key={data.id} detail={data} />}
+        {data.status === "needs_ok" && (
+          <Button size="lg" nativeButton={false} render={<Link href="/approve" />}>
+            Send it to the approval key
+          </Button>
+        )}
         {data.status === "on_hold" && overLimit && (
           <p className="max-w-[52ch] text-base text-muted-foreground">
             Once that&apos;s settled, this still needs the owner&apos;s OK: it&apos;s over the {moneyShort(overLimit)} limit.
@@ -134,7 +140,7 @@ export function RequestDetailPanel({ id, version, backHref }: { id: string; vers
             Show details
           </summary>
           <pre className="mt-2 max-h-[480px] overflow-auto rounded-[4px] bg-muted p-4 font-mono text-[13px] leading-normal whitespace-pre-wrap">
-            {JSON.stringify(data.trace, null, 2)}
+            {JSON.stringify(data.judgment ? { decision: data.trace, review: data.judgment } : data.trace, null, 2)}
           </pre>
         </details>
       )}
@@ -221,6 +227,87 @@ function PaperworkSteps({ detail }: { detail: RequestDetail }) {
         );
       })}
     </ul>
+  );
+}
+
+type PayStep = "idle" | "confirm" | "paying" | "paid" | "unknown" | "checking" | "error";
+
+/** Every check passed: pay it from the operating account, through the bank. */
+function PayNow({ detail }: { detail: RequestDetail }) {
+  const [step, setStep] = useState<PayStep>("idle");
+  const [said, setSaid] = useState<string | null>(null);
+
+  const pay = async () => {
+    setStep("paying");
+    try {
+      await api.pay(detail.id);
+      setSaid(null);
+      setStep("paid");
+    } catch (e) {
+      const message = (e as ApiError).message;
+      setSaid(message);
+      setStep(/unknown outcome/i.test(message) ? "unknown" : "error");
+    }
+  };
+  const ask = async () => {
+    setStep("checking");
+    try {
+      const r = await api.resolve(detail.id);
+      setSaid(r.outcome === "paid" ? "The bank shows it was paid. It's recorded now." : "The bank has no payment for this, so it can be paid again.");
+      setStep(r.outcome === "paid" ? "paid" : "idle");
+    } catch (e) {
+      setSaid((e as ApiError).message);
+      setStep("unknown");
+    }
+  };
+
+  if (step === "paid")
+    return (
+      <p className="flex items-start gap-2 text-body text-pass">
+        <Mark kind="pass" />
+        <span>{said ?? `Paid ${money(detail.amount)} to ${detail.sub}. It's in the log.`}</span>
+      </p>
+    );
+  if (step === "unknown" || step === "checking")
+    return (
+      <div className="flex flex-col items-start gap-2.5">
+        <p className="max-w-[52ch] text-base text-fail">
+          We sent the payment but the bank didn&apos;t confirm it. Check with the bank before paying again.
+        </p>
+        {said && <p className="max-w-[52ch] text-base text-muted-foreground">{said}</p>}
+        <Button size="lg" onClick={ask} disabled={step === "checking"}>
+          {step === "checking" ? "Checking…" : "Check with the bank"}
+        </Button>
+      </div>
+    );
+  if (step === "confirm")
+    return (
+      <div className="flex flex-col items-start gap-2.5">
+        <p className="max-w-[52ch] text-body">
+          Pay {money(detail.amount)} to {detail.sub}, to the account ending {detail.bank_account.slice(-4)}?
+        </p>
+        <div className="flex flex-wrap gap-3">
+          <Button size="lg" onClick={pay}>
+            Yes, pay it
+          </Button>
+          <Button size="lg" variant="outline" onClick={() => setStep("idle")}>
+            Cancel
+          </Button>
+        </div>
+      </div>
+    );
+  return (
+    <div className="flex flex-col items-start gap-2.5">
+      <Button size="lg" onClick={() => setStep("confirm")} disabled={step === "paying"}>
+        {step === "paying" ? "Paying…" : `Pay ${money(detail.amount)} now`}
+      </Button>
+      {step === "error" && said && (
+        <p className="flex max-w-[52ch] items-start gap-2 text-base text-fail">
+          <Mark kind="fail" />
+          <span>{said}</span>
+        </p>
+      )}
+    </div>
   );
 }
 

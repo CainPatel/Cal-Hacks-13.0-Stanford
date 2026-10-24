@@ -54,6 +54,10 @@ make benchmark   # score perception against data/synthetic (no Claude calls)
 make api         # uvicorn api.main:app --reload --port 8000
 make web         # cd web && npm run dev
 make device      # approval key in mock mode on :8001 (real Pi: device/README.md)
+make demo-online # shared Neon log (DATABASE_URL in .env): set the old log aside, load the seed, sync Nessie, decide with Jev
+make sync        # copy the Nessie ledger (owner draws, sub payments) into the log
+make snapshot    # copy the shared Neon log into data/events.db; `make offline` serves it with no network
+make smoke       # check every stage of a running Draw over HTTP (API=, WEB= for the deployment)
 make keys        # which secrets are set in .env (never prints values)
 make hooks       # once per clone: pre-commit hook that blocks secrets
 ```

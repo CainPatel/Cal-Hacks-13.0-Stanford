@@ -11,6 +11,7 @@ const TABS = [
   { href: "/", label: "Pay requests" },
   { href: "/approve", label: "Approve" },
   { href: "/upload", label: "Upload Portal" },
+  { href: "/log", label: "Log" },
   { href: "/security", label: "Security" },
 ];
 

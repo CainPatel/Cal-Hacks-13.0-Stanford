@@ -23,8 +23,10 @@ DATA, _ = with_demo(generate())
 @pytest.fixture
 def pg(monkeypatch):
     import psycopg
-    with psycopg.connect(URL, autocommit=True) as db:  # fresh table, triggers and all
-        db.execute("DROP TABLE IF EXISTS events")
+    with psycopg.connect(URL, autocommit=True) as db:  # fresh table, triggers and all; archives from earlier runs too
+        old = [r[0] for r in db.execute("SELECT tablename FROM pg_tables WHERE tablename LIKE 'events_archive_%'")]
+        for table in ["events", *old]:
+            db.execute(f"DROP TABLE IF EXISTS {table}")
     events._pg_ready.clear()
     monkeypatch.setenv("DATABASE_URL", URL)
     return URL
@@ -89,3 +91,30 @@ def test_advisory_lock_serializes_connections(pg, monkeypatch):
     for th in threads:
         th.join()
     assert order in (["a in", "a out", "b in", "b out"], ["b in", "b out", "a in", "a out"])
+
+
+def test_archive_sets_the_table_aside_and_a_running_api_keeps_working(pg):
+    import psycopg
+    load_seed(DATA)
+    replay(6)
+    n = len(events.read())
+    moved = events.archive()
+    table = moved.removeprefix("Postgres table ")
+    assert events.is_empty()
+    with psycopg.connect(URL) as db:
+        assert db.execute(f"SELECT count(*) FROM {table}").fetchone()[0] == n
+        with pytest.raises(psycopg.errors.RaiseException, match="append-only"):  # the archive stays read-only
+            db.execute(f"DELETE FROM {table}")
+    # this process had the old table ready: appending now goes to the fresh one, numbered from 1
+    assert events.append("signature", {"sig": "s"}, request_id="after") == 1
+    with psycopg.connect(URL) as db, pytest.raises(psycopg.errors.RaiseException, match="append-only"):
+        db.execute("UPDATE events SET kind = 'fact'")
+    assert load_seed(DATA) == 419  # the demo company loads again into the fresh log
+
+
+def test_snapshot_copies_postgres_into_sqlite(pg, tmp_path):
+    load_seed(DATA)
+    replay(6)
+    out = tmp_path / "offline.db"
+    assert events.copy_to_sqlite(out) == 419 + 90
+    assert [e.model_dump() for e in events.read(path=out)] == [e.model_dump() for e in events.read()]

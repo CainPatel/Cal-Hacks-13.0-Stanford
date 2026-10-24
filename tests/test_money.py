@@ -24,22 +24,22 @@ pytestmark = pytest.mark.skipif(pipeline.kernel_decide is None, reason="needs ke
 class FakeNessie:
     """Stands in for requests.request against the Nessie sandbox; records every call."""
 
-    def __init__(self, fail_with=None, envelope=True):
+    def __init__(self, fail_with=None, envelope=True, fail_on=("POST",)):
         self.calls, self.fail_with, self.envelope, self.n = [], fail_with, envelope, 0
+        self.fail_on = fail_on  # which calls fail_with breaks: by default the payment, not the look-up before it
         self.deposits, self.bills = [], []
 
     def __call__(self, method, url, params=None, json=None, timeout=None):
         self.calls.append(SimpleNamespace(method=method, url=url, params=params, json=json))
-        if self.fail_with is not None:
+        if self.fail_with is not None and method in self.fail_on:
             if isinstance(self.fail_with, Exception):
                 raise self.fail_with
             return SimpleNamespace(status_code=self.fail_with, text="bad request", json=lambda: {})
-        self.n += 1
-        oid = f"obj{self.n}"
         if method == "GET":
             body = self.deposits if url.endswith("/deposits") else self.bills if url.endswith("/bills") else []
         else:
-            record = {**(json or {}), "_id": oid}
+            self.n += 1
+            record = {**(json or {}), "_id": f"obj{self.n}"}
             if url.endswith("/deposits"):
                 self.deposits.append(record)
             elif url.endswith("/bills"):
@@ -148,8 +148,9 @@ def test_missing_bank_settings_never_spend_the_approval(monkeypatch, world):
     approval = approval_for(priv, req)
     with pytest.raises(ex.ExecutionRefused, match="NESSIE_API_KEY"):
         ex.execute(d, req, auto_release_limit_usd=25000, pubkey_hex=pub, approval=approval, log_path=world)
-    failed = events.read(kind="execution", request_id=req.id, path=world)[-1].data
-    assert failed["status"] == "failed" and failed["released_nonce"] == approval.nonce
+    # refused at the bank check, before anything was sent or the approval recorded as used
+    assert not events.read(kind="execution", request_id=req.id, path=world)
+    assert not events.read(kind="signature", request_id=req.id, path=world)
 
 
 # --- the GC's ledger in Nessie -----------------------------------------------------

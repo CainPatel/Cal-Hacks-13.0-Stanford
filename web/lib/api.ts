@@ -69,7 +69,27 @@ export type RequestDetail = RequestRow & {
   /** The uploaded original's stored name, for GET /files (behind the upload passcode). */
   original: string | null;
   trace: { action: string; results: RuleResult[]; next_action: string | null } | null;
+  /** Jev's latest review of this request (null when it was decided on the rules alone). */
+  judgment: {
+    source: string;
+    proposal: { action: string } | null;
+    answers: Record<string, { value: string | number; confidence: number }>;
+  } | null;
 };
+
+export type LogKind = "fact" | "judgment" | "kernel_trace" | "signature" | "execution";
+export type LogEvent = {
+  seq: number;
+  ts: string;
+  at: string;
+  kind: LogKind;
+  request_id: string | null;
+  table: string | null;
+  data: Record<string, unknown>;
+  /** One sentence about the row, worded by the API. */
+  line: string;
+};
+export type LogPage = { events: LogEvent[]; more: boolean };
 
 /** data/calibration.json from `python -m fuzzer.calibration` (report()). */
 export type Calibration = {
@@ -161,6 +181,20 @@ export const api = {
   request: (id: string) => call<RequestDetail>(`/requests/${encodeURIComponent(id)}`),
   approve: (id: string) =>
     call<{ paid: boolean; rejected: boolean; reason?: string }>(`/requests/${encodeURIComponent(id)}/approve`, { method: "POST" }),
+  /** Pay a request that's ready (one that needs the owner's OK goes to the approval key first). */
+  pay: (id: string) =>
+    call<{ paid: boolean; amount: string; approved_on_device: boolean }>(`/requests/${encodeURIComponent(id)}/pay`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ confirm: true }),
+    }),
+  /** After a payment whose outcome is unknown: ask the bank what really happened. */
+  resolve: (id: string) => call<{ outcome: "paid" | "unpaid" }>(`/requests/${encodeURIComponent(id)}/resolve`, { method: "POST" }),
+  log: (q: { limit?: number; before?: number; kind?: LogKind | ""; request_id?: string }) => {
+    const params = new URLSearchParams();
+    for (const [k, v] of Object.entries(q)) if (v !== undefined && v !== "") params.set(k, String(v));
+    return call<LogPage>(`/log?${params}`);
+  },
   /** After a client upload to Blob: the API pulls the file from the private store and reads it. */
   ingest: (kind: DocKind, pathname: string, ids: { sub_id?: string; job_id?: string }) =>
     call<IngestResult>("/ingest", {
@@ -199,7 +233,8 @@ export const api = {
       body: JSON.stringify(body),
     }),
   verifyVendor: (id: string) => call<{ crs_status: string; reasons: string[] }>(`/vendors/${encodeURIComponent(id)}/verify`, { method: "POST" }),
-  replay: (through: number) => call<{ new_decisions: number }>(`/replay?through=${through}`, { method: "POST" }),
+  /** The server syncs the bank first, and Jev reviews each request when a model is configured. */
+  replay: (through: number) => call<{ new_decisions: number; judged: boolean }>(`/replay?through=${through}`, { method: "POST" }),
   scorecard: () => call<Scorecard>("/scorecard"),
   calibration: () => call<Calibration>("/calibration"),
   attacks: () => call<{ name: string; about: string }[]>("/attacks"),
