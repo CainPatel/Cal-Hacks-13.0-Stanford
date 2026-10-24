@@ -15,4 +15,4 @@ always_escalate:
   - bank_detail_change
   - amount_over_limit
 
-esp32_pubkey: ""  # hex, uncompressed (04 || X || Y) -- fill in once the device boots
+esp32_pubkey: "04a12febc5ae04262c841a7b35e48b42f6b7538afbd2ba6f2c15acc1e7067633cef982a236a1f95dc6a31eb36592ecb0ad2fcbc5dc37da5ac4c492b3fc9705de4b"
