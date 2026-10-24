@@ -472,3 +472,18 @@ def test_scanned_separate_g702_is_refused_plainly(tmp_path):
     scan = rasterize(build_aia_g702(tmp_path / "g702.pdf", standard_lines()), tmp_path / "scan.pdf")
     with pytest.raises(ExtractionError, match="not readable as text"):
         extract(g703, g702_pdf=scan)
+
+
+def test_claude_heading_row_is_skipped_not_a_line(tmp_path, fake_claude):
+    scanned = rasterize(build_g703(tmp_path / "a.pdf", standard_lines()), tmp_path / "scan.pdf")
+    rows = [_row("1", "HVAC", "", "", "", "", "", "", "", ""), *_transcription().rows]
+    r = extract(scanned, allow_llm_fallback=True, client=fake_claude(_transcription(rows=rows)))
+    assert [li.description for li in r.pay_request.lines] == ["General conditions"]
+    assert any(n.code == "section_heading" for n in r.notes)
+
+
+def test_claude_line_missing_only_its_scheduled_value_still_fails(tmp_path, fake_claude):
+    scanned = rasterize(build_g703(tmp_path / "a.pdf", standard_lines()), tmp_path / "scan.pdf")
+    bad = _transcription(rows=[_row("1", "Ductwork", "", "0", "500.00", "", "500.00", "", "", "50.00")])
+    with pytest.raises(ExtractionError, match="required amount is blank"):
+        extract(scanned, allow_llm_fallback=True, client=fake_claude(bad))

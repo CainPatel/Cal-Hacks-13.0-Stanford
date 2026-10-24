@@ -385,16 +385,26 @@ def _read_with_claude(pdf_bytes: bytes, client) -> RawSheet:
             d.pop("retainage")
         return d
 
+    # A heading row ("HVAC", "Division 23") has an item number but no amounts; the text-layer
+    # path skips these too. A row with any amount at all is still a line and must be complete.
+    rows, notes = [], []
+    for r in t.rows:
+        c = cells(r)
+        if all(not v.strip() for v in c.values()):
+            notes.append(Note("section_heading", f"skipped heading {r.item_no.strip()} {r.description.strip()!r}", r.item_no.strip()))
+        else:
+            rows.append(RawRow(r.item_no.strip(), r.description.strip(), c))
+
     return RawSheet(
         application_no=t.application_no,
         application_date=t.application_date,
         period_to=t.period_to,
         remit_account=t.remit_account.strip(),
         has_retainage_column=t.has_retainage_column,
-        rows=[RawRow(r.item_no.strip(), r.description.strip(), cells(r)) for r in t.rows],
+        rows=rows,
         totals=cells(t.totals_row) if t.totals_row else None,
         g702=t.g702.model_dump() if t.g702 else None,
-        notes=[],
+        notes=notes,
     )
 
 
