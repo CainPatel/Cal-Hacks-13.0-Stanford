@@ -7,6 +7,7 @@ GET  /requests?month=6     one month's pay requests with a plain-English status
 GET  /requests/{id}        one request: checklist, lines with video estimates, trace
 GET  /events?after=0       Server-Sent Events from the log (follow=false to just dump)
 GET  /scorecard            data/scorecard.json from `make fuzz`
+GET  /calibration          data/calibration.json from `python -m fuzzer.calibration`
 GET  /attacks              what the attack console offers
 POST /attacks              run one attack: {"name", "target", "settings"}
 POST /replay?through=6     decide every undecided request through that month
@@ -28,6 +29,7 @@ from shared.schema import Action, Decision
 
 DB = events.DEFAULT_PATH
 SCORECARD = Path("data/scorecard.json")
+CALIBRATION = Path("data/calibration.json")
 
 app = FastAPI(title="Draw")
 app.add_middleware(CORSMiddleware, allow_origins=["http://localhost:3000"], allow_methods=["*"], allow_headers=["*"])
@@ -116,6 +118,13 @@ def scorecard():
     if not SCORECARD.exists():
         raise HTTPException(404, "no scorecard yet; run `make fuzz`")
     return json.loads(SCORECARD.read_text())
+
+
+@app.get("/calibration")
+def calibration():
+    if not CALIBRATION.exists():
+        raise HTTPException(404, "no calibration yet; run `python -m fuzzer.calibration` (needs kernel + Jev/Claude)")
+    return json.loads(CALIBRATION.read_text())
 
 
 class AttackIn(BaseModel):
