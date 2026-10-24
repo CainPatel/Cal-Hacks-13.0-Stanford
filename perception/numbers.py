@@ -89,7 +89,8 @@ def parse_pct(text: str | None) -> tuple[Decimal, bool]:
 
 
 # %y before %Y: strptime's %Y accepts "26" as year 0026.
-_DATE_FORMATS = ("%m/%d/%y", "%m/%d/%Y", "%Y-%m-%d", "%B %d, %Y", "%b %d, %Y", "%b. %d, %Y")
+_DATE_FORMATS = ("%m/%d/%y", "%m/%d/%Y", "%m.%d.%Y", "%m.%d.%y", "%m-%d-%Y", "%Y-%m-%d", "%B %d, %Y", "%b %d, %Y",
+                 "%b. %d, %Y")
 
 
 def parse_date(text: str) -> date:
