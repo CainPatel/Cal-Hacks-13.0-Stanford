@@ -7,8 +7,10 @@ GET  /requests?month=6     one month's pay requests with a plain-English status
 GET  /requests/{id}        one request: checklist, lines with video estimates, trace
 GET  /events?after=0       Server-Sent Events from the log (follow=false to just dump)
 GET  /scorecard            data/scorecard.json from `make fuzz`
+GET  /calibration          data/calibration.json from `python -m fuzzer.calibration`
 GET  /attacks              what the attack console offers
 POST /attacks              run one attack: {"name", "target", "settings"}
+POST /attacks/describe     a judge's plain-English attack, mapped by Claude: {"text"}
 POST /replay?through=6     decide every undecided request through that month
 """
 import asyncio
@@ -28,6 +30,7 @@ from shared.schema import Action, Decision
 
 DB = events.DEFAULT_PATH
 SCORECARD = Path("data/scorecard.json")
+CALIBRATION = Path("data/calibration.json")
 
 app = FastAPI(title="Draw")
 app.add_middleware(CORSMiddleware, allow_origins=["http://localhost:3000"], allow_methods=["*"], allow_headers=["*"])
@@ -118,6 +121,13 @@ def scorecard():
     return json.loads(SCORECARD.read_text())
 
 
+@app.get("/calibration")
+def calibration():
+    if not CALIBRATION.exists():
+        raise HTTPException(404, "no calibration yet; run `python -m fuzzer.calibration` (needs kernel + Jev/Claude)")
+    return json.loads(CALIBRATION.read_text())
+
+
 class AttackIn(BaseModel):
     name: str
     target: str  # a sub id, or a job id for new_sub_ein_mismatch
@@ -141,6 +151,27 @@ def run_attack(body: AttackIn):
     return {"label": out["label"].model_dump(mode="json"), "decision": d.model_dump(mode="json"),
             "amount": str(out["amount"]), "caught": d.action != Action.release,
             "caught_by_rules": d.action == Action.hold}
+
+
+class DescribeIn(BaseModel):
+    text: str
+
+
+@app.post("/attacks/describe")
+def describe_attack(body: DescribeIn):
+    from fuzzer import nl_attack
+    try:
+        out = nl_attack.run(body.text)
+    except nl_attack.AttackError as e:
+        raise HTTPException(502, str(e))
+    except (ValueError, StopIteration, TypeError) as e:
+        raise HTTPException(422, f"that attack can't run as described: {e}")
+    if out["result"] is None:
+        return {"plan": out["plan"], "result": None}
+    r = out["result"]
+    return {"plan": out["plan"], "label": r["label"].model_dump(mode="json"),
+            "decision": r["decision"].model_dump(mode="json"), "amount": str(r["amount"]),
+            "caught": r["decision"].action != Action.release, "caught_by_rules": r["decision"].action == Action.hold}
 
 
 @app.post("/replay")
