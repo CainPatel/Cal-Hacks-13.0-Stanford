@@ -104,6 +104,17 @@ commit (`version`), which log and bank it uses (fingerprints), and how requests 
 (`judgment`: `jev`, `claude`, or `rules only`). Deploys are manual (above), so compare `version` with
 `git rev-parse --short origin/main` after merging.
 
+Then check every stage end to end (read-only; the attack console runs in memory):
+
+```
+make smoke API=https://drawapi.vercel.app WEB=https://drawweb.vercel.app
+```
+
+It prints a PASS/WARN/FAIL line per check (settings, decisions, Jev's reviews, the Log endpoint and
+live stream, scorecard, calibration, attack console, every dashboard page, Blob uploads, CORS) and
+says what to fix. `FLAGS="--sync --pay"` also syncs the bank and makes one sandbox payment;
+`--approve` sends one escalation to the approval key and waits for a press.
+
 ## Limits to know
 
 - **Function duration**: 300 s (Hobby and Pro default). Approve waits up to ~90 s for the button: fine.

@@ -113,6 +113,7 @@ Vercel (dashboard + API), Neon Postgres for the event log, a private Blob store 
 | `make demo-online` | start the shared Neon log over with the demo company, bank synced, Jev in the loop |
 | `make sync` | copy the bank's ledger (Nessie owner draws, sub payments) into the log |
 | `make snapshot` / `make offline` | copy the shared Neon log to `data/events.db` / serve that copy offline |
+| `make smoke` | check every stage of a running Draw over HTTP (`API=… WEB=…` for the deployment; read-only unless `FLAGS="--sync --pay --approve"`) |
 | `make test` | all tests |
 
 ## How a pay request flows

@@ -323,7 +323,8 @@ function AttackConsole() {
 
   useEffect(() => {
     api.attacks().then((a) => (setAttacks(a), setName(a[0]?.name ?? "")), () => {});
-    api.requests(6).then(setSubs, () => {});
+    // one entry per sub: a sub can have two October requests (a resubmission, a new upload)
+    api.requests(6).then((rows) => setSubs([...new Map(rows.map((r) => [r.sub_id, r])).values()]), () => {});
   }, []);
 
   const jobTarget = name === "new_sub_ein_mismatch"; // a brand-new sub has no history; it needs a job to bill on
