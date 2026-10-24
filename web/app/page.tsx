@@ -3,14 +3,16 @@
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useEffect, useMemo, useState } from "react";
+import { ChevronDown } from "lucide-react";
 import { MonthOverview, type View } from "@/components/month-overview";
 import { RequestDetailPanel } from "@/components/request-detail";
-import { StatusChip } from "@/components/status-chip";
+import { Waiting } from "@/components/waiting";
+import { StatusMark } from "@/components/status-chip";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useLive } from "@/hooks/use-live";
 import { api, ApiError, money, MONTHS, monthName, type RequestRow } from "@/lib/api";
-import { category, CATEGORY_ORDER, rowLine } from "@/lib/labels";
+import { category, CATEGORY, CATEGORY_ORDER, phrase } from "@/lib/labels";
 import { cn } from "@/lib/utils";
 
 export default function Page() {
@@ -59,7 +61,14 @@ function PayRequests() {
     for (const r of rows ?? []) byJob.set(r.job, [...(byJob.get(r.job) ?? []), r]);
     const rank = (r: RequestRow) => CATEGORY_ORDER.indexOf(category(r));
     for (const list of byJob.values()) list.sort((a, b) => rank(a) - rank(b) || Number(b.amount) - Number(a.amount));
-    return [...byJob.entries()];
+    // jobs that most need help first: compare their requests' ranks in order
+    return [...byJob.entries()].sort(([an, a], [bn, b]) => {
+      for (let i = 0; i < Math.max(a.length, b.length); i++) {
+        const d = (a[i] ? rank(a[i]) : 99) - (b[i] ? rank(b[i]) : 99);
+        if (d) return d;
+      }
+      return an.localeCompare(bn);
+    });
   }, [rows]);
 
   const total = (list: RequestRow[]) => list.reduce((s, r) => s + Number(r.amount), 0);
@@ -78,8 +87,13 @@ function PayRequests() {
   };
 
   return (
-    <main className="mx-auto grid w-full max-w-[1440px] flex-1 gap-10 px-4 py-6 sm:px-8 sm:py-10 lg:grid-cols-[minmax(0,4fr)_minmax(0,6fr)]">
-      <header className={cn("min-w-0 lg:col-span-2", selected && "hidden lg:block")}>
+    <main
+      className={cn(
+        "mx-auto grid w-full max-w-[1440px] flex-1 gap-10 px-4 py-6 sm:px-8 sm:py-10",
+        selected && "lg:grid-cols-[minmax(0,4fr)_minmax(0,6fr)]",
+      )}
+    >
+      <header className={cn("min-w-0", selected && "hidden lg:col-span-2 lg:block")}>
         <div className="flex flex-wrap items-center justify-between gap-3">
           <h1 id="month" className="text-[1.625rem] leading-tight font-semibold tracking-tight sm:text-lede">
             {monthName(month)}
@@ -107,7 +121,7 @@ function PayRequests() {
         )}
       </header>
 
-      <section aria-labelledby="month" className={cn("min-w-0 space-y-12", selected && "hidden lg:block")}>
+      <section aria-labelledby="month" className={cn("min-w-0 space-y-8", selected && "hidden lg:block")}>
         {error && (
           <div role="alert" className="rounded-lg border border-fail bg-fail-soft p-4 text-fail">
             {error}
@@ -129,53 +143,62 @@ function PayRequests() {
           <p className="rounded-lg border bg-sheet p-6">No pay requests have come in for {monthName(month)}.</p>
         )}
 
-        {jobs.map(([job, list]) => (
-          <section key={job} id={`job-${list[0].job_id}`} aria-label={job} className="scroll-mt-24">
-            <div className="flex items-baseline justify-between gap-4 border-b-2 border-foreground pb-2.5">
-              <h2 className="text-[1.3125rem] font-semibold tracking-tight">{job}</h2>
-              <span className="text-base whitespace-nowrap text-muted-foreground">{list.length} requests</span>
-            </div>
-            <ul className="divide-y divide-border">
-              {list.map((r) => (
-                <li key={r.id}>
-                  <Link
-                    href={href({ r: r.id })}
-                    scroll={false}
-                    aria-current={selected === r.id ? "true" : undefined}
-                    className={cn(
-                      "grid grid-cols-[minmax(0,1fr)_auto] gap-x-6 gap-y-1.5 px-3 py-4 hover:bg-muted",
-                      selected === r.id && "bg-selected shadow-[inset_4px_0_0_var(--primary)] hover:bg-selected",
-                    )}
-                  >
-                    <span className="min-w-0 font-semibold">{r.sub}</span>
-                    <span className="text-right font-mono whitespace-nowrap tnum">{money(r.amount)}</span>
-                    <span className="col-span-2 flex flex-wrap items-center gap-x-3 gap-y-1.5 text-[1.0625rem]">
-                      <StatusChip category={category(r)} />
-                      <span>{rowLine(r.status, r.sentence, r.reason)}</span>
-                    </span>
-                  </Link>
-                </li>
-              ))}
-            </ul>
-            <div className="flex items-baseline justify-between gap-4 px-3 pt-2.5">
-              <span className="text-base text-muted-foreground">Total this period</span>
-              <span className="border-b-[3px] border-double border-foreground pb-0.5 font-mono whitespace-nowrap tnum">{money(total(list))}</span>
-            </div>
-          </section>
-        ))}
+        {rows && rows.length > 0 && !unchecked && <Waiting rows={rows} month={month} version={version} wide={!selected} requestHref={(id) => `${href({ r: id })}#detail`} />}
+
+        <div className={cn("grid items-start gap-x-10 gap-y-8", !selected && "xl:grid-cols-2")}>
+          {jobs.map(([job, list]) => (
+            <details key={job} open id={`job-${list[0].job_id}`} className="group min-w-0 scroll-mt-24">
+              <summary className="flex min-h-12 cursor-pointer list-none items-center gap-3 rounded-sm border-b-2 border-foreground pb-2 outline-none select-none focus-visible:ring-3 focus-visible:ring-ring/50 [&::-webkit-details-marker]:hidden">
+                <h2 className="min-w-0 text-[1.3125rem] font-semibold tracking-tight">{job}</h2>
+                <span className="text-base whitespace-nowrap text-muted-foreground">{list.length} requests</span>
+                <ChevronDown className="ml-auto size-5 shrink-0 text-muted-foreground transition-transform group-open:rotate-180 motion-reduce:transition-none" aria-hidden />
+              </summary>
+              <ul className="divide-y divide-border">
+                {list.map((r) => {
+                  const cat = category(r);
+                  const said = phrase(r);
+                  return (
+                    <li key={r.id}>
+                      <Link
+                        href={href({ r: r.id })}
+                        scroll={false}
+                        aria-current={selected === r.id ? "true" : undefined}
+                        className={cn(
+                          "grid grid-cols-[minmax(0,1fr)_auto] items-start gap-x-4 gap-y-1.5 px-3 py-3 sm:grid-cols-[8.75rem_minmax(0,1fr)_auto] outline-none hover:bg-muted focus-visible:ring-3 focus-visible:ring-ring/50",
+                          selected === r.id && "bg-selected shadow-[inset_4px_0_0_var(--primary)] hover:bg-selected",
+                        )}
+                      >
+                        <span className={cn("inline-flex min-h-7 items-center gap-1.5 self-start rounded-lg px-2 text-[0.9375rem] font-semibold whitespace-nowrap col-span-2 justify-self-start sm:col-span-1", CATEGORY[cat].chip)}>
+                          <StatusMark category={cat} />
+                          {CATEGORY[cat].short}
+                          <span className="sr-only">: {CATEGORY[cat].label}</span>
+                        </span>
+                        <span className="min-w-0">
+                          <span className="block font-semibold">{r.sub}</span>
+                          {said && <span className="block text-[15px] text-muted-foreground">{said}</span>}
+                        </span>
+                        <span className="text-right font-mono whitespace-nowrap tnum">{money(r.amount)}</span>
+                      </Link>
+                    </li>
+                  );
+                })}
+              </ul>
+              <div className="flex items-baseline justify-between gap-4 px-3 pt-2.5">
+                <span className="text-base text-muted-foreground">Total this period</span>
+                <span className="border-b-[3px] border-double border-foreground pb-0.5 font-mono whitespace-nowrap tnum">{money(total(list))}</span>
+              </div>
+            </details>
+          ))}
+        </div>
       </section>
 
-      <aside id="detail" aria-label="Pay request detail" className={cn("min-w-0 scroll-mt-20", !selected && "hidden lg:block")}>
-        <div className="lg:sticky lg:top-24 lg:max-h-[calc(100dvh-7.5rem)] lg:overflow-y-auto lg:pr-1">
-          {selected ? (
+      {selected && (
+        <aside id="detail" aria-label="Pay request detail" className="min-w-0 scroll-mt-20">
+          <div className="lg:sticky lg:top-24 lg:max-h-[calc(100dvh-7.5rem)] lg:overflow-y-auto lg:pr-1">
             <RequestDetailPanel id={selected} version={version} backHref={href({ r: null })} />
-          ) : (
-            <div className="rounded-lg border border-dashed border-border-strong p-8 leading-relaxed text-muted-foreground">
-              Pick a pay request to see every check, the proof behind any hold, and what to do next.
-            </div>
-          )}
-        </div>
-      </aside>
+          </div>
+        </aside>
+      )}
     </main>
   );
 }

@@ -163,3 +163,42 @@ def test_status_reports_the_active_jev_route(client, monkeypatch):
     assert client.get("/").json()["configured"]["jev_key"] is False
     monkeypatch.setenv("TYPESAFE_API_KEY", "x")
     assert client.get("/").json()["configured"]["jev_key"] is True
+
+
+def test_seeded_evidence_is_flagged_as_sample(client):
+    client.post("/replay")
+    d = client.get("/requests/pr_sub_03_6").json()  # Summit Drywall: seeded G703 and seeded video estimates
+    assert d["sample_document"] is True and d["original"] is None
+    assert d["site_evidence"]["sample"] is True
+
+
+def test_emails_match_only_the_exact_domain(client):
+    from datetime import datetime
+
+    from events import log as events
+    from shared.schema import Email, EmailClaims
+
+    events.append("fact", Email(id="em_real", from_addr="ap@brightlineelectric.com", from_domain="brightlineelectric.com",
+                                sent_at=datetime(2026, 10, 23, 8, 0), subject="October pay app", body="Attached.",
+                                claims=EmailClaims()), table="emails", path=main.DB)
+    got = {e["id"]: e for e in client.get("/emails", params={"month": 6}).json()}
+    assert got["em_real"]["sub_id"] == "sub_04" and got["em_real"]["sub"] == "Brightline Electric Inc."
+    assert got["em_sub_04_bank"]["sub_id"] is None  # brightIine with a capital I: not a known sub
+    assert list(got) == ["em_real", "em_sub_04_bank"]  # newest first
+    assert "body" not in got["em_real"]
+    assert client.get("/emails", params={"month": 5}).json() == []
+
+
+def test_original_files_need_a_hashed_name_and_the_passcode(client, monkeypatch, tmp_path):
+    monkeypatch.setattr(main, "UPLOADS", tmp_path / "uploads")
+    name = "a" * 64 + ".pdf"
+    (tmp_path / "uploads").mkdir()
+    (tmp_path / "uploads" / name).write_bytes(b"%PDF-1.4 original")
+    assert client.get("/files/../secrets.pdf").status_code == 404
+    assert client.get("/files/payapp.pdf").status_code == 404
+    r = client.get(f"/files/{name}")  # locally with no passcode set: allowed
+    assert r.status_code == 200 and r.content == b"%PDF-1.4 original" and r.headers["content-type"] == "application/pdf"
+    monkeypatch.setenv("UPLOAD_PASSCODE", "s3cret")
+    assert client.get(f"/files/{name}").status_code == 401
+    assert client.get(f"/files/{name}", headers={"X-Upload-Passcode": "s3cret"}).status_code == 200
+    assert client.get("/files/" + "b" * 64 + ".pdf", headers={"X-Upload-Passcode": "s3cret"}).status_code == 404

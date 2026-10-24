@@ -26,6 +26,8 @@ export type RequestRow = {
   why: ("over_limit" | "unsure" | "new_vendor" | "new_bank")[];
 };
 
+export type EmailRow = { id: string; from_addr: string; from_domain: string; subject: string; sent_at: string; sub_id: string | null; sub: string | null };
+
 export type VendorList = { vendors: { id: string; legal_name: string; job_ids: string[] }[]; jobs: { id: string; name: string }[] };
 export type NewVendor = { legal_name: string; email_domain?: string; ein?: string; bank_account?: string };
 
@@ -48,10 +50,15 @@ export type Line = {
 export type RequestDetail = RequestRow & {
   checklist: { rule: string; passed: boolean; message: string }[];
   lines: Line[];
-  site_evidence: { date: string; frames: string[] } | null;
+  /** `sample`: seeded estimates, not read from a real video. */
+  site_evidence: { date: string; frames: string[]; sample: boolean } | null;
   bank_account: string;
   vendor: { legal_name: string; email_domain: string };
   source_doc: string;
+  /** True when the lines came from the seed, not from reading an uploaded file. */
+  sample_document: boolean;
+  /** The uploaded original's stored name, for GET /files (behind the upload passcode). */
+  original: string | null;
   trace: { action: string; results: RuleResult[]; next_action: string | null } | null;
 };
 
@@ -160,6 +167,21 @@ export const api = {
     return call<IngestResult>(DIRECT[kind].path, { method: "POST", body: form });
   },
   vendors: () => call<VendorList>("/vendors"),
+  emails: (month: number) => call<EmailRow[]>(`/emails?month=${month}`),
+  /** The original upload as a blob URL; the passcode goes in a header, never the URL. */
+  openOriginal: async (name: string, passcode: string) => {
+    let res: Response;
+    try {
+      res = await fetch(`${API_URL}/files/${encodeURIComponent(name)}`, { headers: { "X-Upload-Passcode": passcode }, cache: "no-store" });
+    } catch {
+      throw new ApiError(0, `Can't reach the Draw server at ${API_URL}.`);
+    }
+    if (!res.ok) {
+      const body = await res.json().catch(() => ({}));
+      throw new ApiError(res.status, typeof body.detail === "string" ? body.detail : `Couldn't open the original (${res.status}).`);
+    }
+    return URL.createObjectURL(await res.blob());
+  },
   createVendor: (body: NewVendor, passcode: string) =>
     call<{ id: string; legal_name: string }>("/vendors", {
       method: "POST",

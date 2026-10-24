@@ -1,5 +1,9 @@
-import type { ReactNode } from "react";
-import { type Line, type RequestDetail, type RuleResult } from "@/lib/api";
+"use client";
+
+import { ChevronDown } from "lucide-react";
+import { type ReactNode, useState } from "react";
+import { Button } from "@/components/ui/button";
+import { api, ApiError, money, type Line, type RequestDetail, type RuleResult } from "@/lib/api";
 import { day, sayChar, shortName } from "@/lib/labels";
 import { cn } from "@/lib/utils";
 
@@ -35,7 +39,7 @@ const MARK_COLOR = { pass: "stroke-pass", fail: "stroke-fail", ok: "stroke-hold"
 /** One upright margin mark: tick, cross, or the owner's ring. */
 export function Mark({ kind }: { kind: keyof typeof MARKS }) {
   return (
-    <svg viewBox="0 0 24 24" aria-hidden className={cn("size-6 fill-none", MARK_COLOR[kind])} strokeWidth={2.6} strokeLinecap="round" strokeLinejoin="round">
+    <svg viewBox="0 0 24 24" aria-hidden className={cn("size-6 shrink-0 fill-none", MARK_COLOR[kind])} strokeWidth={2.6} strokeLinecap="round" strokeLinejoin="round">
       <path d={MARKS[kind]} />
     </svg>
   );
@@ -55,28 +59,67 @@ export function MarkRow({ kind, sr, children }: { kind: keyof typeof MARKS; sr: 
 }
 
 /**
- * The proof beside each hold: what the rule saw on the left, the document it came from on the right.
- * Every failing evidence rule gets its own block, in the order progress, bank/email, supplier.
+ * One piece of proof (DESIGN.md "Evidence boxes"): open and light red when it explains the hold,
+ * closed and light green when it checks out. The mark and the word say which; colour only repeats it.
  */
+function EvidenceBox({ title, failed, sample, children }: { title: string; failed: boolean; sample?: "video" | "document"; children: ReactNode }) {
+  return (
+    <details open={failed} className="group overflow-hidden rounded-lg border bg-sheet">
+      <summary
+        className={cn(
+          "flex min-h-12 cursor-pointer list-none items-center gap-2.5 px-4 py-2 outline-none select-none focus-visible:ring-3 focus-visible:ring-ring/50 [&::-webkit-details-marker]:hidden",
+          failed ? "bg-fail-soft" : "bg-pass-soft",
+        )}
+      >
+        <Mark kind={failed ? "fail" : "pass"} />
+        <span className="font-semibold">{title}</span>
+        <span className={cn("text-meta", failed ? "text-fail" : "text-pass")}>{failed ? "Didn't pass" : "Checks out"}</span>
+        <ChevronDown className="ml-auto size-5 text-muted-foreground transition-transform group-open:rotate-180 motion-reduce:transition-none" aria-hidden />
+      </summary>
+      <div className="p-4">
+        {children}
+        {sample && <p className="mt-4 border-t pt-2.5 text-meta text-muted-foreground">Sample numbers, not read from a real {sample}.</p>}
+      </div>
+    </details>
+  );
+}
+
+/** The proof, in the order progress, email sender, bank account, supplier, then the request's own lines. */
 export function Evidence({ detail }: { detail: RequestDetail }) {
   const progress = failedRule(detail, "13")?.evidence.overstatements ?? [];
   const bank = failedRule(detail, "10")?.evidence;
   const domains = failedRule(detail, "11")?.evidence.mismatches ?? [];
   const notices = failedRule(detail, "07")?.evidence.unresolved ?? [];
+  const linesFailed = ["01", "02", "03", "13"].some((n) => failedRule(detail, n));
+  const videoSample = detail.site_evidence?.sample ? "video" : undefined;
 
-  const blocks: ReactNode[] = [
-    ...progress.map((o, i) => <ProgressBlock key={`p${o.item_no}`} o={o} detail={detail} withFrames={i === 0} />),
-    ...(bank || domains.length ? [<BankBlock key="bank" bank={bank} domains={domains} sub={detail.sub} />] : []),
-    ...notices.map((n, i) => <SupplierBlock key={`n${i}`} n={n} detail={detail} />),
-  ];
-  if (!blocks.length) return null;
   return (
-    <section aria-label="The proof" className="mt-8 divide-y border-t pt-6">
-      {blocks.map((b, i) => (
-        <div key={i} className="py-6 first:pt-0 last:pb-0">
-          {b}
-        </div>
+    <section aria-label="The proof" className="mt-8 space-y-3">
+      {progress.map((o) => (
+        <EvidenceBox key={`p${o.item_no}`} title="Progress" failed sample={videoSample}>
+          <ProgressBlock o={o} detail={detail} />
+        </EvidenceBox>
       ))}
+      {domains.length > 0 && (
+        <EvidenceBox title="Email sender" failed>
+          <DomainBlock domains={domains} sub={detail.sub} />
+        </EvidenceBox>
+      )}
+      {bank && (
+        <EvidenceBox title="Bank account" failed>
+          <BankBlock bank={bank} />
+        </EvidenceBox>
+      )}
+      {notices.map((n, i) => (
+        // notices to owner only ever come from the seed: nothing reads a real one yet
+        <EvidenceBox key={`n${i}`} title="Supplier" failed sample="document">
+          <SupplierBlock n={n} detail={detail} />
+        </EvidenceBox>
+      ))}
+      <EvidenceBox title="Lines" failed={linesFailed} sample={detail.sample_document ? "document" : videoSample}>
+        <LinesTable detail={detail} flagged={new Set(progress.map((o) => o.item_no))} />
+        {detail.original && <OpenOriginal name={detail.original} />}
+      </EvidenceBox>
     </section>
   );
 }
@@ -105,8 +148,9 @@ function Doc({ name, children }: { name?: string; children: ReactNode }) {
 
 const pct = (n: number) => `${Number.isInteger(n) ? n : n.toFixed(1)}%`;
 const clamp = (n: number) => Math.max(0, Math.min(100, n));
+const fileName = (path: string) => path.split("/").pop() ?? path;
 
-function ProgressBlock({ o, detail, withFrames }: { o: Overstatement; detail: RequestDetail; withFrames: boolean }) {
+function ProgressBlock({ o, detail }: { o: Overstatement; detail: RequestDetail }) {
   const claimed = Number(o.claimed_pct);
   const video = Number(o.video_estimate_pct);
   const tol = Number(o.tolerance);
@@ -119,7 +163,7 @@ function ProgressBlock({ o, detail, withFrames }: { o: Overstatement; detail: Re
     <Columns>
       <div>
         <H4>
-          Line {o.item_no}, {what}, against the site video
+          Line {o.item_no}, {what}
         </H4>
         <div className="relative mx-3.5 h-[132px]" role="img"
           aria-label={`Billed ${pct(claimed)}. Site video ${pct(video)}. Allowed within ${tol} points of the video.`}>
@@ -140,27 +184,14 @@ function ProgressBlock({ o, detail, withFrames }: { o: Overstatement; detail: Re
           ))}
         </div>
         <Note>
-          {Number(o.gap)} points apart. Up to {tol} is allowed (the shaded band).
+          {Number(o.gap)} points apart, {tol} allowed (the shaded band).
         </Note>
-        {withFrames && site && site.frames.length > 0 && (
-          <>
-            <div className="mt-4 grid grid-cols-3 gap-2" aria-hidden>
-              {site.frames.map((f, i) => (
-                <div key={f} className="grid aspect-[16/10] place-items-center border border-dashed border-border-strong px-1 text-center text-[13px] leading-tight text-muted-foreground">
-                  Frame {i + 1}, not loaded
-                </div>
-              ))}
-            </div>
-            <p className="mt-2 text-sm text-muted-foreground">
-              Site video, {day(site.date)}, {site.frames.length} frames. Site video frames aren&apos;t loaded in this demo.
-            </p>
-          </>
-        )}
+        {site && <p className="mt-2 text-meta text-muted-foreground">Site video, {day(site.date)}.</p>}
       </div>
       {line && (
         <div>
           <H4>Their G703, line {line.item_no}</H4>
-          <G703 line={line} printed={o.printed_pct ?? o.claimed_pct} source={detail.source_doc} />
+          <G703 line={line} printed={o.printed_pct ?? o.claimed_pct} source={fileName(detail.source_doc)} />
         </div>
       )}
     </Columns>
@@ -204,7 +235,106 @@ function G703({ line, printed, source }: { line: Line; printed: string; source: 
   );
 }
 
-const lastFour = (acct?: string) => (acct ? `ending ${acct.replace(/\D/g, "").slice(-4)}` : "none");
+function LinesTable({ detail, flagged }: { detail: RequestDetail; flagged: Set<string> }) {
+  return (
+    <div className="overflow-x-auto">
+      <table className="w-full border-collapse text-base">
+        <thead className="text-left text-sm text-muted-foreground">
+          <tr className="border-b-2 border-foreground">
+            <th className="px-2 py-1.5 font-medium">Item</th>
+            <th className="px-2 py-1.5 font-medium">Description</th>
+            <th className="px-2 py-1.5 text-right font-medium">Billed</th>
+            <th className="px-2 py-1.5 text-right font-medium">Video</th>
+            <th className="px-2 py-1.5 text-right font-medium">To date</th>
+          </tr>
+        </thead>
+        <tbody>
+          {detail.lines.map((l) => {
+            const flag = flagged.has(l.item_no);
+            return (
+              <tr key={l.item_no} className={cn("border-b", flag && "bg-hold-soft")}>
+                <td className="px-2 py-[9px] font-mono whitespace-nowrap">{l.item_no}</td>
+                <td className="px-2 py-[9px]">
+                  {l.description}
+                  {flag && <span className="sr-only"> (claims more than the site video shows)</span>}
+                </td>
+                <td className={cn("px-2 py-[9px] text-right font-mono whitespace-nowrap tnum", flag && "font-semibold text-hold")}>{Number(l.pct_complete)}%</td>
+                <td className="px-2 py-[9px] text-right font-mono whitespace-nowrap tnum">{l.video_pct === null ? "none" : `${Number(l.video_pct)}%`}</td>
+                <td className="px-2 py-[9px] text-right font-mono whitespace-nowrap tnum">{money(l.total_to_date)}</td>
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+const PASSCODE_KEY = "draw.upload-passcode";
+const remembered = () => {
+  try {
+    return sessionStorage.getItem(PASSCODE_KEY) ?? "";
+  } catch {
+    return "";
+  }
+};
+
+/**
+ * "Open the original": the uploaded file, from the private store, behind the upload passcode
+ * (pay apps carry full bank accounts). The passcode goes in a header and is kept for this visit only.
+ */
+function OpenOriginal({ name }: { name: string }) {
+  const [asking, setAsking] = useState(false);
+  const [code, setCode] = useState("");
+  const [error, setError] = useState<string | null>(null);
+
+  const open = async (passcode: string) => {
+    const tab = window.open("about:blank", "_blank"); // opened now, while the click still counts as the user's
+    setError(null);
+    try {
+      const url = await api.openOriginal(name, passcode);
+      try {
+        sessionStorage.setItem(PASSCODE_KEY, passcode);
+      } catch {}
+      if (tab) tab.location.href = url;
+      else window.location.href = url;
+      setAsking(false);
+    } catch (e) {
+      tab?.close();
+      if ((e as ApiError).status === 401) setAsking(true);
+      setError((e as ApiError).message);
+    }
+  };
+
+  return (
+    <div className="mt-4 flex flex-col items-start gap-2.5">
+      {asking ? (
+        <form className="flex flex-wrap items-end gap-3" onSubmit={(e) => (e.preventDefault(), open(code))}>
+          <label className="block">
+            <span className="block text-meta text-muted-foreground">Upload passcode</span>
+            <input
+              type="password"
+              autoComplete="off"
+              value={code}
+              onChange={(e) => setCode(e.target.value)}
+              className="mt-1 min-h-12 rounded-md border border-border-strong bg-background px-3 text-body outline-none focus-visible:ring-3 focus-visible:ring-ring/50"
+            />
+          </label>
+          <Button type="submit" variant="outline" className="h-12 px-5 text-body font-semibold">
+            Open the original
+          </Button>
+        </form>
+      ) : (
+        <Button variant="outline" className="h-12 px-5 text-body font-semibold" onClick={() => open(remembered())}>
+          Open the original
+        </Button>
+      )}
+      {error && <p className="text-meta text-fail">{error}</p>}
+    </div>
+  );
+}
+
+const lastFour = (acct?: string) => (acct ? `ending ${acct.replace(/\D/g, "").slice(-4)}` : "none on file");
 
 /** "a capital I", with the letter itself in mono: in Geist Sans a capital I and a lowercase l look the same. */
 function Said({ c }: { c: string | null }) {
@@ -232,54 +362,53 @@ function Letters({ text, bad }: { text: string; bad: Set<number> }) {
   );
 }
 
-function BankBlock({ bank, domains, sub }: { bank?: Shapes; domains: DomainMismatch[]; sub: string }) {
+function DomainBlock({ domains, sub }: { domains: DomainMismatch[]; sub: string }) {
   const name = shortName(sub);
   return (
-    <Columns>
-      <div className="@container">
-        <H4>{domains.length ? "Where the email came from" : "Where the money would go"}</H4>
-        {domains.map((m) => {
-          const diffs = m.differences ?? [];
-          const bad = new Set(diffs.map((d) => d.position));
-          return (
-            <div key={m.email_id} className="mb-4">
-              <div className="font-mono text-[clamp(14px,5.4cqw,26px)] leading-none">
-                <p className="mb-1.5 font-sans text-[15px] text-muted-foreground">The email</p>
-                <Letters text={m.claimed_domain} bad={bad} />
-                <p className="mt-3.5 mb-1.5 font-sans text-[15px] text-muted-foreground">{name}&apos;s real domain</p>
-                <Letters text={m.vendor_domain} bad={new Set()} />
-              </div>
-              {diffs.length > 0 && (
-                <Note>
-                  {diffs.map((d, i) => (
-                    <span key={i}>
-                      {i > 0 && " "}
-                      {d.claimed ? (
-                        <>
-                          Letter {d.position + 1} is <Said c={d.claimed} />, not <Said c={d.vendor} />.
-                        </>
-                      ) : (
-                        <>A letter is missing at position {d.position + 1}.</>
-                      )}
-                    </span>
-                  ))}{" "}
-                  On most screens they look the same. Don&apos;t act on this email.
-                </Note>
-              )}
+    <div className="@container">
+      {domains.map((m) => {
+        const diffs = m.differences ?? [];
+        const bad = new Set(diffs.map((d) => d.position));
+        return (
+          <div key={m.email_id} className="mb-4 last:mb-0">
+            <div className="font-mono text-[clamp(14px,5.4cqw,26px)] leading-none">
+              <p className="mb-1.5 font-sans text-[15px] text-muted-foreground">The email</p>
+              <Letters text={m.claimed_domain} bad={bad} />
+              <p className="mt-3.5 mb-1.5 font-sans text-[15px] text-muted-foreground">{name}&apos;s real domain</p>
+              <Letters text={m.vendor_domain} bad={new Set()} />
             </div>
-          );
-        })}
-        {bank && (
-          <div className={cn(domains.length > 0 && "mt-[18px] border-t pt-3.5")}>
-            <p className="text-[15px] text-muted-foreground">Bank account</p>
-            <p className="font-mono text-[19px] tnum">
-              {lastFour(bank.on_file)} → {lastFour(bank.requested)}
-            </p>
-            {bank.verification_status === "unverified" && <Note>The new account hasn&apos;t been verified.</Note>}
+            {diffs.length > 0 && (
+              <Note>
+                {diffs.map((d, i) => (
+                  <span key={i}>
+                    {i > 0 && " "}
+                    {d.claimed ? (
+                      <>
+                        Letter {d.position + 1} is <Said c={d.claimed} />, not <Said c={d.vendor} />.
+                      </>
+                    ) : (
+                      <>A letter is missing at position {d.position + 1}.</>
+                    )}
+                  </span>
+                ))}{" "}
+                On most screens they look the same. Don&apos;t act on this email.
+              </Note>
+            )}
           </div>
-        )}
-      </div>
-    </Columns>
+        );
+      })}
+    </div>
+  );
+}
+
+function BankBlock({ bank }: { bank: Shapes }) {
+  return (
+    <div>
+      <p className="font-mono text-[19px] tnum">
+        {lastFour(bank.on_file)} → {lastFour(bank.requested)}
+      </p>
+      {bank.verification_status === "unverified" && <Note>The new account hasn&apos;t been verified.</Note>}
+    </div>
   );
 }
 
@@ -287,7 +416,6 @@ function SupplierBlock({ n, detail }: { n: Notice; detail: RequestDetail }) {
   return (
     <Columns>
       <div>
-        <H4>What&apos;s missing</H4>
         <ul className="border-t">
           <MarkRow kind="pass" sr="Done:">Notice to owner filed {day(n.notice_date)}</MarkRow>
           <MarkRow kind="fail" sr="Missing:">{n.supplier}&apos;s release: not received</MarkRow>

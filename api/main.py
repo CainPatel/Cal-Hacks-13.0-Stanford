@@ -34,6 +34,7 @@ import hmac
 import io
 import json
 import os
+import re
 import secrets
 import time
 from datetime import date, datetime
@@ -42,7 +43,7 @@ from pathlib import Path
 
 from fastapi import FastAPI, File, Form, Header, HTTPException, Request, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import StreamingResponse
+from fastapi.responses import FileResponse, StreamingResponse
 from pydantic import BaseModel
 
 from events import log as events
@@ -217,11 +218,14 @@ def get_request(request_id: str):
         "lines": [{**l.model_dump(mode="json"),
                    "video_pct": str(site.estimates[l.item_no]) if site and l.item_no in site.estimates else None}
                   for l in req.lines],
-        "site_evidence": site.model_dump(mode="json") if site else None,
+        "site_evidence": {**site.model_dump(mode="json"), "sample": not READ_VIDEO.search(site.id)} if site else None,
         "bank_account": req.bank_account,
         "vendor": next({"legal_name": v.legal_name, "email_domain": v.email_domain}
                        for v in state["vendors"] if v.id == req.sub_id),
         "source_doc": req.source_doc,
+        # read from an uploaded file (named by its hash) or seeded; seeded numbers are labelled on screen
+        "sample_document": not HASHED.fullmatch(Path(req.source_doc).name),
+        "original": Path(req.source_doc).name if HASHED.fullmatch(Path(req.source_doc).name) else None,
         "trace": decision.model_dump(mode="json") if decision else None,  # behind "Show details"
     }
 
@@ -481,6 +485,56 @@ def _require_passcode(given: str | None) -> None:
         raise HTTPException(401, "That upload passcode isn't right.")
 
 
+HASHED = re.compile(r"[0-9a-f]{64}\.(pdf|eml)")  # an upload's stored name (_save_upload)
+READ_VIDEO = re.compile(r"_\d{8}_[0-9a-f]{8}$")  # perception/video.py's evidence ids; seeded ones end in a month number
+
+
+@app.get("/files/{name}")
+def original_file(name: str, x_upload_passcode: str | None = Header(None)):
+    """An original upload, for the detail pane's "Open the original". Pay apps carry full bank
+    accounts and the dashboard has no logins, so it takes the upload passcode."""
+    if not HASHED.fullmatch(name):
+        raise HTTPException(404, "no such file")
+    _require_passcode(x_upload_passcode)
+    media = "application/pdf" if name.endswith(".pdf") else "message/rfc822"
+    headers = {"Content-Disposition": f'inline; filename="{name}"', "Cache-Control": "no-store"}
+    if os.environ.get("BLOB_READ_WRITE_TOKEN") or os.environ.get("BLOB_STORE_ID"):
+        from vercel.blob import sync as blob
+        try:  # opened before the response starts, so a missing file is still a 404
+            opened = blob.stream_blob(f"uploads/{name}", access="private")
+            download = opened.__enter__()
+        except blob.BlobNotFoundError:
+            raise HTTPException(404, "That original isn't in storage.")
+
+        def chunks():
+            try:
+                yield from download
+            finally:
+                opened.__exit__(None, None, None)
+        return StreamingResponse(chunks(), media_type=media, headers=headers)
+    path = UPLOADS / name
+    if not path.exists():
+        raise HTTPException(404, "That original isn't on this server.")
+    return FileResponse(path, media_type=media, headers=headers)
+
+
+@app.get("/emails")
+def list_emails(month: int = 6):
+    """The month's email, newest first, for "Waiting for documents". The sub is matched on the exact
+    domain only (perception.attachments.sender_sub), so a lookalike shows as unknown."""
+    from perception.attachments import sender_sub
+
+    state, end = events.state(path=DB), month_end(month)
+    out = []
+    for e in sorted(state["emails"], key=lambda e: e.sent_at, reverse=True):
+        if (e.sent_at.year, e.sent_at.month) != (end.year, end.month):
+            continue
+        v = sender_sub(state, e.from_domain)
+        out.append({"id": e.id, "from_addr": e.from_addr, "from_domain": e.from_domain, "subject": e.subject,
+                    "sent_at": e.sent_at.isoformat(), "sub_id": v.id if v else None, "sub": v.legal_name if v else None})
+    return out
+
+
 @app.get("/vendors")
 def list_vendors():
     """Every known sub (not only those billing this month), with the jobs they have a subcontract on."""
@@ -571,8 +625,7 @@ def _save_upload(upload: UploadFile, limit: int, suffix: str) -> tuple[Path, str
     UPLOADS.mkdir(parents=True, exist_ok=True)
     path = UPLOADS / f"{sha}{suffix}"
     path.write_bytes(data)
-    if not getattr(upload, "draw_archived", False):  # an /ingest file is already in the Blob store
-        _archive(data, f"{sha}{suffix}")
+    _archive(data, f"{sha}{suffix}")  # by hash, so GET /files can find any original from its record
     return path, sha
 
 
@@ -650,7 +703,6 @@ def ingest(body: IngestIn):
     name = body.pathname.rsplit("/", 1)[-1]
     with local.open("rb") as f:
         file = StarletteUpload(file=f, filename=name)
-        file.draw_archived = True
         try:
             if body.kind == "pay_app":
                 return upload_pay_app(file=file, sub_id=body.sub_id, job_id=body.job_id, g702=None)
@@ -827,7 +879,6 @@ def _email_attachments(eml: bytes, email) -> list[dict]:
 
     def upload(path: Path, name: str):
         f = StarletteUpload(file=path.open("rb"), filename=name)
-        f.draw_archived = True  # the email itself is archived; don't store each attachment twice
         return f
 
     out = []
