@@ -86,7 +86,10 @@ async function call<T>(path: string, init?: RequestInit): Promise<T> {
   try {
     res = await fetch(`${API_URL}${path}`, { cache: "no-store", ...init });
   } catch {
-    throw new ApiError(0, `Can't reach the Draw server at ${API_URL}. Is it running (make api)?`);
+    const deployed = typeof window !== "undefined" && !/^(localhost|127\.0\.0\.1)$/.test(window.location.hostname);
+    if (deployed && /localhost|127\.0\.0\.1/.test(API_URL))
+      throw new ApiError(0, "This dashboard was built without NEXT_PUBLIC_API_URL, so it's looking for the API on your own computer. Set it to the API's address on Vercel and redeploy.");
+    throw new ApiError(0, `Can't reach the Draw server at ${API_URL}. Is it running (make api)? If it is, check that its CORS_ORIGINS includes this page's address.`);
   }
   const body = await res.json().catch(() => ({}));
   if (!res.ok) throw new ApiError(res.status, typeof body.detail === "string" ? body.detail : `Request failed (${res.status}).`);
