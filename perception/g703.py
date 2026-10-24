@@ -177,6 +177,48 @@ _G702_LABELS: dict[str, list[re.Pattern]] = {
 _LEADER = re.compile(r"^\s*(?:\([^)]*\)\s*)?[:.\s]*")
 
 
+_AIA_G702_TITLE = re.compile(r"APPLICATION\s+AND\s+CERTIFICATE\s+FOR\s+PAYMENT", re.I)
+
+
+def _g702_lines(page, text: str) -> list[str]:
+    """Lines to search for G702 labels. The AIA form prints the architect's certificate on the
+    same baselines as lines 1-9, so on that page only the left column is read; otherwise
+    "1. ORIGINAL CONTRACT SUM $ 435,000.00 ARCHITECT'S CERTIFICATE..." would be one line."""
+    if _AIA_G702_TITLE.search(text):
+        left = page.crop((0, 0, float(page.width) / 2, float(page.height)))
+        return (left.extract_text() or "").splitlines()
+    return text.splitlines()
+
+
+def read_g702(path: str | Path) -> tuple[dict[str, str], dict[str, str], list[Note]]:
+    """A G702 sent as its own PDF: printed amounts per field, header values, notes."""
+    notes: list[Note] = []
+    lines: list[str] = []
+    header: dict[str, set[str]] = {k: set() for k in _HEADER_PATTERNS}
+    try:
+        with pdfplumber.open(path) as pdf:
+            for page_no, page in enumerate(pdf.pages, start=1):
+                page = visible_page(page, page_no, notes)
+                if page is None:
+                    continue
+                text = page.extract_text() or ""
+                lines += _g702_lines(page, text)
+                for key, pattern in _HEADER_PATTERNS.items():
+                    for m in pattern.finditer(text):
+                        header[key].add(m.group(1).strip())
+    except pdfplumber.utils.exceptions.PdfminerException as e:
+        raise ExtractionError(f"could not open G702 PDF: {e}") from e
+    except _UseFallback as e:
+        raise ExtractionError(f"G702 is not readable as text ({e}); send it with the G703 or as a digital PDF") from e
+    fields, conflicts = _g702_from_text(lines)
+    if conflicts:
+        raise ExtractionError(f"G702 lines printed more than once with different amounts: {conflicts}")
+    for key, values in header.items():
+        if len(values) > 1:
+            raise ExtractionError(f"G702 shows more than one {key}: {sorted(values)}")
+    return fields, {k: next(iter(v)) for k, v in header.items() if v}, notes
+
+
 def _g702_from_text(lines: list[str]) -> tuple[dict[str, str], list[str]]:
     """Printed amount per G702 field, and the fields whose label appears with conflicting amounts."""
     found: dict[str, set[str]] = {}
@@ -214,7 +256,7 @@ def _read_text_layer(path: Path) -> RawSheet:
                 continue  # blank page
 
             text = page.extract_text() or ""
-            text_lines.extend(text.splitlines())
+            text_lines.extend(_g702_lines(page, text))
             for key, pattern in _HEADER_PATTERNS.items():
                 m = pattern.search(text)
                 if m:
@@ -497,12 +539,16 @@ def extract_pay_request(
     request_id: str | None = None,
     allow_llm_fallback: bool = True,
     client=None,
+    g702_pdf: str | Path | None = None,
 ) -> ExtractionResult:
     """Read one pay application PDF (G703 continuation sheet + G702 summary) into a PayRequest.
 
     Sub and job come from the submission, not the document: a PDF can claim to
     be from anyone. The remit-to account is read from the document because it
     is the sub's claim that rule 10 checks against the account on file.
+
+    g702_pdf is the G702 when the sub sends it as a separate file. If both
+    documents carry a G702, application number or period, they must agree.
     """
     path = Path(pdf_path)
     pdf_bytes = path.read_bytes()
@@ -535,6 +581,23 @@ def extract_pay_request(
 
     if not lines:
         raise ExtractionError("no line items found")
+    if g702_pdf is not None:
+        fields, header, g_notes = read_g702(g702_pdf)
+        sheet.notes.extend(g_notes)
+        try:
+            for key in ("application_no", "period_to"):
+                theirs, ours = header.get(key), getattr(sheet, key)
+                same = theirs == ours or (key == "period_to" and theirs and ours and parse_date(theirs) == parse_date(ours))
+                if theirs and ours and not same:
+                    raise ExtractionError(f"G702 and G703 disagree on {key}: {theirs!r} vs {ours!r}")
+                if theirs and not ours:
+                    setattr(sheet, key, theirs)
+            if sheet.g702 and fields and {k: parse_money(v) for k, v in sheet.g702.items()} != {
+                    k: parse_money(v) for k, v in fields.items()}:
+                raise ExtractionError("the G702 file and the G702 inside the pay application disagree")
+        except CellParseError as e:
+            raise ExtractionError(f"G702 value unreadable: {e}") from e
+        sheet.g702 = sheet.g702 or fields or None
     if not sheet.period_to:
         raise ExtractionError("sheet has no 'period to' date")
     try:
