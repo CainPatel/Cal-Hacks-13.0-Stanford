@@ -71,6 +71,10 @@ account into the device's payload. If the bank's answer is unknown (a timeout, a
 are blocked until `POST /requests/{id}/resolve` (or `python -m events nessie-resolve <id>`) finds out
 from Nessie. Payments are serialized within one API process; run a single API worker.
 
+## Deploy
+
+Vercel (dashboard + API), Neon Postgres for the event log, a private Blob store for uploads: see [`docs/deploy.md`](docs/deploy.md).
+
 ## Commands
 
 | Command | Does |

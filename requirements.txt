@@ -15,3 +15,5 @@ numpy>=2.0
 pyyaml>=6
 requests>=2.32
 python-multipart>=0.0.9
+psycopg[binary]>=3.2
+vercel-blob>=0.5.0

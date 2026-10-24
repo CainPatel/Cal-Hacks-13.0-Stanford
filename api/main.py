@@ -23,7 +23,8 @@ POST /requests/{id}/resolve  settle a payment whose outcome is unknown by asking
 POST /vendors/{id}/verify  check a vendor with CRS (rule 09) and record the status
 
 Env: CORS_ORIGINS (comma-separated web origins, default http://localhost:3000), DEVICE_URL (approval key),
-APPROVAL_KEY_PUBKEY (optional override of contract.yaml's esp32_pubkey, for a local mock key).
+APPROVAL_KEY_PUBKEY (optional override of contract.yaml's esp32_pubkey, for a local mock key),
+DATABASE_URL (Postgres log, deployed), BLOB_* (private Blob store for uploaded originals, deployed).
 """
 import asyncio
 import hashlib
@@ -45,10 +46,13 @@ from fuzzer import run as fuzzer
 from shared.schema import Action, Decision
 
 DB = events.DEFAULT_PATH
-SCORECARD = Path("data/scorecard.json")
-CALIBRATION = Path("data/calibration.json")
-UPLOADS = Path("data/uploads")
-FRAMES = Path("data/frames")
+# Working files. On Vercel only /tmp is writable (and it doesn't last): the log is Postgres there,
+# and uploaded originals are archived to the private Blob store.
+DATA = Path(os.environ.get("DRAW_DATA_DIR") or ("/tmp/draw" if os.environ.get("VERCEL") else "data"))
+SCORECARD = DATA / "scorecard.json"
+CALIBRATION = DATA / "calibration.json"
+UPLOADS = DATA / "uploads"
+FRAMES = DATA / "frames"
 MAX_PDF_BYTES = 32 * 1024 * 1024
 MAX_VIDEO_BYTES = 500 * 1024 * 1024
 
@@ -167,9 +171,17 @@ async def stream(request: Request, after: int = 0, follow: bool = True):
 
 @app.get("/scorecard")
 def scorecard():
-    if not SCORECARD.exists():
-        raise HTTPException(404, "no scorecard yet; run `make fuzz`")
-    return json.loads(SCORECARD.read_text())
+    """`make fuzz` writes the full scorecard; with none on disk (a fresh deploy) a smaller one is
+    scored on the spot and cached for this instance."""
+    if SCORECARD.exists():
+        return json.loads(SCORECARD.read_text())
+    card = fuzzer.run(int(os.environ.get("SCORECARD_CASES", "2000")))
+    try:
+        SCORECARD.parent.mkdir(parents=True, exist_ok=True)
+        SCORECARD.write_text(json.dumps(card))
+    except OSError:
+        pass  # read-only disk: serve it uncached
+    return card
 
 
 @app.get("/calibration")
@@ -396,8 +408,8 @@ def verify_vendor(vendor_id: str):
 
 @app.post("/replay")
 def run_replay(through: int = 6, judge: bool = False):
-    if not DB.exists():
-        raise HTTPException(409, "no event log; run `make events` first")
+    if events.is_empty(DB):
+        raise HTTPException(409, "no events yet; run `make events` (or `python -m events load` against Postgres) first")
     model = None
     if judge:
         from judgment import judge as model
@@ -415,7 +427,20 @@ def _save_upload(upload: UploadFile, limit: int, suffix: str) -> tuple[Path, str
     UPLOADS.mkdir(parents=True, exist_ok=True)
     path = UPLOADS / f"{sha}{suffix}"
     path.write_bytes(data)
+    _archive(data, f"{sha}{suffix}")
     return path, sha
+
+
+def _archive(data: bytes, name: str) -> str | None:
+    """Keep the original in the private Blob store when one is connected (deployed). Pay apps carry
+    bank details, so the store must be private: nothing here gets a public URL."""
+    if not (os.environ.get("BLOB_READ_WRITE_TOKEN") or os.environ.get("BLOB_STORE_ID")):
+        return None
+    from vercel.blob import sync as blob
+    try:
+        return blob.put_blob(f"uploads/{name}", data, access="private", allow_overwrite=True).pathname
+    except blob.BlobError as e:
+        raise HTTPException(502, f"Couldn't store the original file ({type(e).__name__}); nothing was recorded.")
 
 
 def _notes(notes) -> list[dict]:
