@@ -1,5 +1,9 @@
-.PHONY: seed test fuzz events replay api synthetic demo benchmark device device-test
+.PHONY: seed test fuzz events replay api synthetic demo benchmark keys hooks device device-test
 PY = .venv/bin/python
+
+# Keys from .env (gitignored) reach every command below; missing .env is fine.
+-include .env
+export
 N ?= 500
 M ?= 6
 W ?= 0
@@ -43,3 +47,13 @@ demo:
 	$(PY) -m events replay 6
 	$(PY) -m fuzzer.run 5000
 	$(PY) -m uvicorn api.main:app --port $(PORT)
+
+# Which secrets are set (never prints a value)
+keys:
+	@for k in ANTHROPIC_API_KEY AI_GATEWAY_API_KEY NESSIE_API_KEY CRS_API_KEY ESP32_DEVICE_URL; do \
+		if [ -n "$$(printenv $$k)" ]; then echo "  $$k: set"; else echo "  $$k: missing"; fi; done
+
+# Turn on the repo's secret-blocking pre-commit hook for this clone (run once per laptop)
+hooks:
+	git config core.hooksPath .githooks
+	@echo "pre-commit secret check enabled"
