@@ -72,6 +72,10 @@ are blocked until `POST /requests/{id}/resolve` (or `python -m events nessie-res
 from Nessie. Payments run one at a time across every API instance (a Postgres advisory lock on Vercel, a
 file lock locally).
 
+## Results
+
+Every measured number (kernel vs. 16 attack types, the limit dial, perception accuracy, Jev calibration), with commands to reproduce: [`docs/results.md`](docs/results.md).
+
 ## Deploy
 
 Vercel (dashboard + API), Neon Postgres for the event log, a private Blob store for uploads: see [`docs/deploy.md`](docs/deploy.md).
