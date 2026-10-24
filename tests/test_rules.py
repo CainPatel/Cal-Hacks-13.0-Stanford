@@ -9,7 +9,7 @@ from kernel.state import KernelState
 from shared.schema import PayRequest
 
 FIXTURES = Path(__file__).parent / "fixtures"
-RULE_NUMBERS = ["01", "02", "03"]
+RULE_NUMBERS = ["01", "02", "03", "04"]
 
 
 def load(name: str) -> tuple[KernelState, PayRequest]:
@@ -41,6 +41,18 @@ def test_runner_releases_on_all_pass():
     decision = decide(state, request)
     assert decision.action == Action.release
     assert all(r.passed for r in decision.results)
+
+
+def test_runner_escalates_over_limit_with_yaml_loaded_contract():
+    """auto_release_limit_usd comes from yaml as an int/str, not a Decimal -- is_over_limit
+    must not blow up comparing Decimal to that raw type."""
+    from kernel.runner import decide
+    from shared.schema import Action
+
+    state, request = load("rule_01_pass.json")
+    state = state.model_copy(update={"contract": {"auto_release_limit_usd": 5000}})
+    decision = decide(state, request)
+    assert decision.action == Action.escalate
 
 
 def test_runner_holds_on_any_fail():

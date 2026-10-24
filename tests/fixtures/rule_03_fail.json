@@ -105,7 +105,18 @@
         "source_doc": "g703/sub_01_202607.xlsx"
       }
     ],
-    "releases": [],
+    "releases": [
+      {
+        "id": "rel_c_pr_sub_01_4",
+        "sub_id": "sub_01",
+        "job_id": "job_1",
+        "kind": "conditional_progress",
+        "through_date": "2026-08-31",
+        "amount": "13500.00",
+        "signed": true,
+        "received_at": "2026-08-25"
+      }
+    ],
     "lower_tier_notices": [],
     "coi": null,
     "ledger": [],

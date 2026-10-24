@@ -2,6 +2,8 @@
 Pure function of (KernelState, PayRequest) -> Decision; no I/O. The caller (api/ or a
 script) is responsible for loading state and writing the Decision to events/.
 """
+from decimal import Decimal
+
 from kernel.rules import ALL_RULES
 from kernel.state import KernelState
 from shared.schema import Action, Decision, PayRequest, RuleResult
@@ -19,7 +21,7 @@ def is_over_limit(state: KernelState, request: PayRequest) -> bool:
     limit = state.contract.get("auto_release_limit_usd")
     if limit is None:
         return False
-    return request.g702.current_payment_due > limit
+    return request.g702.current_payment_due > Decimal(str(limit))
 
 
 def next_action_for(results: list[RuleResult]) -> str | None:

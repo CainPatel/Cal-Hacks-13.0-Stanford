@@ -3,6 +3,7 @@ from kernel.rules import (
     rule_01_cumulative_continuity,
     rule_02_scheduled_value_ceiling,
     rule_03_retainage_math,
+    rule_04_conditional_release_present,
 )
 from kernel.rules.base import Rule
 
@@ -10,4 +11,5 @@ ALL_RULES: list[Rule] = [
     rule_01_cumulative_continuity.check,
     rule_02_scheduled_value_ceiling.check,
     rule_03_retainage_math.check,
+    rule_04_conditional_release_present.check,
 ]
