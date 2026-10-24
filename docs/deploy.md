@@ -47,6 +47,8 @@ Two Vercel projects from this repo:
 
 Redeploy both after adding variables (`NEXT_PUBLIC_*` is baked in at build time).
 
+Pushes don't deploy: both projects set `"git": {"deploymentEnabled": false}` (`vercel.json`, `web/vercel.json`) to stay under Vercel's deploy limit. Deploy on purpose from the Vercel dashboard (Deployments → Create Deployment, pick the branch) or with `vercel --prod` from the project's folder.
+
 ## 3. Load the demo company into Neon (once)
 
 After Neon is connected and `draw-api` redeployed:
