@@ -202,3 +202,18 @@ def test_original_files_need_a_hashed_name_and_the_passcode(client, monkeypatch,
     assert client.get(f"/files/{name}").status_code == 401
     assert client.get(f"/files/{name}", headers={"X-Upload-Passcode": "s3cret"}).status_code == 200
     assert client.get("/files/" + "b" * 64 + ".pdf", headers={"X-Upload-Passcode": "s3cret"}).status_code == 404
+
+
+def test_request_events_tell_the_story_without_raw_payloads(client):
+    client.post("/replay")
+    client.post("/replay", params={"through": 6})  # same answer again: collapses into one step
+    r = client.get("/requests/pr_sub_04_6/events").json()
+    kinds = [s["kind"] for s in r["steps"]]
+    assert kinds[0] == "received" and "checked" in kinds
+    checked = [s for s in r["steps"] if s["kind"] == "checked"]
+    assert checked[-1]["action"] == "hold" and {"10", "11"} <= set(checked[-1]["failed_rules"])
+    assert r["threshold"] == main.load_contract()["escalation_confidence_threshold"]
+    import json
+    text = json.dumps(r)
+    assert "bank_account" not in text and '"sig"' not in text
+    assert client.get("/requests/pr_nope/events").status_code == 404

@@ -160,3 +160,12 @@ export const PAPERWORK_ACTION: Record<string, { say: string; act?: string; kind?
 
 /** The paperwork a hold is waiting on, in the order to chase it (fraud rules are not paperwork). */
 export const missingPaperwork = (r: Judged) => holdRules(r).filter((n) => n in PAPERWORK_ACTION && !(n === "09" && r.crs_status !== "unknown"));
+
+/** Jev's questions (judgment/questions.py), in words. */
+export const JEV_QUESTION: Record<string, string> = {
+  release_form_correct: "Is the lien release the right form?",
+  bank_change_suspicious: "Does the bank change look suspicious?",
+  progress_plausible: "Does the billed progress look right?",
+  duplicate_likelihood: "Is this a duplicate?",
+  proposed_action: "What should happen?",
+};

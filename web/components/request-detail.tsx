@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 import { Evidence, failedRule, Mark, MarkRow } from "@/components/evidence";
 import { StatusChip } from "@/components/status-chip";
+import { Timeline } from "@/components/timeline";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { api, ApiError, money, moneyShort, ruleNumber, type RequestDetail } from "@/lib/api";
@@ -99,6 +100,7 @@ export function RequestDetailPanel({ id, version, backHref }: { id: string; vers
       </div>
 
       <Evidence detail={data} />
+      <Timeline id={data.id} version={version} />
 
       {results.length > 0 && (
         <details className="group mt-8 border-t pt-4">

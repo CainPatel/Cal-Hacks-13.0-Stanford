@@ -230,6 +230,43 @@ def get_request(request_id: str):
     }
 
 
+@app.get("/requests/{request_id}/events")
+def request_events(request_id: str):
+    """The request's story from the append-only log, as summaries for the detail pane's timeline and
+    review panel. Raw payloads never leave: pay-request facts and signatures carry bank accounts."""
+    log = events.read(path=DB)
+    fact = next((e for e in log if e.kind == "fact" and e.table == "pay_requests" and e.data.get("id") == request_id), None)
+    if fact is None:
+        raise HTTPException(404, f"no pay request {request_id}")
+    when = lambda e: {"seq": e.seq, "at": e.at.isoformat(), "ts": e.ts.isoformat()}
+    steps = [{"kind": "received", **when(fact), "read_from_file": bool(HASHED.fullmatch(Path(fact.data.get("source_doc", "")).name))}]
+    amount = None
+    for e in (x for x in log if x.request_id == request_id):
+        if e.kind == "judgment":
+            answers = {q: {"value": a.get("value"), "confidence": a.get("confidence")} for q, a in e.data.get("answers", {}).items()}
+            steps.append({"kind": "reviewed", **when(e), "source": e.data.get("source"), "answers": answers,
+                          "errors": len(e.data.get("errors") or [])})
+        elif e.kind == "kernel_trace":
+            failed = sorted(r["rule"][:2] for r in e.data.get("results", []) if not r.get("passed"))
+            last = steps[-1]
+            if last["kind"] == "checked" and last["action"] == e.data.get("action") and last["failed_rules"] == failed:
+                last["times"] += 1  # replays that came to the same answer
+            else:
+                steps.append({"kind": "checked", **when(e), "action": e.data.get("action"), "failed_rules": failed, "times": 1})
+        elif e.kind == "signature":
+            steps.append({"kind": "signed", **when(e), "rejected": bool(e.data.get("rejected"))})
+        elif e.kind == "execution":
+            status = e.data.get("status", "paid")
+            if status == "started":
+                amount = e.data.get("amount")
+            elif status == "failed":
+                steps.append({"kind": "payment_failed", **when(e), "amount": amount})
+            elif status == "paid":
+                steps.append({"kind": "paid", **when(e), "amount": amount})
+    threshold = load_contract().get("escalation_confidence_threshold")
+    return {"steps": steps, "threshold": threshold}
+
+
 @app.get("/events")
 async def stream(request: Request, after: int = 0, follow: bool = True):
     after = int(request.headers.get("last-event-id", after))  # browsers resume where they left off

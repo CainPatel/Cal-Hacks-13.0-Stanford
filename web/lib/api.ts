@@ -26,6 +26,15 @@ export type RequestRow = {
   why: ("over_limit" | "unsure" | "new_vendor" | "new_bank")[];
 };
 
+type When = { seq: number; at: string; ts: string };
+export type Step =
+  | (When & { kind: "received"; read_from_file: boolean })
+  | (When & { kind: "reviewed"; source: string | null; answers: Record<string, { value: string | number | null; confidence: number | null }>; errors: number })
+  | (When & { kind: "checked"; action: string; failed_rules: string[]; times: number })
+  | (When & { kind: "signed"; rejected: boolean })
+  | (When & { kind: "paid" | "payment_failed"; amount: string | null });
+export type RequestEvents = { steps: Step[]; threshold: number | null };
+
 export type EmailRow = { id: string; from_addr: string; from_domain: string; subject: string; sent_at: string; sub_id: string | null; sub: string | null };
 
 export type VendorList = { vendors: { id: string; legal_name: string; job_ids: string[] }[]; jobs: { id: string; name: string }[] };
@@ -167,6 +176,7 @@ export const api = {
     return call<IngestResult>(DIRECT[kind].path, { method: "POST", body: form });
   },
   vendors: () => call<VendorList>("/vendors"),
+  requestEvents: (id: string) => call<RequestEvents>(`/requests/${encodeURIComponent(id)}/events`),
   emails: (month: number) => call<EmailRow[]>(`/emails?month=${month}`),
   /** The original upload as a blob URL; the passcode goes in a header, never the URL. */
   openOriginal: async (name: string, passcode: string) => {
