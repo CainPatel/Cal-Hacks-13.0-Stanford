@@ -209,7 +209,7 @@ CONFIRM = {"confirm": True}
 @pytest.fixture
 def client(world, monkeypatch, bank):
     monkeypatch.setattr(main, "DB", world)
-    monkeypatch.delenv("ESP32_DEVICE_URL", raising=False)
+    monkeypatch.setenv("DEVICE_URL", "http://localhost:8001")
     return TestClient(main.app)
 
 
@@ -232,7 +232,7 @@ def test_escalation_goes_through_the_approval_key(client, world, monkeypatch):
     monkeypatch.setenv("APPROVAL_KEY_PUBKEY", pub)
     sent = {}
 
-    def device(url, payload, timeout):
+    def device(url, payload, timeout=None):
         sent.update(url=url, payload=payload)
         return ex.SignedApproval(payload, sign(priv, ex.canonical_payload_bytes(payload)), payload["nonce"])
 
@@ -244,16 +244,16 @@ def test_escalation_goes_through_the_approval_key(client, world, monkeypatch):
 
 def test_escalation_without_a_registered_key(client, monkeypatch):
     monkeypatch.delenv("APPROVAL_KEY_PUBKEY", raising=False)
-    monkeypatch.setattr(pipeline, "default_contract", lambda: {"auto_release_limit_usd": 25000, "esp32_pubkey": ""})
+    monkeypatch.setattr("kernel.contract.load_contract", lambda: {"auto_release_limit_usd": 25000, "esp32_pubkey": ""})
     r = client.post("/requests/pr_sub_15_6/pay", json=CONFIRM)
-    assert r.status_code == 409 and "Register the approval key" in r.json()["detail"]
+    assert r.status_code == 503 and "isn't set up yet" in r.json()["detail"]
 
 
 def test_rejection_on_the_device_pays_nothing(client, monkeypatch, bank):
     _, pub = make_keypair()
     monkeypatch.setenv("APPROVAL_KEY_PUBKEY", pub)
     monkeypatch.setattr(ex, "request_device_approval",
-                        lambda url, payload, timeout: ex.SignedApproval(payload, "00", payload["nonce"], rejected=True))
+                        lambda url, payload, timeout=None: ex.SignedApproval(payload, "00", payload["nonce"], rejected=True))
     assert client.post("/requests/pr_sub_15_6/pay", json=CONFIRM).status_code == 403
     assert not [c for c in bank.calls if c.method == "POST"]
 
@@ -267,7 +267,7 @@ def test_device_problems_are_plain_errors(client, monkeypatch, error, code):
     _, pub = make_keypair()
     monkeypatch.setenv("APPROVAL_KEY_PUBKEY", pub)
 
-    def device(url, payload, timeout):
+    def device(url, payload, timeout=None):
         raise error
 
     monkeypatch.setattr(ex, "request_device_approval", device)
@@ -432,7 +432,7 @@ def test_device_payload_includes_the_account(client, monkeypatch, world):
     monkeypatch.setenv("APPROVAL_KEY_PUBKEY", pub)
     sent = {}
 
-    def device(url, payload, timeout):
+    def device(url, payload, timeout=None):
         sent.update(payload)
         return ex.SignedApproval(payload, sign(priv, ex.canonical_payload_bytes(payload)), payload["nonce"])
 
