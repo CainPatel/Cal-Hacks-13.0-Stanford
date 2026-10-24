@@ -1,27 +1,42 @@
 "use client";
 
+import { Suspense } from "react";
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useSearchParams } from "next/navigation";
+import { monthName } from "@/lib/api";
 import { cn } from "@/lib/utils";
 
 const TABS = [
   { href: "/", label: "Pay requests" },
-  { href: "/upload", label: "Upload" },
   { href: "/approve", label: "Approve" },
   { href: "/security", label: "Security" },
+  { href: "/upload", label: "Upload" },
 ];
+
+// Pay requests reads ?m= (default 6, as in app/page.tsx); every other page is month 6.
+function Month() {
+  const path = usePathname();
+  const m = useSearchParams().get("m");
+  return <>{monthName(path === "/" ? Number(m ?? 6) : 6)}</>;
+}
 
 export function TopBar() {
   const path = usePathname();
-  const dark = path.startsWith("/security");
   return (
-    <header className={cn("sticky top-0 z-20 border-b bg-sheet/95 backdrop-blur-sm", dark && "dark border-border bg-background/95 text-foreground")}>
-      <div className="mx-auto flex h-16 max-w-[1400px] items-center gap-3 px-4 sm:gap-6 sm:px-6 lg:px-8">
-        <Link href="/" className="flex items-baseline gap-2 text-lg font-semibold tracking-tight">
-          <span aria-hidden className="inline-block size-3 translate-y-px rounded-[3px] bg-primary" />
-          Draw
-        </Link>
-        <nav aria-label="Main" className="-mb-px flex h-full items-stretch gap-1 overflow-x-auto">
+    <header className="sticky top-0 z-20 border-b bg-sheet">
+      <div className="mx-auto flex min-h-16 max-w-[1440px] flex-wrap items-center gap-x-8 gap-y-2 px-4 sm:px-8">
+        <div className="flex flex-wrap items-baseline gap-x-3 gap-y-0.5 py-2 *:whitespace-nowrap">
+          <Link href="/" className="text-2xl font-bold tracking-[-0.02em]">
+            Draw
+          </Link>
+          <span className="text-muted-foreground">
+            <Suspense fallback={monthName(6)}>
+              <Month />
+            </Suspense>
+          </span>
+          <span className="text-[15px] text-muted-foreground">Sample company, synthetic data</span>
+        </div>
+        <nav aria-label="Main" className="flex gap-1 overflow-x-auto max-sm:-mx-4 max-sm:w-[calc(100%+2rem)] sm:ml-auto">
           {TABS.map((t) => {
             const active = t.href === "/" ? path === "/" : path.startsWith(t.href);
             return (
@@ -30,8 +45,8 @@ export function TopBar() {
                 href={t.href}
                 aria-current={active ? "page" : undefined}
                 className={cn(
-                  "flex items-center border-b-2 border-transparent px-2 text-[15px] sm:px-3 font-medium whitespace-nowrap text-muted-foreground transition-colors hover:text-foreground",
-                  active && "border-primary text-foreground",
+                  "flex min-h-[52px] items-center border-b-[3px] border-transparent px-2.5 font-medium sm:px-3.5 whitespace-nowrap text-muted-foreground transition-colors hover:text-foreground focus-visible:-outline-offset-[3px] sm:min-h-16",
+                  active && "border-primary font-semibold text-foreground",
                 )}
               >
                 {t.label}
@@ -39,7 +54,6 @@ export function TopBar() {
             );
           })}
         </nav>
-        <p className="ml-auto hidden text-sm text-muted-foreground md:block">Ridgeline Builders · demo data, synthetic</p>
       </div>
     </header>
   );
