@@ -11,14 +11,18 @@ GET  /calibration          data/calibration.json from `python -m fuzzer.calibrat
 GET  /attacks              what the attack console offers
 POST /attacks              run one attack: {"name", "target", "settings"}
 POST /attacks/describe     a judge's plain-English attack, mapped by Claude: {"text"}
-POST /replay?through=6     decide every undecided request through that month
+POST /replay?through=6     decide every undecided request through that month (&judge=true: Jev first)
+POST /pay-apps             upload a sub's pay application PDF (form: file, sub_id, job_id) -> a pay_requests fact
+POST /site-video           upload the super's walkthrough video (form: file, job_id) -> a site_evidence fact
 """
 import asyncio
+import hashlib
 import json
+from datetime import date, datetime
 from decimal import Decimal
 from pathlib import Path
 
-from fastapi import FastAPI, HTTPException, Request
+from fastapi import FastAPI, File, Form, HTTPException, Request, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
@@ -31,6 +35,10 @@ from shared.schema import Action, Decision
 DB = events.DEFAULT_PATH
 SCORECARD = Path("data/scorecard.json")
 CALIBRATION = Path("data/calibration.json")
+UPLOADS = Path("data/uploads")
+FRAMES = Path("data/frames")
+MAX_PDF_BYTES = 32 * 1024 * 1024
+MAX_VIDEO_BYTES = 500 * 1024 * 1024
 
 app = FastAPI(title="Draw")
 app.add_middleware(CORSMiddleware, allow_origins=["http://localhost:3000"], allow_methods=["*"], allow_headers=["*"])
@@ -175,7 +183,77 @@ def describe_attack(body: DescribeIn):
 
 
 @app.post("/replay")
-def run_replay(through: int = 6):
+def run_replay(through: int = 6, judge: bool = False):
     if not DB.exists():
         raise HTTPException(409, "no event log; run `make events` first")
-    return {"new_decisions": len(replay(through, path=DB))}
+    model = None
+    if judge:
+        from judgment import judge as model
+    return {"new_decisions": len(replay(through, path=DB, judge=model))}
+
+
+def _save_upload(upload: UploadFile, limit: int, suffix: str) -> tuple[Path, str]:
+    """Store an upload under data/uploads by content hash; the name never comes from the client."""
+    data = upload.file.read(limit + 1)
+    if len(data) > limit:
+        raise HTTPException(413, f"file is larger than {limit // (1024 * 1024)} MB")
+    if not data:
+        raise HTTPException(422, "the file is empty")
+    sha = hashlib.sha256(data).hexdigest()
+    UPLOADS.mkdir(parents=True, exist_ok=True)
+    path = UPLOADS / f"{sha}{suffix}"
+    path.write_bytes(data)
+    return path, sha
+
+
+@app.post("/pay-apps")
+def upload_pay_app(file: UploadFile = File(...), sub_id: str = Form(...), job_id: str = Form(...)):
+    """Read a pay application into the log. Sub and job come from who sent it, never from the PDF."""
+    from perception import ExtractionError, extract_pay_request
+
+    state = events.state(path=DB)
+    if not any(c.sub_id == sub_id and c.job_id == job_id for c in state["subcontracts"]):
+        raise HTTPException(404, f"no subcontract for {sub_id} on {job_id}")
+    path, sha = _save_upload(file, MAX_PDF_BYTES, ".pdf")
+    submitted = datetime.now().replace(microsecond=0)
+    try:
+        result = extract_pay_request(path, sub_id=sub_id, job_id=job_id, submitted_at=submitted)
+    except ExtractionError as e:
+        raise HTTPException(422, f"Couldn't read this pay application: {e}")
+    req = result.pay_request
+    req = req.model_copy(update={"id": f"pr_{sub_id}_{req.number}_{sha[:8]}"})
+    if any(r.id == req.id for r in state["pay_requests"]):
+        raise HTTPException(409, f"this exact file was already uploaded as {req.id}")
+    seq = events.append("fact", req, table="pay_requests", at=submitted, path=DB)
+    return {"request_id": req.id, "seq": seq, "method": result.method, "fallback_reason": result.fallback_reason,
+            "notes": [{"code": n.code, "message": n.message, "item_no": n.item_no} for n in result.notes],
+            "pay_request": req.model_dump(mode="json")}
+
+
+@app.post("/site-video")
+def upload_site_video(file: UploadFile = File(...), job_id: str = Form(...), upload_date: date | None = Form(None)):
+    """Turn a walkthrough video into site evidence for every line on the job's subcontracts."""
+    from perception import VideoError, build_site_evidence
+
+    state = events.state(path=DB)
+    lines, seen = [], set()
+    for c in state["subcontracts"]:  # the GC's contract SOV, not text from any sub's PDF
+        if c.job_id == job_id:
+            for s in c.sov:
+                if s.item_no not in seen:
+                    seen.add(s.item_no)
+                    lines.append(s)
+    if not lines:
+        raise HTTPException(404, f"no subcontracts on {job_id}")
+    suffix = Path(file.filename or "").suffix.lower()
+    path, _ = _save_upload(file, MAX_VIDEO_BYTES, suffix if suffix in {".mp4", ".mov", ".m4v", ".webm"} else ".mp4")
+    try:
+        result = build_site_evidence(path, job_id=job_id, upload_date=upload_date or date.today(),
+                                     line_items=lines, frames_dir=FRAMES)
+    except (VideoError, ValueError) as e:
+        raise HTTPException(422, f"Couldn't use this video: {e}")
+    ev = result.evidence
+    seq = events.append("fact", ev, table="site_evidence", at=ev.date, path=DB)
+    return {"site_evidence_id": ev.id, "seq": seq, "date_source": result.date_source,
+            "notes": [{"code": n.code, "message": n.message, "item_no": n.item_no} for n in result.notes],
+            "site_evidence": ev.model_dump(mode="json")}
