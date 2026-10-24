@@ -25,8 +25,9 @@ class Answer:
     question: str
     type: str
     value: str | float  # choice name, or score normalized to 0-1
-    confidence: float
+    confidence: float  # for Score questions: probability on the answer's side of the midpoint (see validate)
     probabilities: dict[str, float]
+    model_confidence: float | None = None  # what the model reported, before that conversion
 
 
 @dataclass
@@ -99,8 +100,29 @@ def validate(raw: dict, questions: dict = QUESTIONS) -> dict[str, Answer]:
             if not lo <= score <= hi:
                 raise InvalidAnswers(f"{qid}: score {score} outside {lo}..{hi}")
             value = (score - lo) / (hi - lo)
+            side = _side_confidence(probs, levels, value)
+            if side is not None:
+                # A score's decision is which side of the midpoint it falls on, so its confidence is the
+                # probability mass on that side. The model's own figure spreads over five levels and reads
+                # ~0.55 even when every level is "not a duplicate" (calibration: always right, said 0.55).
+                out[qid] = Answer(qid, q["type"], value, side, probs, float(conf))
+                continue
         out[qid] = Answer(qid, q["type"], value, float(conf), probs)
     return out
+
+
+def _side_confidence(probs: dict[str, float], levels: list[float], value: float) -> float | None:
+    """Probability on the answer's side of the scale's midpoint; the middle level counts for neither side."""
+    try:
+        by_level = {float(k): v for k, v in probs.items()}
+    except (TypeError, ValueError):
+        return None
+    if not by_level or set(by_level) - set(levels):
+        return None
+    mid = (levels[0] + levels[-1]) / 2
+    low = sum(v for k, v in by_level.items() if k < mid)
+    high = sum(v for k, v in by_level.items() if k > mid)
+    return high if value >= 0.5 else low
 
 
 _CHOICE_TEXT = {

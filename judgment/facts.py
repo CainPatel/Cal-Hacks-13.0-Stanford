@@ -212,11 +212,21 @@ def release_facts(state, request: PayRequest) -> dict:
 
     covering = [r for r in mine if r.through_date == request.period_end]
     others = [r for r in mine if r.through_date != request.period_end]
+    good = [r for r in covering if r.signed and r.kind == required]
+    printed_due = request.g702.current_payment_due
+    prev = _previous_period(state, request)
+    prev_paid = prev is not None and any(e.kind == LedgerKind.sub_payment and e.request_id == prev.id for e in state.ledger)
+    prev_waiver = prev_paid and any(
+        r.kind in (ReleaseKind.unconditional_progress, ReleaseKind.unconditional_final)
+        and r.through_date == prev.period_end and r.signed for r in mine)
     return {
         "payment_stage": "final" if final_stage else "progress",
         "required_kind": required.value,
         "releases_through_this_period": [describe(r) for r in covering[:3]],
-        "signed_release_of_required_kind_through_this_period": any(r.signed and r.kind == required for r in covering),
+        "signed_release_of_required_kind_through_this_period": bool(good),
+        "that_release_covers_the_payment": bool(good) and max(r.amount for r in good) >= max(printed_due, due),
+        "last_period_unconditional_waiver_owed": prev_paid,
+        "last_period_unconditional_waiver_on_file": prev_waiver if prev_paid else None,
         "most_recent_other_release": describe(others[0]) if others else None,
     }
 
@@ -369,6 +379,10 @@ def contract_facts(state, request: PayRequest) -> dict:
             l.item_no for l in request.lines
             if l.total_to_date > sov.get(l.item_no, l.scheduled_value) + approved.get(l.item_no, Decimal("0"))],
         "lines_not_in_subcontract": [l.item_no for l in request.lines if l.item_no not in sov],
+        "lines_whose_scheduled_value_differs_from_subcontract": [
+            l.item_no for l in request.lines
+            if l.item_no in sov and l.scheduled_value != sov[l.item_no] + approved.get(l.item_no, Decimal("0"))],
+        "job_requires_owner_draw_first": state.job.pay_when_paid,
         "insurance_on_file": coi is not None,
         "general_liability_expired_by_period_end": coi.gl_expiry < request.period_end if coi else None,
         "workers_comp_expired_by_period_end": coi.wc_expiry < request.period_end if coi else None,
@@ -376,6 +390,44 @@ def contract_facts(state, request: PayRequest) -> dict:
         "owner_draw_received_for_period": bool(draws),
         "owner_draw_date": max(e.date for e in draws).isoformat() if draws else None,
     }
+
+
+def problems_found(f: dict) -> list[str]:
+    """Plain statements of what's wrong, each computed in code from the same inputs the kernel's
+    rules read. The overall question is told that any of these means hold."""
+    c, r, b, v, req = f["contract"], f["release"], f["bank"], f["vendor"], f["request"]
+    out = []
+    if c["lines_withholding_less_than_contract_retainage"]:
+        out.append("withholds less retainage than the contract rate")
+    if c["lines_billed_past_scheduled_value_plus_approved_change_orders"]:
+        out.append("bills past the scheduled value without an approved change order")
+    if c["lines_whose_scheduled_value_differs_from_subcontract"] or c["lines_not_in_subcontract"]:
+        out.append("scheduled values or line items differ from the subcontract")
+    if c["insurance_on_file"] is False or c["general_liability_expired_by_period_end"] or c["workers_comp_expired_by_period_end"]:
+        out.append("insurance is missing or expired")
+    if c["supplier_notices_not_released"]:
+        out.append("a supplier filed a notice to owner and hasn't released")
+    if c["job_requires_owner_draw_first"] and not c["owner_draw_received_for_period"]:
+        out.append("the owner's draw for this period hasn't arrived")
+    if not r["signed_release_of_required_kind_through_this_period"]:
+        out.append("no signed lien release of the right kind through this period")
+    elif not r["that_release_covers_the_payment"]:
+        out.append("the lien release covers less than the payment")
+    if r["last_period_unconditional_waiver_owed"] and not r["last_period_unconditional_waiver_on_file"]:
+        out.append("last period's unconditional waiver never came in")
+    if b["account_changed"]:
+        out.append("the bank account differs from the one on file")
+    if any(e["domain_imitates_vendor"] for e in b["emails"]):
+        out.append("an email comes from a domain imitating the vendor's")
+    if v["identity_check"] != "verified":
+        out.append("the vendor's identity isn't verified")
+    if any(line["gap_exceeds_tolerance"] for line in f["progress"]["lines"]):
+        out.append("claimed progress exceeds what the site video shows")
+    if any(d["every_line_same_total_to_date"] or d["same_period"] for d in f["duplicates"]["earlier_requests"]):
+        out.append("looks like a resubmission of an earlier request")
+    if req["sub_summary_differs_from_computed"]:
+        out.append("the payment due on the sub's summary doesn't match the billed amounts")
+    return out
 
 
 def compute_facts(state, request: PayRequest) -> dict:
@@ -388,6 +440,7 @@ def compute_facts(state, request: PayRequest) -> dict:
         "progress": progress_facts(state, request),
         "duplicates": duplicate_facts(state, request),
     }
+    facts["problems_found"] = problems_found(facts)
     facts = json.loads(json.dumps(facts, default=str))  # plain JSON, whatever types the contract holds
     # Shrink the free text first; never drop computed facts silently.
     for limit in (EMAIL_BODY_CHARS, 200, 0):
