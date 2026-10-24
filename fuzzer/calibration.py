@@ -30,9 +30,12 @@ def outcomes(answers: dict, label: Label) -> list[tuple[str, float, bool]]:
     truth = {
         RELEASE: lambda v: v == ("incomplete" if "missing_conditional_release" in an else "correct"),
         BANK: lambda v: (v >= 0.5) == ("bank_change" in an),
-        PROGRESS: lambda v: v == ("overstated" if "overbill_pct" in an or "past_sov" in an else "plausible"),
+        PROGRESS: lambda v: v == ("overstated" if any(k in an for k in ("overbill_pct", "past_sov", "inflated_scheduled_value"))
+                                  else "plausible"),
         DUPLICATE: lambda v: (v >= 0.5) == ("duplicate" in an),
-        ACTION: lambda v: (v == "release") == (label.expected_action.value == "release"),
+        # the errors that cost money: releasing an attack, or holding an honest request.
+        # Escalating a big clean payment to the button is correct, not a miss.
+        ACTION: lambda v: v != "release" if an else v != "hold",
     }
     return [(q, a.confidence, truth[q](a.value)) for q, a in answers.items() if q in truth]
 
@@ -95,9 +98,18 @@ def report(points, alpha=0.01, delta=0.05, seed=0) -> dict:
     random.Random(seed).shuffle(shuffled)
     calib, test = shuffled[: len(points) // 2], shuffled[len(points) // 2:]
     picked = threshold(calib, alpha, delta)
-    by_q = {q: curve([p for p in points if p[0] == q]) for q in sorted({p[0] for p in points})}
+    questions = sorted({p[0] for p in points})
+    by_q = {q: curve([p for p in points if p[0] == q]) for q in questions}
+    per_q = {}
+    for q in questions:  # rule 15 applies one floor; this shows what each question would earn alone
+        qc, qt = [p for p in calib if p[0] == q], [p for p in test if p[0] == q]
+        t = threshold(qc, alpha, delta)
+        per_q[q] = {"answers": len(qc) + len(qt), "accuracy": round(sum(p[2] for p in points if p[0] == q) /
+                                                                  max(1, sum(1 for p in points if p[0] == q)), 4),
+                    "threshold": t["chosen"], "holdout": holdout_check(qt, t["chosen"]["threshold"]) if t["chosen"] else None}
     return {"answers": len(points), "curve": curve(points), "by_question": by_q, "threshold": picked,
-            "holdout": holdout_check(test, picked["chosen"]["threshold"]) if picked["chosen"] else None}
+            "holdout": holdout_check(test, picked["chosen"]["threshold"]) if picked["chosen"] else None,
+            "per_question": per_q}
 
 
 def collect(n: int, judge=None, rng_seed: int = 0) -> list[tuple[str, float, bool]]:
@@ -105,20 +117,27 @@ def collect(n: int, judge=None, rng_seed: int = 0) -> list[tuple[str, float, boo
     import pipeline
     from fuzzer.run import make_cases
     from judgment.judge import judge as real_judge
-    judge = judge or real_judge
+    judge = judge or (lambda ks, req: real_judge(ks, req, use_fallback=False))  # Jev only: don't mix in Claude
     contract = pipeline.default_contract()
-    points = []
+    points, failed = [], 0
     for data, label in make_cases(n, random.Random(rng_seed)):
         ks, req = pipeline.kernel_state(data, label.request_id, contract)
         result = judge(ks, req)
-        if result.source != "unavailable":
-            points += outcomes(result.answers, label)
+        if result.source == "unavailable":
+            failed += 1
+            continue
+        points += outcomes(result.answers, label)
+    if failed:
+        print(f"{failed} of {n} cases got no answer from Jev and were skipped")
     return points
 
 
 if __name__ == "__main__":
     n = int(sys.argv[1]) if len(sys.argv) > 1 else 400
-    out = report(collect(n))
+    points = collect(n)
+    Path("data").mkdir(exist_ok=True)
+    Path("data/calibration_points.json").write_text(json.dumps(points))  # raw (question, confidence, right)
+    out = report(points)
     Path("data/calibration.json").write_text(json.dumps(out, indent=2))
     c = out["threshold"]["chosen"]
     print(f"{out['answers']} answers | ECE {out['curve']['expected_calibration_error']} | "
