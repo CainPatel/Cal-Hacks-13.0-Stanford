@@ -18,6 +18,7 @@ AI accounts-payable clerk for small general contractors. The model can only *pro
 ```
 shared/schema.py      Pydantic models everyone uses        (A, frozen Fri 8:30 PM)
 seed/                 fake GC, jobs, subs, G703s, anomalies (B)
+synthetic/            seed rendered as PDF/XLSX/EML + truth (B)
 kernel/rules/         one file per rule, rule_01..rule_15   (A)
 kernel/runner.py      runs all rules, decides, writes trace (A)
 kernel/executor.py    Nessie call behind signature gate     (A)
@@ -39,6 +40,7 @@ Edit only your directory unless the owner says yes in chat. `shared/schema.py` c
 ```
 make seed        # regenerate seed data into data/seed.db
 make test        # pytest, all rules against fixtures
+make synthetic   # render G703 PDF/XLSX, releases, COIs, emails + truth.json into data/synthetic
 make fuzz N=500  # run N mutated cases, write scorecard to data/scorecard.json
 make api         # uvicorn api.main:app --reload --port 8000
 make web         # cd web && npm run dev
