@@ -154,6 +154,10 @@ function NextAction({ detail }: { detail: RequestDetail }) {
   const [shown, setShown] = useState(false);
   const action = detail.next_action?.replace(/\.$/, "");
   if (detail.status !== "on_hold" || !action) return null;
+  if (/^hold\b/i.test(action)) {
+    // some rules' next step is "keep holding", not something to send: say it, don't make it a button
+    return <p className="max-w-prose text-[15px] leading-snug text-muted-foreground">{action.replace(/^hold;?\s*/i, "Keep it on hold: ")}.</p>;
+  }
 
   if (/call/i.test(action)) {
     return (

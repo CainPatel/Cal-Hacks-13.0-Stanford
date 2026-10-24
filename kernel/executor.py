@@ -288,6 +288,11 @@ def _created_id(body) -> str | None:
     return None
 
 
+# Nessie accepts a bill without recurring_date, but then can't list the account's bills (its response
+# model requires the upcoming_payment_date it derives from recurring_date): one such bill breaks the ledger.
+_BILL_REQUIRED = {"recurring_date": 1}
+
+
 def _payment_tag(request: PayRequest) -> str:
     # Everything rule 01/10 need from a past payment, kept on the bill so the ledger can be rebuilt from Nessie.
     return "|".join(["pay", request.id, request.sub_id, request.job_id, request.period_end.isoformat(),
@@ -298,7 +303,7 @@ def _nessie_pay(request: PayRequest, amount: Decimal) -> dict:
     """Pay the sub: a completed bill on the GC's Nessie account."""
     base, key, account = _nessie_config()
     bill = {"status": "completed", "payee": request.sub_id, "nickname": _payment_tag(request),
-            "payment_date": date.today().isoformat(), "payment_amount": float(amount)}
+            "payment_date": date.today().isoformat(), "payment_amount": float(amount), **_BILL_REQUIRED}
     body = _nessie("POST", f"/accounts/{account}/bills", key=key, base=base, body=bill)
     return {"status": "paid", "request_id": request.id, "amount": str(amount), "bank": "nessie",
             "nessie_bill_id": _created_id(body), "nessie_response": body}
@@ -378,7 +383,7 @@ def nessie_setup(ledger: list[LedgerEntry], gc_name: tuple[str, str] = ("Ridgeli
         elif e.request_id and e.sub_id:
             _nessie("POST", f"/accounts/{account}/bills", key=key, base=base, body={
                 "status": "completed", "payee": e.sub_id, "payment_date": e.date.isoformat(),
-                "payment_amount": float(e.amount),
+                "payment_amount": float(e.amount), **_BILL_REQUIRED,
                 "nickname": "|".join(["pay", e.request_id, e.sub_id, e.job_id, e.period_end.isoformat(),
                                       e.bank_account or ""])})
     return account

@@ -25,6 +25,8 @@ if [ -f .env ]; then
     case "$line" in ''|\#*) continue ;; esac
     name=${line%%=*}; value=${line#*=}
     [ "${#value}" -ge 8 ] || continue
+    case "$name" in *_URL) continue ;; esac            # endpoints, not secrets
+    case "$value" in http://*|https://*) continue ;; esac
     if printf '%s\n' "$added" | grep -qF -e "$value"; then
       echo "BLOCKED: this commit contains the value of $name from your .env"; fail=1
     fi
