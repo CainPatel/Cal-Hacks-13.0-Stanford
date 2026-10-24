@@ -7,9 +7,11 @@ matches Jev's exactly. These confidences are self-reported, not calibrated.
 """
 
 import json
+import math
 import os
 
 import anthropic
+import pydantic
 from pydantic import BaseModel, Field
 
 MODEL = os.environ.get("JUDGMENT_FALLBACK_MODEL", "claude-opus-5-5")
@@ -83,6 +85,8 @@ def ask(state: dict, questions: dict, client=None) -> dict:
         )
     except anthropic.AnthropicError as e:  # includes a client that can't find credentials
         raise FallbackError(f"Claude request failed: {e}") from e
+    except pydantic.ValidationError as e:  # the SDK parses inside .parse(): truncated or non-JSON output
+        raise FallbackError(f"structured output did not parse: {e.error_count()} errors") from e
     if response.stop_reason in ("refusal", "max_tokens") or response.parsed_output is None:
         raise FallbackError(f"no usable answer (stop_reason={response.stop_reason}, request {response._request_id})")
 
@@ -91,18 +95,25 @@ def ask(state: dict, questions: dict, client=None) -> dict:
         q = questions.get(a.question_id)
         if q is None:
             continue  # validation reports missing or unknown questions
-        probs = {p.option: p.probability for p in a.probabilities}
+        options = _options(q)
+        probs: dict[str, float] = {}
+        for p in a.probabilities:
+            if p.option in probs:
+                raise FallbackError(f"{a.question_id}: option {p.option!r} given twice")
+            if not (math.isfinite(p.probability) and 0 <= p.probability <= 1):
+                raise FallbackError(f"{a.question_id}: probability {p.probability} outside [0, 1]")
+            probs[p.option] = p.probability
+        if set(probs) != set(options):
+            raise FallbackError(f"{a.question_id}: needs a probability for every option {options}, got {sorted(probs)}")
         total = sum(probs.values())
-        if not probs or not 0.9 <= total <= 1.1:
+        # No renormalizing toward certainty: a distribution that doesn't already sum to 1 is rejected.
+        if abs(total - 1) > 0.02:
             raise FallbackError(f"{a.question_id}: probabilities sum to {total}")
-        probs = {k: v / total for k, v in probs.items()}
         best = max(probs, key=probs.get)
         if q["type"] == "choice":
             out[a.question_id] = {"type": "choice", "choice": best, "probabilities": probs, "confidence": probs[best]}
         else:
             levels = {str(i): text for i, text in enumerate(q["criteria"])}
-            if not set(probs) <= set(levels):
-                raise FallbackError(f"{a.question_id}: unknown levels {sorted(set(probs) - set(levels))}")
             score = sum(int(k) * v for k, v in probs.items())
             out[a.question_id] = {"type": "score", "score": score, "legend": levels,
                                   "probabilities": probs, "confidence": probs[best]}

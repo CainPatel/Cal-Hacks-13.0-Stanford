@@ -38,8 +38,22 @@ class JudgmentResult:
     errors: list[str] = field(default_factory=list)
 
 
+def _number(x) -> bool:
+    return isinstance(x, (int, float)) and not isinstance(x, bool) and math.isfinite(x)
+
+
 def _finite_unit(x) -> bool:
-    return isinstance(x, (int, float)) and not isinstance(x, bool) and math.isfinite(x) and 0 <= x <= 1
+    return _number(x) and 0 <= x <= 1
+
+
+def _probabilities(qid: str, probs) -> dict[str, float]:
+    if probs is None:
+        return {}
+    if not isinstance(probs, dict) or not all(isinstance(k, str) and _finite_unit(v) for k, v in probs.items()):
+        raise InvalidAnswers(f"{qid}: probabilities must map names to numbers in [0, 1], got {probs!r}")
+    if probs and abs(sum(probs.values()) - 1) > 0.02:
+        raise InvalidAnswers(f"{qid}: probabilities sum to {sum(probs.values())}")
+    return {k: float(v) for k, v in probs.items()}
 
 
 def validate(raw: dict, questions: dict = QUESTIONS) -> dict[str, Answer]:
@@ -55,25 +69,37 @@ def validate(raw: dict, questions: dict = QUESTIONS) -> dict[str, Answer]:
         conf = a.get("confidence")
         if not _finite_unit(conf):
             raise InvalidAnswers(f"{qid}: confidence {conf!r} is not in [0, 1]")
-        probs = a.get("probabilities") or {}
+        probs = _probabilities(qid, a.get("probabilities"))
         if q["type"] == "choice":
-            if a.get("choice") not in q["criteria"]:
-                raise InvalidAnswers(f"{qid}: {a.get('choice')!r} is not an option")
-            value: str | float = a["choice"]
+            choice = a.get("choice")
+            if not isinstance(choice, str) or choice not in q["criteria"]:
+                raise InvalidAnswers(f"{qid}: {choice!r} is not an option")
+            if probs and (set(probs) - set(q["criteria"]) or probs.get(choice, 0) < max(probs.values())):
+                raise InvalidAnswers(f"{qid}: choice {choice!r} disagrees with probabilities {probs}")
+            value: str | float = choice
         else:
-            legend = a.get("legend") or {}
+            legend = a.get("legend")
+            if not isinstance(legend, dict):
+                raise InvalidAnswers(f"{qid}: legend {legend!r} is not a mapping")
             try:
-                levels = sorted(float(k) for k in legend)
+                keyed = sorted((float(k), text) for k, text in legend.items())
             except (TypeError, ValueError) as e:
                 raise InvalidAnswers(f"{qid}: unreadable legend {legend!r}") from e
+            levels = [k for k, _ in keyed]
+            if len(set(levels)) != len(q["criteria"]) or not all(math.isfinite(k) for k in levels):
+                raise InvalidAnswers(f"{qid}: legend {legend!r} doesn't have {len(q['criteria'])} distinct levels")
+            # If the legend echoes our level texts, they must be in our order, or the scale would be inverted.
+            texts = [text for _, text in keyed]
+            if all(t in q["criteria"] for t in texts) and texts != list(q["criteria"]):
+                raise InvalidAnswers(f"{qid}: legend levels are not in the order they were declared")
             score = a.get("score")
-            if len(levels) != len(q["criteria"]) or not isinstance(score, (int, float)) or not math.isfinite(score):
-                raise InvalidAnswers(f"{qid}: bad score {score!r} for legend {legend!r}")
+            if not _number(score):
+                raise InvalidAnswers(f"{qid}: score {score!r} is not a number")
             lo, hi = levels[0], levels[-1]
             if not lo <= score <= hi:
                 raise InvalidAnswers(f"{qid}: score {score} outside {lo}..{hi}")
             value = (score - lo) / (hi - lo)
-        out[qid] = Answer(qid, q["type"], value, float(conf), {str(k): float(v) for k, v in probs.items()})
+        out[qid] = Answer(qid, q["type"], value, float(conf), probs)
     return out
 
 
@@ -127,8 +153,8 @@ def _unavailable(facts: dict, errors: list[str]) -> JudgmentResult:
 def judge(state, request: PayRequest, *, ask_jev=jev.ask, ask_fallback=fallback.ask, use_fallback: bool = True) -> JudgmentResult:
     try:
         facts = compute_facts(state, request)
-    except ValueError as e:
-        return _unavailable({}, [f"facts: {e}"])
+    except Exception as e:  # noqa: BLE001 - judgment must not take the pipeline down; rule 15 escalates instead
+        return _unavailable({}, [f"facts: {type(e).__name__}: {e}"])
     threshold = state.contract.get("escalation_confidence_threshold")
     errors: list[str] = []
     sources = [("jev", ask_jev)] + ([("claude", ask_fallback)] if use_fallback else [])
@@ -137,6 +163,9 @@ def judge(state, request: PayRequest, *, ask_jev=jev.ask, ask_fallback=fallback.
             answers = validate(ask(facts, QUESTIONS))
         except (jev.JevError, fallback.FallbackError, InvalidAnswers) as e:
             errors.append(f"{source}: {e}")
+            continue
+        except Exception as e:  # noqa: BLE001 - an unexpected failure is still a failed source, never a crash
+            errors.append(f"{source}: unexpected {type(e).__name__}: {e}")
             continue
         proposal = Proposal(
             action=Action(answers[ACTION].value),

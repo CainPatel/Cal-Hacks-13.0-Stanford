@@ -25,6 +25,11 @@ def state_for(data: dict, request_id: str, contract: dict = CONTRACT):
     vendor = next(v for v in data["vendors"] if v.id == req.sub_id)
     vendor = vendor.model_copy(update={"first_paid": payments[0].date if payments else None})
     state = SimpleNamespace(
+        job=next(j for j in data["jobs"] if j.id == req.job_id),
+        subcontract=next(c for c in data["subcontracts"] if c.sub_id == req.sub_id and c.job_id == req.job_id),
+        change_orders=mine(data["change_orders"]),
+        lower_tier_notices=mine(data["lower_tier_notices"]),
+        coi=next((c for c in data["cois"] if c.sub_id == req.sub_id), None),
         vendor=vendor,
         prior_requests=[r for r in mine(data["pay_requests"]) if r.id in paid],
         all_requests=[r for r in mine(data["pay_requests"]) if r.id != req.id],

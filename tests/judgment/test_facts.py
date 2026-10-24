@@ -2,7 +2,7 @@ import json
 
 import pytest
 
-from judgment.facts import MAX_STATE_BYTES, compute_facts, is_lookalike
+from judgment.facts import MAX_STATE_BYTES, compute_facts, domain_resembles, is_lookalike
 from seed.anomalies import THIS_MONTH
 from tests.judgment.conftest import state_for
 
@@ -33,10 +33,12 @@ def test_is_lookalike(sender, vendor, expected):
 def test_clean_request_facts(seed):
     clean = next(r for r in seed["pay_requests"] if r.number == THIS_MONTH)
     f = facts_for(seed, clean.id)
-    assert f["release"]["release_on_file"] and f["release"]["signed"]
-    assert f["release"]["kind_matches_required"] and f["release"]["through_date_vs_period_end_days"] == 0
+    assert f["release"]["signed_release_of_required_kind_through_this_period"]
+    assert f["request"]["sub_summary_differs_from_computed"] is False
     assert f["bank"]["account_changed"] is False
-    assert not any(e["all_lines_identical"] for e in f["duplicates"]["earlier_requests"])
+    assert not any(e["every_line_same_total_to_date"] for e in f["duplicates"]["earlier_requests"])
+    c = f["contract"]
+    assert c["lines_withholding_less_than_contract_retainage"] == [] and c["owner_draw_received_for_period"]
     assert f["vendor"]["first_payment_to_vendor"] is False
 
 
@@ -49,7 +51,7 @@ def test_homoglyph_email_is_flagged(anomaly_cases):
     data, label = case(anomaly_cases, "bank_change_homoglyph")
     bank = facts_for(data, label.request_id)["bank"]
     assert bank["account_changed"]
-    assert any(e["domain_is_lookalike_of_vendor"] and e["new_account_is_this_requests_account"] for e in bank["emails"])
+    assert any(e["domain_imitates_vendor"] and e["names_this_requests_account"] for e in bank["emails"])
 
 
 def test_bank_change_email_is_flagged(anomaly_cases):
@@ -60,14 +62,13 @@ def test_bank_change_email_is_flagged(anomaly_cases):
 
 def test_missing_release_is_visible(anomaly_cases):
     data, label = case(anomaly_cases, "missing_conditional_release")
-    r = facts_for(data, label.request_id)["release"]
-    assert r["releases_through_this_period"] == 0 or not r.get("signed", False)
+    assert not facts_for(data, label.request_id)["release"]["signed_release_of_required_kind_through_this_period"]
 
 
 def test_resubmission_matches_an_earlier_paid_request(anomaly_cases):
     data, label = case(anomaly_cases, "duplicate_new_number")
     dupes = facts_for(data, label.request_id)["duplicates"]["earlier_requests"]
-    assert any(d["all_lines_identical"] and d["already_paid"] and not d["same_number"] for d in dupes)
+    assert any(d["every_line_same_total_to_date"] and d["already_paid"] and not d["same_number"] for d in dupes)
 
 
 def test_new_vendor_flagged(anomaly_cases):

@@ -16,7 +16,8 @@ from tests.judgment.conftest import state_for
 def jev_answers(action="release", conf=0.95, legend_base=1, **override):
     legend = {str(legend_base + i): text for i, text in enumerate(QUESTIONS[BANK]["criteria"])}
     answers = {
-        RELEASE: {"type": "choice", "choice": "correct", "probabilities": {"correct": conf}, "confidence": conf},
+        RELEASE: {"type": "choice", "choice": "correct", "confidence": conf,
+                  "probabilities": {"correct": conf, "wrong_type": round(1 - conf, 6), "incomplete": 0.0}},
         BANK: {"type": "score", "score": legend_base + 0.2, "legend": legend, "probabilities": {}, "confidence": conf},
         PROGRESS: {"type": "choice", "choice": "plausible", "probabilities": {}, "confidence": conf},
         DUPLICATE: {"type": "score", "score": legend_base, "legend": legend, "probabilities": {}, "confidence": conf},
@@ -201,9 +202,9 @@ class FakeClaude:
 def claude_answers(**probs):
     default = {
         RELEASE: {"correct": 0.9, "wrong_type": 0.05, "incomplete": 0.05},
-        BANK: {"0": 0.7, "1": 0.2, "2": 0.1},
+        BANK: {"0": 0.7, "1": 0.2, "2": 0.1, "3": 0.0, "4": 0.0},
         PROGRESS: {"plausible": 0.8, "overstated": 0.15, "understated": 0.05},
-        DUPLICATE: {"0": 1.0},
+        DUPLICATE: {"0": 1.0, "1": 0.0, "2": 0.0, "3": 0.0, "4": 0.0},
         ACTION: {"release": 0.6, "hold": 0.3, "escalate": 0.1},
     }
     default.update(probs)
@@ -232,12 +233,13 @@ def test_fallback_prompt_carries_state_and_options():
 
 
 def test_fallback_bad_probabilities_rejected():
+    bad = {RELEASE: {"correct": 0.2, "wrong_type": 0.2, "incomplete": 0.2}}
     with pytest.raises(fallback.FallbackError, match="sum"):
-        fallback.ask({}, QUESTIONS, client=FakeClaude(claude_answers(**{RELEASE: {"correct": 0.2}})))
+        fallback.ask({}, QUESTIONS, client=FakeClaude(claude_answers(**bad)))
 
 
 def test_fallback_unknown_level_rejected():
-    with pytest.raises(fallback.FallbackError, match="unknown levels"):
+    with pytest.raises(fallback.FallbackError, match="every option"):
         fallback.ask({}, QUESTIONS, client=FakeClaude(claude_answers(**{BANK: {"7": 1.0}})))
 
 
