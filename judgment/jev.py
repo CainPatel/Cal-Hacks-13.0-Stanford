@@ -1,10 +1,10 @@
 """Minimal client for Jev's System One endpoint.
 
-Default route is Vercel AI Gateway (no waitlist): base URL
-https://ai-gateway.vercel.sh/typesafe, key in JEV_API_KEY (or AI_GATEWAY_API_KEY), model
-typesafe-ai/jev. Set JEV_BASE_URL=https://thejevai.com with JEV_API_KEY for
-direct access. Both serve the same request; the response envelopes differ and
-both are accepted.
+Routes, chosen by JEV_BASE_URL (default: Vercel AI Gateway):
+  https://ai-gateway.vercel.sh/typesafe  key AI_GATEWAY_API_KEY or JEV_API_KEY, model typesafe-ai/jev
+  https://api.typesafe.ai                key TYPESAFE_API_KEY or JEV_API_KEY, model jev-latest
+  https://thejevai.com                   key JEV_API_KEY, model typesafe/jev-1.14
+All take the same request; the response envelopes differ and all are accepted. JEV_MODEL overrides.
 """
 
 import http.client
@@ -16,6 +16,15 @@ import urllib.parse
 import urllib.request
 
 GATEWAY_URL = "https://ai-gateway.vercel.sh/typesafe"
+TYPESAFE_URL = "https://api.typesafe.ai"
+# Jev's hosts sit behind Cloudflare, which refuses urllib's default "Python-urllib" User-Agent (error 1010).
+USER_AGENT = "draw-ap/1.0 (+https://github.com/CainPatel/Cal-Hacks-13.0-Stanford)"
+# host -> (key env names in order of preference, default model)
+ROUTES = {
+    "ai-gateway.vercel.sh": (("AI_GATEWAY_API_KEY", "JEV_API_KEY"), "typesafe-ai/jev"),
+    "api.typesafe.ai": (("TYPESAFE_API_KEY", "JEV_API_KEY"), "jev-latest"),
+    "thejevai.com": (("JEV_API_KEY",), "typesafe/jev-1.14"),
+}
 TIMEOUT_S = 20
 RETRY_STATUSES = {429, 500, 502, 503, 504, 529}
 RETRIES = 2
@@ -39,14 +48,11 @@ def _config() -> tuple[str, str, str]:
     base = os.environ.get("JEV_BASE_URL", GATEWAY_URL).rstrip("/")
     if not base.startswith("https://"):
         raise JevError("JEV_BASE_URL must be https")
-    via_gateway = urllib.parse.urlsplit(base).hostname == "ai-gateway.vercel.sh"
-    # The team stores the key as JEV_API_KEY; via the gateway an AI_GATEWAY_API_KEY wins if both are set.
-    names = ("AI_GATEWAY_API_KEY", "JEV_API_KEY") if via_gateway else ("JEV_API_KEY",)
+    names, default_model = ROUTES.get(urllib.parse.urlsplit(base).hostname, (("JEV_API_KEY",), "jev-latest"))
     key = next((os.environ[n] for n in names if os.environ.get(n)), None)
     if not key:
         raise JevError(f"no Jev API key configured (looked for {' or '.join(names)} for {base})")
-    model = os.environ.get("JEV_MODEL", "typesafe-ai/jev" if via_gateway else "typesafe/jev-1.14")
-    return f"{base}/v1/systemone", key, model
+    return f"{base}/v1/systemone", key, os.environ.get("JEV_MODEL", default_model)
 
 
 def _answers(raw: bytes) -> dict:
@@ -71,7 +77,7 @@ def ask(state: dict, questions: dict, *, opener=_OPENER.open, sleep=time.sleep) 
         url,
         data=payload,
         method="POST",
-        headers={"Authorization": f"Bearer {key}", "Content-Type": "application/json"},
+        headers={"Authorization": f"Bearer {key}", "Content-Type": "application/json", "User-Agent": USER_AGENT},
     )
     last: Exception | None = None
     for attempt in range(RETRIES + 1):

@@ -280,3 +280,16 @@ def test_gateway_accepts_the_team_key_name(monkeypatch):
 def test_auth_failure_names_the_route(gateway_key):
     with pytest.raises(jev.JevError, match="is the key for this route"):
         jev.ask({}, {}, opener=opener_returning(http_error(401)), sleep=lambda s: None)
+
+
+def test_typesafe_route_and_user_agent(monkeypatch):
+    monkeypatch.setenv("JEV_BASE_URL", "https://api.typesafe.ai")
+    monkeypatch.delenv("JEV_API_KEY", raising=False)
+    monkeypatch.delenv("JEV_MODEL", raising=False)
+    monkeypatch.setenv("TYPESAFE_API_KEY", "ts-key")
+    opener = opener_returning({"model": "jev-1.13.0", "answers": {"q": {"type": "noul", "noul": 0.5}}})
+    jev.ask({}, {}, opener=opener)
+    req = opener.calls[0]
+    assert req.full_url == "https://api.typesafe.ai/v1/systemone"
+    assert req.get_header("Authorization") == "Bearer ts-key" and json.loads(req.data)["model"] == "jev-latest"
+    assert req.get_header("User-agent").startswith("draw-ap/")  # not urllib's default, which Cloudflare blocks

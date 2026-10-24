@@ -98,6 +98,7 @@ def test_payment_is_a_completed_bill_on_the_gc_account(bank, world):
     assert (call.method, call.url) == ("POST", "https://prod-api.nessieisreal.com/accounts/gc_acct/bills")
     assert call.params == {"key": "test-key"}
     assert call.json["status"] == "completed" and call.json["payee"] == req.sub_id
+    assert call.json["recurring_date"] == 1  # without it Nessie can't list the account's bills
     assert Decimal(str(call.json["payment_amount"])) == req.g702.current_payment_due
     assert receipt["status"] == "paid" and receipt["nessie_bill_id"] == "obj1"
     # the payment is in the ledger at once, so the next decision sees it (rule 01's "previously certified")
