@@ -66,6 +66,32 @@ ESCALATION_RULES = {"14_within_spend_authority", "15_confidence_floor"}  # kerne
 STATUS = {Action.release: "ready", Action.escalate: "needs_ok", Action.hold: "on_hold"}
 
 
+@app.exception_handler(events.LogNotConfigured)
+def log_not_configured(request: Request, exc: events.LogNotConfigured):
+    from fastapi.responses import JSONResponse
+    return JSONResponse(status_code=503, content={"detail": str(exc)})
+
+
+@app.get("/")
+def status():
+    """What's configured on this deployment, as yes/no only (never a value), plus whether the log has data."""
+    env = lambda *names: any(os.environ.get(n) for n in names)
+    log = "postgres" if os.environ.get("DATABASE_URL") else ("not connected" if os.environ.get("VERCEL") else "sqlite")
+    try:
+        has_events = not events.is_empty(DB)
+    except Exception as e:  # report, don't crash the status page
+        has_events = f"error: {type(e).__name__}"
+    return {
+        "service": "Draw API", "docs": "/docs", "event_log": log, "log_has_events": has_events,
+        "configured": {
+            "anthropic_key": env("ANTHROPIC_API_KEY"), "jev_key": env("JEV_API_KEY", "AI_GATEWAY_API_KEY"),
+            "nessie_key": env("NESSIE_API_KEY"), "blob_store": env("BLOB_STORE_ID", "BLOB_READ_WRITE_TOKEN"),
+            "cors_origins": os.environ.get("CORS_ORIGINS", "http://localhost:3000 (default)"),
+            "device_url": env("DEVICE_URL"),
+        },
+    }
+
+
 def decisions() -> dict[str, Decision]:
     """Latest kernel trace per request."""
     return {e.request_id: Decision.model_validate(e.data) for e in events.read(kind="kernel_trace", path=DB)}
