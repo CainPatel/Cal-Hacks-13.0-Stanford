@@ -164,6 +164,24 @@ def duplicate_new_number(data, sub_id, rng, new_period=False):
     return data, label(dup, "duplicate_new_number", "rule_12")
 
 
+def duplicate_this_month(data, sub_id, rng):
+    """Submit this month's request a second time under a new number, so it gets paid twice. Rule 12."""
+    data = copy(data)
+    orig = oct_request(data, sub_id)
+    dup = orig.model_copy(update=dict(id=f"{orig.id}_again", number=THIS_MONTH + 1,
+                                      submitted_at=datetime(2026, 10, 27, 8, 0),
+                                      source_doc=f"g703/{sub_id}_202610_v2.pdf"))
+    data["pay_requests"].append(dup)
+    return data, label(dup, "duplicate_this_month", "rule_12")
+
+
+def missing_prior_unconditional(data, sub_id, rng):
+    """Last month's payment cleared but its unconditional waiver never came in. Rule 5."""
+    data = copy(data)
+    remove(data["releases"], f"rel_u_pr_{sub_id}_{THIS_MONTH - 1}")
+    return data, label(oct_request(data, sub_id), "missing_prior_unconditional", "rule_05")
+
+
 def bank_change_email(data, sub_id, rng, homoglyph=False):
     """Email asks to pay a new account; the request uses it. Rule 10 (+11 if the domain is fake)."""
     data = copy(data)
