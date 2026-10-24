@@ -124,7 +124,7 @@ def test_event_stream_from_now(client):
 def test_status_page_and_unconfigured_log(client, monkeypatch):
     body = client.get("/").json()
     assert body["event_log"] == "sqlite" and body["log_has_events"] is True
-    assert all(isinstance(v, bool) for k, v in body["configured"].items() if k != "cors_origins")  # never values
+    assert all(isinstance(v, bool) for k, v in body["configured"].items() if k not in ("cors_origins", "jev_route"))  # never secret values
     from events import log as events
     monkeypatch.setenv("VERCEL", "1")
     monkeypatch.delenv("DATABASE_URL", raising=False)
@@ -140,3 +140,15 @@ def test_setup_demo_only_into_an_empty_log(client, tmp_path, monkeypatch):
     assert client.post("/setup/demo").json() == {"facts_loaded": 419, "decisions": 90}
     assert len(client.get("/requests").json()) == 15
     assert client.post("/setup/demo").status_code == 409  # once only
+
+
+def test_status_reports_the_active_jev_route(client, monkeypatch):
+    for k in ("JEV_BASE_URL", "TYPESAFE_API_KEY", "JEV_API_KEY", "AI_GATEWAY_API_KEY"):
+        monkeypatch.delenv(k, raising=False)
+    monkeypatch.setenv("JEV_BASE_URL", "https://api.typesafe.ai")
+    body = client.get("/").json()["configured"]
+    assert body["jev_route"] == "api.typesafe.ai" and body["jev_key"] is False
+    monkeypatch.setenv("AI_GATEWAY_API_KEY", "x")  # the gateway key doesn't count for TypeSafe's route
+    assert client.get("/").json()["configured"]["jev_key"] is False
+    monkeypatch.setenv("TYPESAFE_API_KEY", "x")
+    assert client.get("/").json()["configured"]["jev_key"] is True
