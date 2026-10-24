@@ -93,11 +93,47 @@ async function call<T>(path: string, init?: RequestInit): Promise<T> {
   return body as T;
 }
 
+export type DocKind = "pay_app" | "release" | "coi" | "email" | "site_video";
+
+export type IngestResult = {
+  request_id?: string;
+  release_id?: string;
+  coi_id?: string;
+  email_id?: string;
+  site_evidence_id?: string;
+  method?: string;
+  fallback_reason?: string | null;
+  notes?: { code: string; message: string; item_no: string | null }[];
+  pay_request?: { number: number; period_end: string; g702: { current_payment_due: string } };
+};
+
+const DIRECT: Record<DocKind, { path: string; fields: ("sub_id" | "job_id")[] }> = {
+  pay_app: { path: "/pay-apps", fields: ["sub_id", "job_id"] },
+  release: { path: "/releases", fields: ["sub_id", "job_id"] },
+  coi: { path: "/cois", fields: ["sub_id"] },
+  email: { path: "/emails", fields: [] },
+  site_video: { path: "/site-video", fields: ["job_id"] },
+};
+
 export const api = {
   requests: (month: number) => call<RequestRow[]>(`/requests?month=${month}`),
   request: (id: string) => call<RequestDetail>(`/requests/${encodeURIComponent(id)}`),
   approve: (id: string) =>
     call<{ paid: boolean; rejected: boolean; reason?: string }>(`/requests/${encodeURIComponent(id)}/approve`, { method: "POST" }),
+  /** After a client upload to Blob: the API pulls the file from the private store and reads it. */
+  ingest: (kind: DocKind, pathname: string, ids: { sub_id?: string; job_id?: string }) =>
+    call<IngestResult>("/ingest", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ kind, pathname, ...ids }),
+    }),
+  /** No Blob store (local): the file goes to the API directly. */
+  uploadDirect: (kind: DocKind, file: File, ids: { sub_id?: string; job_id?: string }) => {
+    const form = new FormData();
+    form.set("file", file);
+    for (const f of DIRECT[kind].fields) if (ids[f]) form.set(f, ids[f] as string);
+    return call<IngestResult>(DIRECT[kind].path, { method: "POST", body: form });
+  },
   replay: (through: number) => call<{ new_decisions: number }>(`/replay?through=${through}`, { method: "POST" }),
   scorecard: () => call<Scorecard>("/scorecard"),
   attacks: () => call<{ name: string; about: string }[]>("/attacks"),
