@@ -22,7 +22,7 @@ DEFAULT_TOLERANCE = Decimal("10")
 
 def check(state: KernelState, request: PayRequest) -> RuleResult:
     if state.site_evidence is None:
-        return ok(RULE, {"site_evidence": None}, "No site video on file for this period yet.")
+        return fail(RULE, {"site_evidence": None}, "No site video on file for this period yet.")
 
     tolerance = Decimal(str(state.contract.get("progress_tolerance_points", DEFAULT_TOLERANCE)))
     overstatements = []
