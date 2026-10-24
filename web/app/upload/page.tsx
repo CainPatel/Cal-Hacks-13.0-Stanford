@@ -161,7 +161,7 @@ function UploadForm() {
 
   return (
     <main className="mx-auto w-full max-w-[760px] flex-1 px-4 py-6 sm:px-8 lg:py-10">
-      <h1 className="text-[27px] leading-tight font-semibold tracking-[-0.02em] sm:text-lede">Add what the sub sent</h1>
+      <h1 className="text-[27px] leading-tight font-semibold tracking-[-0.02em] sm:text-lede">Upload Portal</h1>
       <p className="mt-3 max-w-[60ch] text-body text-muted-foreground">
         Drop in the document as it came. Draw reads it and checks it with everything else; there&apos;s nothing to type.
       </p>

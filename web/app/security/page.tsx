@@ -1,5 +1,6 @@
 "use client";
 
+import { ChevronDown } from "lucide-react";
 import { type ReactNode, useEffect, useMemo, useState } from "react";
 import { CartesianGrid, ComposedChart, Line, ReferenceLine, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { Mark } from "@/components/evidence";
@@ -42,10 +43,10 @@ export default function SecurityPage() {
       {!card && !error && <Skeleton className="mt-4 h-24 w-full max-w-[62ch]" />}
       {card && <Headline card={card} />}
 
-      {card && <AttackLedger card={card} />}
+      <AttackConsole />
       {card && card.limit_sweep?.length > 0 && <LimitDial card={card} />}
       <CalibrationCurve calib={calib} />
-      <AttackConsole />
+      {card && <AttackLedger card={card} />}
 
       {card && (
         <p className="mt-14 font-mono text-sm text-muted-foreground">
@@ -100,7 +101,15 @@ function AttackLedger({ card }: { card: Scorecard }) {
   const total = (key: "n" | "wrongful" | "right_rule") => rows.reduce((s, r) => s + r[key], 0);
 
   return (
-    <Section id="ledger" title="Every kind of attack we tried">
+    // closed by default so the console stays the main event; the numbers are one tap away
+    <details className="group mt-14">
+      <summary className="flex min-h-12 cursor-pointer list-none items-center gap-3 rounded-sm outline-none select-none focus-visible:ring-3 focus-visible:ring-ring/50 [&::-webkit-details-marker]:hidden">
+        <h2 id="ledger" className="text-[22px] font-semibold tracking-[-0.01em]">
+          Every kind of attack we tried
+        </h2>
+        <ChevronDown className="size-5 text-muted-foreground transition-transform group-open:rotate-180 motion-reduce:transition-none" aria-hidden />
+      </summary>
+      <div className="mt-5">
       <div className="overflow-x-auto">
         <table className="w-full border-collapse text-[15px] sm:text-[17px]">
           <thead>
@@ -146,7 +155,8 @@ function AttackLedger({ card }: { card: Scorecard }) {
           </tfoot>
         </table>
       </div>
-    </Section>
+      </div>
+    </details>
   );
 }
 
