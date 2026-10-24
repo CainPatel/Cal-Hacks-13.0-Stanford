@@ -213,4 +213,4 @@ class Label(Model):
     request_id: str
     anomaly: str | None  # None = clean
     expected_action: Action
-    rules: list[str]  # rules that should fire
+    rules: list[str]  # rules that must fail to catch it; others may fail too

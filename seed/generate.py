@@ -3,12 +3,11 @@
 Every request here is clean. Anomalies are planted on top of this in a later
 step, each with a Label. Deterministic: same RNG seed -> same data.
 
-    python -m seed.generate            # writes data/seed.db
+    python -m seed      # writes data/seed.db (clean + the 3 demo anomalies)
 """
 import json
 import random
 import sqlite3
-import sys
 from datetime import date, datetime, timedelta
 from decimal import Decimal
 from pathlib import Path
@@ -191,10 +190,3 @@ def load(path: Path = Path("data/seed.db")) -> dict[str, list[dict]]:
     with sqlite3.connect(path) as db:
         tables = [t for (t,) in db.execute("SELECT name FROM sqlite_master WHERE type='table'")]
         return {t: [json.loads(d) for (d,) in db.execute(f"SELECT data FROM {t}")] for t in tables}
-
-
-if __name__ == "__main__":
-    path = Path(sys.argv[1] if len(sys.argv) > 1 else "data/seed.db")
-    data = generate()
-    write(data, path)
-    print(f"wrote {path}: " + ", ".join(f"{len(v)} {k}" for k, v in data.items()))

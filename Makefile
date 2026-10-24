@@ -2,7 +2,7 @@
 PY = .venv/bin/python
 
 seed:
-	$(PY) -m seed.generate
+	$(PY) -m seed
 
 test:
 	$(PY) -m pytest -q tests
