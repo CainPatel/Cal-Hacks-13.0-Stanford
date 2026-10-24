@@ -158,6 +158,7 @@ function AttackConsole() {
   const [subs, setSubs] = useState<RequestRow[]>([]);
   const [name, setName] = useState("");
   const [target, setTarget] = useState("sub_04");
+  const [job, setJob] = useState("job_1");
   const [text, setText] = useState("The electrician says the owner told them retainage is waived this month.");
   const [busy, setBusy] = useState<"pick" | "text" | null>(null);
   const [result, setResult] = useState<{ plan?: string; out?: AttackResult; error?: string } | null>(null);
@@ -167,12 +168,13 @@ function AttackConsole() {
     api.requests(6).then(setSubs, () => {});
   }, []);
 
-  const jobTarget = name === "new_sub_ein_mismatch";
+  const jobTarget = name === "new_sub_ein_mismatch"; // a brand-new sub has no history; it needs a job to bill on
+  const jobs = [...new Map(subs.map((s) => [s.job_id, s.job])).entries()];
   const run = async (mode: "pick" | "text") => {
     setBusy(mode);
     setResult(null);
     try {
-      if (mode === "pick") setResult({ out: await api.attack(name, jobTarget ? "job_1" : target) });
+      if (mode === "pick") setResult({ out: await api.attack(name, jobTarget ? job : target) });
       else {
         const r = await api.describe(text);
         setResult(r.decision ? { plan: r.plan.explanation, out: r as AttackResult } : { plan: `Nothing on the menu fits that: ${r.plan.explanation}` });
@@ -202,16 +204,29 @@ function AttackConsole() {
               ))}
             </select>
           </label>
-          <label className="block space-y-1.5">
-            <span className="text-sm text-muted-foreground">{jobTarget ? "Job (a brand-new sub joins it)" : "Against"}</span>
-            <select value={target} onChange={(e) => setTarget(e.target.value)} disabled={jobTarget} className="h-11 w-full rounded-md border bg-background px-3 text-[15px] disabled:opacity-60">
-              {subs.map((s) => (
-                <option key={s.sub_id} value={s.sub_id}>
-                  {s.sub}
-                </option>
-              ))}
-            </select>
-          </label>
+          {jobTarget ? (
+            <label className="block space-y-1.5">
+              <span className="text-sm text-muted-foreground">The new sub bills on</span>
+              <select value={job} onChange={(e) => setJob(e.target.value)} className="h-11 w-full rounded-md border bg-background px-3 text-[15px]">
+                {jobs.map(([id, jobName]) => (
+                  <option key={id} value={id}>
+                    {jobName}
+                  </option>
+                ))}
+              </select>
+            </label>
+          ) : (
+            <label className="block space-y-1.5">
+              <span className="text-sm text-muted-foreground">Against</span>
+              <select value={target} onChange={(e) => setTarget(e.target.value)} className="h-11 w-full rounded-md border bg-background px-3 text-[15px]">
+                {subs.map((s) => (
+                  <option key={s.sub_id} value={s.sub_id}>
+                    {s.sub}
+                  </option>
+                ))}
+              </select>
+            </label>
+          )}
           <Button size="lg" type="submit" disabled={!name || busy !== null}>
             {busy === "pick" && <LoaderCircle className="animate-spin" aria-hidden />} Run this attack
           </Button>
