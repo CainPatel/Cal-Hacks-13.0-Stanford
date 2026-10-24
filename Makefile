@@ -1,4 +1,4 @@
-.PHONY: seed test fuzz events replay api web synthetic demo demo-online snapshot offline sync benchmark keys hooks device device-test
+.PHONY: seed test fuzz events replay api web synthetic demo demo-online snapshot offline sync smoke benchmark keys hooks device device-test
 PY = .venv/bin/python
 
 # Keys from .env (gitignored) reach every command below; missing .env is fine. With DATABASE_URL in
@@ -9,6 +9,8 @@ N ?= 500
 M ?= 6
 W ?= 0
 PORT ?= 8000
+API ?= http://localhost:8000
+WEB ?= http://localhost:3000
 
 seed:
 	$(PY) -m seed
@@ -77,6 +79,11 @@ snapshot:
 offline: export DATABASE_URL =
 offline:
 	$(PY) -m uvicorn api.main:app --reload --port $(PORT)
+
+# Check every stage of a running Draw over HTTP, local or deployed (API=, WEB=). Read-only unless
+# FLAGS adds --sync (bank sync + replay), --pay (one sandbox payment), --approve (needs a button press).
+smoke:
+	$(PY) scripts/smoke.py --api $(API) --web $(WEB) $(FLAGS)
 
 # Which secrets are set (never prints a value)
 keys:
