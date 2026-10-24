@@ -80,8 +80,9 @@ def test_approval_pays_only_once(env):
     _, d, req = decided("pr_sub_10_6")
     approval = signed(env[0], req)
     run(env, d, req, approval)
-    with pytest.raises(ex.ExecutionRefused, match="already used"):
-        run(env, d, req, approval)  # nonce comes back from the event log, not the caller
+    # refused twice over: the request is already paid, and the nonce is spent (both read from the log)
+    with pytest.raises(ex.ExecutionRefused, match="already (used|been paid)"):
+        run(env, d, req, approval)
     assert len(env[2]) == 1
 
 

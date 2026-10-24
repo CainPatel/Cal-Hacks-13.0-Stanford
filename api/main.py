@@ -12,6 +12,7 @@ GET  /attacks              what the attack console offers
 POST /attacks              run one attack: {"name", "target", "settings"}
 POST /attacks/describe     a judge's plain-English attack, mapped by Claude: {"text"}
 POST /replay?through=6     decide every undecided request through that month (&judge=true: Jev first)
+POST /requests/{id}/pay    pay it: straight through if released, else via the approval key, then Nessie
 POST /pay-apps             upload a sub's pay application PDF (form: file, sub_id, job_id) -> a pay_requests fact
 POST /site-video           upload the super's walkthrough video (form: file, job_id) -> a site_evidence fact
 POST /releases             upload a lien release PDF (form: file, sub_id, job_id) -> a releases fact
@@ -47,11 +48,18 @@ app = FastAPI(title="Draw")
 app.add_middleware(CORSMiddleware, allow_origins=["http://localhost:3000"], allow_methods=["*"], allow_headers=["*"])
 
 STATUS = {Action.release: "ready", Action.escalate: "needs_ok", Action.hold: "on_hold"}
+DEVICE_TIMEOUT_S = 100  # the device gives up after 90 s; allow for the round trip
 
 
 def decisions() -> dict[str, Decision]:
     """Latest kernel trace per request."""
     return {e.request_id: Decision.model_validate(e.data) for e in events.read(kind="kernel_trace", path=DB)}
+
+
+def payments() -> dict[str, dict]:
+    """Successful executions per request (the bank's receipt)."""
+    return {e.request_id: {**e.data, "at": e.ts.isoformat()} for e in events.read(kind="execution", path=DB)
+            if e.data.get("status", "paid") == "paid"}
 
 
 def sentence(decision: Decision | None, vendor: str, amount: Decimal) -> str:
@@ -66,23 +74,23 @@ def sentence(decision: Decision | None, vendor: str, amount: Decimal) -> str:
     return f"On hold: {failing.message}" if failing else "On hold."
 
 
-def row(req, state, decision):
+def row(req, state, decision, paid=None):
     vendor = next(v.legal_name for v in state["vendors"] if v.id == req.sub_id)
     amount = req.g702.current_payment_due
     return {
         "id": req.id, "sub_id": req.sub_id, "sub": vendor, "job_id": req.job_id,
         "job": next(j.name for j in state["jobs"] if j.id == req.job_id),
         "amount": str(amount), "period_end": str(req.period_end),
-        "status": STATUS[decision.action] if decision else "not_checked",
-        "sentence": sentence(decision, vendor, amount),
-        "next_action": decision.next_action if decision else None,
+        "status": "paid" if paid else (STATUS[decision.action] if decision else "not_checked"),
+        "sentence": f"Paid ${amount:,.2f} to {vendor.rstrip('.')}." if paid else sentence(decision, vendor, amount),
+        "next_action": None if paid else (decision.next_action if decision else None),
     }
 
 
 @app.get("/requests")
 def list_requests(month: int = 6):
-    state, ds = events.state(path=DB), decisions()
-    return [row(r, state, ds.get(r.id)) for r in state["pay_requests"] if r.period_end == month_end(month)]
+    state, ds, ps = events.state(path=DB), decisions(), payments()
+    return [row(r, state, ds.get(r.id), ps.get(r.id)) for r in state["pay_requests"] if r.period_end == month_end(month)]
 
 
 @app.get("/requests/{request_id}")
@@ -95,7 +103,7 @@ def get_request(request_id: str):
     site = max((s for s in state["site_evidence"] if s.job_id == req.job_id and s.date <= req.period_end),
                key=lambda s: s.date, default=None)
     return {
-        **row(req, state, decision),
+        **row(req, state, decision, payments().get(request_id)),
         "checklist": [{"rule": r.rule, "passed": r.passed, "message": r.message} for r in decision.results]
         if decision else [],
         "lines": [{**l.model_dump(mode="json"),
@@ -193,6 +201,71 @@ def run_replay(through: int = 6, judge: bool = False):
     if judge:
         from judgment import judge as model
     return {"new_decisions": len(replay(through, path=DB, judge=model))}
+
+
+def _approval_key() -> tuple[str, str | None]:
+    """Where the approval key listens, and its registered public key (contract.yaml; env overrides for local runs)."""
+    import os
+
+    import pipeline
+    url = os.environ.get("ESP32_DEVICE_URL") or "http://localhost:8001"
+    pubkey = os.environ.get("APPROVAL_KEY_PUBKEY") or pipeline.default_contract().get("esp32_pubkey") or None
+    return url.rstrip("/"), pubkey
+
+
+@app.post("/requests/{request_id}/pay")
+def pay(request_id: str):
+    """Move the money. A released request under the limit pays straight away; anything that needs the
+    owner's OK goes to the approval key first and pays only on a valid signature (kernel/executor.py)."""
+    import time
+    import uuid
+
+    import requests as http
+
+    import pipeline
+    from kernel import executor
+
+    state = events.state(path=DB)
+    req = next((r for r in state["pay_requests"] if r.id == request_id), None)
+    if req is None:
+        raise HTTPException(404, f"no pay request {request_id}")
+    decision = decisions().get(request_id)
+    if decision is None:
+        raise HTTPException(409, "This request hasn't been checked yet; run the replay first.")
+    if decision.action == Action.hold:
+        raise HTTPException(409, f"On hold: {decision.next_action or 'resolve the failing checks first.'}")
+    limit = Decimal(str(pipeline.default_contract().get("auto_release_limit_usd", 0)))
+    amount = req.g702.current_payment_due
+    needs_ok = decision.action == Action.escalate or amount > limit or any(not r.passed for r in decision.results)
+
+    approval, pubkey = None, None
+    if needs_ok:
+        device, pubkey = _approval_key()
+        if not pubkey:
+            raise HTTPException(409, "Register the approval key first: put its public key (GET /pubkey on the "
+                                     "device) in config/contract.yaml as esp32_pubkey.")
+        payload = {"request_id": req.id, "payee": req.sub_id, "amount": str(amount), "job": req.job_id,
+                   "nonce": uuid.uuid4().hex, "expires_at": int(time.time()) + 90}
+        try:
+            approval = executor.request_device_approval(device, payload, timeout=DEVICE_TIMEOUT_S)
+        except http.exceptions.HTTPError as e:
+            code = e.response.status_code if e.response is not None else 502
+            raise HTTPException(504 if code == 408 else 409 if code == 409 else 502,
+                                {408: "Nobody pressed the button in time.",
+                                 409: "The approval key is already waiting on another payment."}.get(
+                                     code, f"The approval key answered HTTP {code}."))
+        except http.exceptions.RequestException as e:
+            raise HTTPException(502, f"Can't reach the approval key at {device}: {e}")
+        if approval.rejected:
+            # A rejection can only stop a payment, so it is honored without checking the signature.
+            raise HTTPException(403, "Rejected on the approval key. Nothing was paid.")
+    try:
+        receipt = executor.execute(decision, req, auto_release_limit_usd=limit, pubkey_hex=pubkey,
+                                   approval=approval, log_path=DB)
+    except executor.ExecutionRefused as e:
+        raise HTTPException(409, f"Not paid: {e}")
+    return {"paid": True, "request_id": req.id, "amount": str(amount), "approved_on_device": approval is not None,
+            "receipt": receipt}
 
 
 def _save_upload(upload: UploadFile, limit: int, suffix: str) -> tuple[Path, str]:

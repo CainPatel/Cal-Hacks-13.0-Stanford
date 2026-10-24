@@ -71,3 +71,22 @@ def replay(through: int, write: bool = True, decide=None, path=events.DEFAULT_PA
                 events.append("kernel_trace", d, request_id=req.id, at=at, path=path)
             out.append(d)
     return out
+
+
+def ledger_key(e) -> tuple:
+    """What makes two ledger rows the same money movement, whichever system recorded them."""
+    if e.kind.value == "owner_draw":
+        return ("owner_draw", e.job_id, e.period_end)
+    return ("sub_payment", e.request_id or e.id)
+
+
+def sync_ledger(entries, path=events.DEFAULT_PATH) -> int:
+    """Append bank ledger entries (e.g. from Nessie) the log doesn't already have, each at its own date."""
+    known = {ledger_key(e) for e in events.state(path=path)["ledger"]}
+    added = 0
+    for e in sorted(entries, key=lambda e: e.date):
+        if ledger_key(e) not in known:
+            events.append("fact", e, table="ledger", at=as_datetime(e.date), path=path)
+            known.add(ledger_key(e))
+            added += 1
+    return added

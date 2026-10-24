@@ -1,6 +1,8 @@
 """python -m events load        fresh data/events.db from the seed (clean + 3 demo holds)
 python -m events replay 6    decide every request through month 6 (Oct), appending decisions
 python -m events replay 6 --judge   same, with Jev (or the Claude fallback) answering first
+python -m events nessie-setup       create the GC's bank account in the Nessie sandbox and load its history
+python -m events nessie-sync        copy owner draws and sub payments from Nessie into the log
 """
 import sys
 from collections import Counter
@@ -30,5 +32,24 @@ elif cmd == "replay":
     decisions = replay(month, path=PATH, judge=judge)
     print(f"kernel: {pipeline.KERNEL}")
     print(f"{len(decisions)} new decisions through month {month}: {dict(Counter(d.action.value for d in decisions))}")
+elif cmd == "nessie-setup":
+    from kernel.executor import NessieError, nessie_setup
+    data, _ = with_demo(generate())
+    try:
+        account = nessie_setup(data["ledger"])
+    except NessieError as e:
+        sys.exit(f"Nessie setup failed: {e}")
+    print(f"Created the GC's Nessie account and loaded {len(data['ledger'])} ledger entries.")
+    print(f"Add this line to .env:\nNESSIE_ACCOUNT_ID={account}")
+elif cmd == "nessie-sync":
+    from events.replay import sync_ledger
+    from kernel.executor import NessieError, nessie_ledger
+    if not PATH.exists():
+        sys.exit(f"No log at {PATH}. Run `make events` first.")
+    try:
+        entries = nessie_ledger()
+    except NessieError as e:
+        sys.exit(f"Nessie sync failed: {e}")
+    print(f"{len(entries)} ledger entries in Nessie, {sync_ledger(entries, path=PATH)} new to the log")
 else:
     sys.exit(__doc__)

@@ -47,7 +47,15 @@ Then exercise each stage:
 
 Without keys, nothing breaks: Claude-backed uploads (scans, video) answer 422 with the reason, emails
 are read with code-only claims, and a judged replay escalates every request rule 15 can't vouch for.
-There is no approve-and-pay endpoint yet; `kernel/executor.py` is exercised by `tests/test_executor.py`.
+Paying (the money stage, all in the Nessie sandbox, no real money):
+
+```
+python -m events nessie-setup     # once: creates the GC's Nessie account, prints NESSIE_ACCOUNT_ID for .env
+curl localhost:8001/pubkey        # register the approval key: APPROVAL_KEY_PUBKEY in .env (or contract.yaml)
+curl -X POST localhost:8000/requests/pr_sub_02_6/pay    # released: pays straight away
+curl -X POST localhost:8000/requests/pr_sub_15_6/pay    # escalated: waits for `a` + Enter on the device
+python -m events nessie-sync      # pull the bank's ledger back into the log
+```
 
 ## Commands
 
