@@ -61,7 +61,7 @@ def sentence(decision: Decision | None, vendor: str, amount: Decimal) -> str:
     if decision.action == Action.release:
         return "Ready to pay."
     if decision.action == Action.escalate:
-        return f"Needs your OK: ${amount:,.2f} to {vendor}."
+        return f"Needs your OK: ${amount:,.2f} to {vendor.rstrip('.')}."
     failing = next((r for r in decision.results if not r.passed), None)
     return f"On hold: {failing.message}" if failing else "On hold."
 
