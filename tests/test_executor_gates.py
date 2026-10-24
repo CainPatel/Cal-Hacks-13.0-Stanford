@@ -122,3 +122,11 @@ def test_kernel_holds_the_two_sneaky_attacks():
         data, label = mutate(WORLD, "sub_02", random.Random(0))
         d = pipeline.decide(data, label.request_id)
         assert d.action == Action.hold, (label.anomaly, [r.rule for r in d.results if not r.passed])
+
+
+def test_kernel_holds_a_release_for_less_than_the_payment():
+    import random
+    data, label = a.release_amount_short(WORLD, "sub_02", random.Random(0), fraction=0.5)
+    d = pipeline.decide(data, label.request_id)
+    assert d.action == Action.hold
+    assert [r.rule for r in d.results if not r.passed and not r.rule.startswith("14")] == ["04_conditional_release_present"]

@@ -112,7 +112,7 @@
         "job_id": "job_1",
         "kind": "conditional_progress",
         "through_date": "2026-08-31",
-        "amount": "13500.00",
+        "amount": "18000.00",
         "signed": true,
         "received_at": "2026-08-25"
       },
