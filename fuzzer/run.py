@@ -14,6 +14,7 @@ from datetime import date, timedelta
 from decimal import Decimal
 from pathlib import Path
 
+import pipeline
 from pipeline import KERNEL, decide
 from seed import anomalies as a
 from seed.generate import generate
@@ -153,10 +154,33 @@ def button_load(worlds=WORLDS) -> dict:
             "held_share_clean": round(actions.count(Action.hold) / len(actions), 4)}
 
 
+LIMITS = [10000, 15000, 25000, 50000, 100000]
+
+
+def limit_sweep(cases, limits=LIMITS, worlds=WORLDS) -> list[dict]:
+    """The auto-release limit as a dial: owner's taps vs. attacks that would pay out automatically."""
+    base = getattr(pipeline, "default_contract", dict)()  # {} under the stub kernel
+    clean = [generate(rng_seed=s) for s in range(worlds)]
+    jobs = sum(len(w["jobs"]) for w in clean)
+    out = []
+    for limit in limits:
+        contract = {**base, "auto_release_limit_usd": limit}
+        actions = [decide(w, r.id, contract=contract).action
+                   for w in clean for r in w["pay_requests"] if r.number == a.THIS_MONTH]
+        leaked = [amount(d, l.request_id) for d, l in cases
+                  if l.anomaly and decide(d, l.request_id, contract=contract).action == Action.release]
+        out.append({"limit": limit,
+                    "button_presses_per_job_month": round(actions.count(Action.escalate) / jobs, 2),
+                    "auto_released_share": round(actions.count(Action.release) / len(actions), 4),
+                    "attacks_auto_paid": len(leaked), "dollars_auto_paid": str(sum(leaked))})
+    return out
+
+
 def run(n=500, rng_seed=0) -> dict:
     rng = random.Random(rng_seed)
     rows = []
-    for i, (data, label) in enumerate(make_cases(n, rng)):
+    cases = list(make_cases(n, rng))
+    for i, (data, label) in enumerate(cases):
         d = decide(data, label.request_id)
         rows.append({
             "case": i, "request_id": label.request_id, "anomaly": label.anomaly,
@@ -164,7 +188,7 @@ def run(n=500, rng_seed=0) -> dict:
             "action": d.action.value, "failed_rules": [x.rule for x in d.results if not x.passed],
             "amount": str(amount(data, label.request_id)),
         })
-    return {**score(rows), **button_load()}
+    return {**score(rows), **button_load(), "limit_sweep": limit_sweep(cases)}
 
 
 if __name__ == "__main__":
@@ -179,5 +203,9 @@ if __name__ == "__main__":
           f"is approved (rule catch rate {card['rule_catch_rate']})")
     print(f"button presses per job per month: {card['button_presses_per_job_month']} | "
           f"auto-released share of a clean month: {card['auto_released_share']}")
+    for s in card["limit_sweep"]:
+        print(f"  limit ${s['limit']:>7,}: {s['button_presses_per_job_month']:.2f} taps/job/month, "
+              f"{s['auto_released_share']:.0%} of a clean month auto-paid, "
+              f"{s['attacks_auto_paid']} attacks auto-paid (${Decimal(s['dollars_auto_paid']):,.0f})")
     print(f"wrongful releases {card['wrongful_releases']} | catch rate {card['catch_rate']} | "
           f"false-hold rate {card['false_hold_rate']} | protected ${card['dollars_protected']}")
