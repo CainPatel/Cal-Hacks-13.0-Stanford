@@ -21,6 +21,7 @@ from gpiozero import LED, Button, Device
 
 CFG = tomllib.loads((Path(__file__).parent / "config.toml").read_text())
 MOCK = os.environ.get("DRAWKEY_MOCK") == "1"
+BUTTONS_ONLY = os.environ.get("DRAWKEY_BUTTONS_ONLY") == "1"  # Pi service: only the GPIO buttons decide
 FIELDS = {"request_id", "payee", "amount", "job", "nonce", "expires_at"}
 
 
@@ -153,6 +154,8 @@ def get_pending():
 
 @app.post("/decide/{what}")
 def decide_page(what: str):
+    if BUTTONS_ONLY:  # the page is reachable from the internet; a press on the key is the only approval
+        return JSONResponse({"error": "press the button on the key"}, 403)
     if what not in ("approve", "reject"):
         return JSONResponse({"error": "approve or reject"}, 400)
     decide(what)
@@ -170,7 +173,7 @@ button{font-size:28px;padding:24px 0;width:min(45%,240px);border:0;border-radius
 </style>
 <div id=wait>Nothing to approve right now.</div>
 <div id=req hidden><div id=payee></div><div id=amt></div><div id=job></div>
-<button id=yes onclick="go('approve')">Approve</button><button id=no onclick="go('reject')">Reject</button></div>
+<!--decide--></div>
 <script>
 async function go(w){await fetch('/decide/'+w,{method:'POST'});tick()}
 async function tick(){const p=await (await fetch('/pending')).json();const has=!!p.payee;
@@ -180,6 +183,9 @@ tick();setInterval(tick,1000)
 </script>"""
 
 
+BUTTONS = """<button id=yes onclick="go('approve')">Approve</button><button id=no onclick="go('reject')">Reject</button>"""
+
+
 @app.get("/", response_class=HTMLResponse)
 def page():
-    return PAGE
+    return PAGE.replace("<!--decide-->", "<p>Press the green or red button on the key.</p>" if BUTTONS_ONLY else BUTTONS)
