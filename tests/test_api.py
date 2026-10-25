@@ -238,3 +238,18 @@ def test_attack_targets_are_the_seeded_subs_even_after_a_new_sub_arrives(client)
     targets = client.get("/attacks/targets").json()
     assert len(targets) == 15 and {t["id"] for t in targets} == {f"sub_{i:02d}" for i in range(1, 16)}
     assert client.post("/attacks", json={"name": "supplier_notice_unreleased", "target": targets[0]["id"]}).status_code == 200
+
+
+def test_an_attack_no_rule_holds_is_saved_as_a_gap(client, tmp_path, monkeypatch):
+    from fuzzer import nl_attack
+    assessment = {"summary": "x", "holds": [], "backstops": [{"backstop": "limit", "why": "big"}], "jev": None,
+                  "gap": "a small overcharge could pay", "out_of_scope": None, "verdict": "needs_key"}
+    monkeypatch.setattr(main, "GAPS", tmp_path / "gaps.jsonl")
+    monkeypatch.setattr(nl_attack, "run", lambda text: {"plan": {"attack": "none"}, "result": None, "assessment": assessment})
+    r = client.post("/attacks/describe", json={"text": "charge a little more each month"}).json()
+    assert r["assessment"]["verdict"] == "needs_key" and r["gap_saved"] is True
+    assert client.get("/attacks/gaps").json()[0]["text"] == "charge a little more each month"
+    stopped = {**assessment, "holds": [{"rule": "10", "why": "new account"}], "verdict": "stopped"}
+    monkeypatch.setattr(nl_attack, "run", lambda text: {"plan": {"attack": "none"}, "result": None, "assessment": stopped})
+    assert client.post("/attacks/describe", json={"text": "a held one"}).json()["gap_saved"] is False
+    assert len(client.get("/attacks/gaps").json()) == 1

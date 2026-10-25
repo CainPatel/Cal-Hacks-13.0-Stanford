@@ -411,11 +411,56 @@ def describe_attack(body: DescribeIn):
     except (ValueError, StopIteration, TypeError, ArithmeticError) as e:
         raise HTTPException(422, f"that attack can't run as described: {e or type(e).__name__}")
     if out["result"] is None:
-        return {"plan": out["plan"], "result": None}
+        assessment = out.get("assessment")
+        found_gap = assessment is not None and assessment["verdict"] != "stopped"  # no rule would hold it
+        return {"plan": out["plan"], "result": None, "assessment": assessment,
+                "gap_saved": _save_gap(body.text, assessment) if found_gap else False}
     r = out["result"]
     return {"plan": out["plan"], "label": r["label"].model_dump(mode="json"),
             "decision": r["decision"].model_dump(mode="json"), "amount": str(r["amount"]),
             "caught": r["decision"].action != Action.release, "caught_by_rules": r["decision"].action == Action.hold}
+
+
+GAPS = DATA / "attack_gaps.jsonl"  # local runs; deployed, each gap is a private Blob under attack-gaps/
+
+
+def _blob_configured() -> bool:
+    return bool(os.environ.get("BLOB_READ_WRITE_TOKEN") or os.environ.get("BLOB_STORE_ID"))
+
+
+def _save_gap(text: str, assessment: dict) -> bool:
+    """Keep an attack idea that no rule would hold, so the team can turn it into a new check or fuzz case.
+    Never part of the event log: it's an idea, not a fact about any payment."""
+    record = {"at": datetime.now().isoformat(timespec="seconds"), "text": text, "assessment": assessment}
+    data = json.dumps(record).encode()
+    try:
+        if _blob_configured():
+            from vercel.blob import sync as blob
+            name = f"attack-gaps/{datetime.now():%Y%m%dT%H%M%S}-{hashlib.sha256(data).hexdigest()[:8]}.json"
+            blob.put_blob(name, data, access="private", content_type="application/json")
+        else:
+            GAPS.parent.mkdir(parents=True, exist_ok=True)
+            with GAPS.open("a") as f:
+                f.write(json.dumps(record) + "\n")
+        return True
+    except Exception:  # noqa: BLE001 - saving an idea must never break the attack console's answer
+        return False
+
+
+@app.get("/attacks/gaps")
+def attack_gaps(limit: int = 50):
+    """Attack ideas the console found no rule for, newest first: the team's list of new checks to write."""
+    if _blob_configured():
+        from vercel.blob import sync as blob
+        names = sorted((b.pathname for b in blob.query_blobs(prefix="attack-gaps/")), reverse=True)[:limit]
+        out = []
+        for name in names:
+            with blob.stream_blob(name, access="private") as download:
+                out.append(json.loads(b"".join(download)))
+        return out
+    if not GAPS.exists():
+        return []
+    return [json.loads(line) for line in GAPS.read_text().splitlines() if line.strip()][::-1][:limit]
 
 
 @app.post("/requests/{request_id}/approve")
