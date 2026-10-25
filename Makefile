@@ -1,4 +1,4 @@
-.PHONY: seed test fuzz events replay api web synthetic demo demo-online snapshot offline sync smoke benchmark keys hooks device device-test
+.PHONY: seed test fuzz events replay reset api web synthetic demo demo-online snapshot offline sync smoke benchmark keys hooks device device-test
 PY = .venv/bin/python
 
 # Keys from .env (gitignored) reach every command below; missing .env is fine. With DATABASE_URL in
@@ -64,6 +64,12 @@ demo-online:
 	$(PY) -m events load
 	$(PY) -m events nessie-sync
 	$(PY) -m events replay 6 --judge
+
+# Start the log over for another run of the demo: whichever log is configured (the shared Neon log with
+# DATABASE_URL in .env, else data/events.db) is set aside (renamed, never deleted), the demo company is
+# loaded (plus data/demo_company/ when present), the bank synced, and May-October decided.
+reset:
+	$(PY) -m events reset --yes
 
 # Copy the bank's ledger (owner draws, payments made anywhere) into the log
 sync:

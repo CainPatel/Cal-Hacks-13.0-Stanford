@@ -17,7 +17,8 @@ W, H = landscape(letter)
 SHRUNK = 0.28  # a 7 pt sheet printed at 28% sets 2 pt type, like a browser's "fit to page"
 
 
-def export_g703(path, *, scale=1.0, working_column=False, ruled_header=False, tight_items=False, remit=True):
+def export_g703(path, *, rows=ROWS, period="11.25.2021", scale=1.0, working_column=False, ruled_header=False,
+                tight_items=False, remit=True):
     c = canvas.Canvas(str(path), pagesize=(W, H))
     c.translate(0, H)
     c.scale(scale, scale)
@@ -27,7 +28,7 @@ def export_g703(path, *, scale=1.0, working_column=False, ruled_header=False, ti
     c.drawString(28, y(45), "CONTINUATION SHEET AIA DOCUMENT G703 PAGE 1 OF 1 PAGES")
     c.drawString(28, y(56), "AIA Document G702, APPLICATION AND CERTIFICATION FOR PAYMENT, containing")
     c.drawString(513, y(56), "APPLICATION NO: Draw #1")
-    c.drawString(537, y(76), "PERIOD TO: 11.25.2021")
+    c.drawString(537, y(76), f"PERIOD TO: {period}")
     if remit:
         c.drawString(28, y(66), "Remit payment to account: 021000021:77812345")
     for letter_, x in LETTERS.items():
@@ -46,7 +47,7 @@ def export_g703(path, *, scale=1.0, working_column=False, ruled_header=False, ti
     if working_column:
         c.drawRightString(760, y(130), "actual exp")
     top = 170
-    for item, desc, cells in ROWS:
+    for item, desc, cells in rows:
         if tight_items:
             c.drawRightString(45.6, y(top), item)  # 0.2 em before the description, as on the real export
         else:
@@ -61,42 +62,44 @@ def export_g703(path, *, scale=1.0, working_column=False, ruled_header=False, ti
     return path
 
 
-# Lines 1-9 of the AIA spreadsheet G702: (label, amount, the line below it). The architect's
+# Lines 1-9 of the AIA spreadsheet G702: (label, which amount, the line below it). The architect's
 # certificate starts left of the page's middle, so cutting the page in half cuts its words.
 G702_ROWS = [
-    ("1.  ORIGINAL CONTRACT SUM", "$ 384,614.00", None),
+    ("1.  ORIGINAL CONTRACT SUM", "$ {contract}", None),
     ("2.  Net change by Change Orders", "$ 0.00", None),
-    ("3.  CONTRACT SUM TO DATE (Line 1 ± 2)", "$ 384,614.00", None),
-    ("4.  TOTAL COMPLETED & STORED TO", "$ $236,587.00", "         DATE       (Column G on G703)"),
+    ("3.  CONTRACT SUM TO DATE (Line 1 ± 2)", "$ {contract}", None),
+    ("4.  TOTAL COMPLETED & STORED TO", "$ ${completed}", "         DATE       (Column G on G703)"),
     ("5.  RETAINAGE:", None, None),
-    ("a.   % of Completed Work", "$ 14,000.00", "     (Column D + E on G703)"),
+    ("a.   % of Completed Work", "$ {retainage}", "     (Column D + E on G703)"),
     ("b.   % of Stored Material", "$", "     (Column F on G703)"),
     ("     Total Retainage (Lines 5a + 5b or", None, None),
-    ("     Total in Column I of G703)", "$ 14,000.00", None),
-    ("6.  TOTAL EARNED LESS RETAINAGE", "$ 222,587.00", "     (Line 4 Less Line 5 Total)"),
+    ("     Total in Column I of G703)", "$ {retainage}", None),
+    ("6.  TOTAL EARNED LESS RETAINAGE", "$ {earned}", "     (Line 4 Less Line 5 Total)"),
     ("7.  LESS PREVIOUS CERTIFICATES FOR", None, None),
     ("     PAYMENT (Line 6 from prior Certificate)", "$ 0.00", None),
-    ("8.  CURRENT PAYMENT DUE", "$ 222,587.00", None),
-    ("9.  BALANCE TO FINISH, INCLUDING RETAINAGE", "$ 162,027.00", "     (Line 3 less Line 6)"),
+    ("8.  CURRENT PAYMENT DUE", "$ {earned}", None),
+    ("9.  BALANCE TO FINISH, INCLUDING RETAINAGE", "$ {balance}", "     (Line 3 less Line 6)"),
 ]
+G702_AMOUNTS = {"contract": "384,614.00", "completed": "236,587.00", "retainage": "14,000.00",
+                "earned": "222,587.00", "balance": "162,027.00"}  # the ROWS sheet's totals
 CERTIFICATE = ["CONTRACTOR:", "By: Date:", "State of: FLORIDA County of: PINELLAS",
                "ARCHITECT'S CERTIFICATE FOR PAYMENT", "In accordance with the Contract Documents, based on",
                "comprising the application, the Architect certifies", "Architect's knowledge, information and belief",
                "the quality of the Work is in accordance with", "is entitled to payment of the AMOUNT CERTIFIED."]
 
 
-def export_g702(path):
+def export_g702(path, *, amounts=G702_AMOUNTS, period="11.25.2021"):
     c = canvas.Canvas(str(path), pagesize=(W, H))
     c.setFont("Helvetica", 8)
     c.drawString(36, H - 40, "APPLICATION AND CERTIFICATION FOR PAYMENT   AIA DOCUMENT G702   PAGE 1 of 1")
     c.drawString(430, H - 56, "APPLICATION NO: #01")
-    c.drawString(430, H - 70, "PERIOD TO: 11.25.2021")
+    c.drawString(430, H - 70, f"PERIOD TO: {period}")
     c.drawString(36, H - 90, "Continuation Sheet, AIA Document G703, is attached.")
     top, right = 110, iter(CERTIFICATE)
     for label, amount, below in G702_ROWS:
         c.drawString(36, H - top, label)
         if amount:
-            c.drawRightString(330, H - top, amount)
+            c.drawRightString(330, H - top, amount.format(**amounts))
         c.drawString(W / 2 - 20, H - top, next(right, ""))
         top += 12
         if below:
