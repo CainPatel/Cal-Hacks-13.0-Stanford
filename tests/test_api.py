@@ -76,7 +76,7 @@ def test_attack_console(client):
 def test_scorecard_scored_on_first_request(client, monkeypatch):
     monkeypatch.setenv("SCORECARD_CASES", "40")
     card = client.get("/scorecard").json()
-    assert card["cases"] == 40 and "limit_sweep" in card
+    assert card["cases"] == 40 + 61 and "limit_sweep" in card  # plus the held-out set (fuzzer/heldout/)
     assert main.SCORECARD.exists()  # cached for the next request
 
 

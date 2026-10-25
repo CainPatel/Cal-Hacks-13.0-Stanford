@@ -1,0 +1,3411 @@
+[
+  {
+    "state": {
+      "job": {
+        "id": "job_27",
+        "name": "Beacon Hill Medical Center",
+        "owner": "Beacon Hill Health LLC",
+        "lender": "First Sound Bank",
+        "architect": "CollinsWoerman",
+        "contract_sum": "600000.00",
+        "retainage_rate": "0.10",
+        "pay_when_paid": true
+      },
+      "subcontract": {
+        "id": "sc_sub_27",
+        "sub_id": "sub_27",
+        "job_id": "job_27",
+        "sov": [
+          {
+            "item_no": "22-11",
+            "description": "Domestic water piping and distribution",
+            "scheduled_value": "60000.00"
+          }
+        ],
+        "retainage_rate": "0.10"
+      },
+      "vendor": {
+        "id": "sub_27",
+        "legal_name": "Sound Plumbing Systems LLC",
+        "ein": "12-4455667",
+        "email_domain": "soundplumbing.com",
+        "bank_account": "121000021:111222334",
+        "first_paid": "2026-05-15",
+        "crs_status": "verified"
+      },
+      "change_orders": [],
+      "prior_requests": [
+        {
+          "id": "pr_sub_27_1",
+          "number": 1,
+          "sub_id": "sub_27",
+          "job_id": "job_27",
+          "period_end": "2026-07-31",
+          "lines": [
+            {
+              "item_no": "22-11",
+              "description": "Domestic water piping and distribution",
+              "scheduled_value": "60000.00",
+              "previous_applications": "0.00",
+              "this_period": "15000.00",
+              "stored_materials": "0.00",
+              "total_to_date": "15000.00",
+              "pct_complete": "25",
+              "balance_to_finish": "45000.00",
+              "retainage": "1500.00"
+            }
+          ],
+          "g702": {
+            "original_contract_sum": "60000.00",
+            "net_change_orders": "0.00",
+            "contract_sum_to_date": "60000.00",
+            "total_completed_stored": "15000.00",
+            "retainage": "1500.00",
+            "total_earned_less_retainage": "13500.00",
+            "less_previous_certificates": "0.00",
+            "current_payment_due": "13500.00"
+          },
+          "bank_account": "121000021:111222334",
+          "submitted_at": "2026-07-28T10:00:00",
+          "source_doc": "g703/sub_27_202607.xlsx"
+        }
+      ],
+      "all_requests": [
+        {
+          "id": "pr_sub_27_1",
+          "number": 1,
+          "sub_id": "sub_27",
+          "job_id": "job_27",
+          "period_end": "2026-07-31",
+          "lines": [
+            {
+              "item_no": "22-11",
+              "description": "Domestic water piping and distribution",
+              "scheduled_value": "60000.00",
+              "previous_applications": "0.00",
+              "this_period": "15000.00",
+              "stored_materials": "0.00",
+              "total_to_date": "15000.00",
+              "pct_complete": "25",
+              "balance_to_finish": "45000.00",
+              "retainage": "1500.00"
+            }
+          ],
+          "g702": {
+            "original_contract_sum": "60000.00",
+            "net_change_orders": "0.00",
+            "contract_sum_to_date": "60000.00",
+            "total_completed_stored": "15000.00",
+            "retainage": "1500.00",
+            "total_earned_less_retainage": "13500.00",
+            "less_previous_certificates": "0.00",
+            "current_payment_due": "13500.00"
+          },
+          "bank_account": "121000021:111222334",
+          "submitted_at": "2026-07-28T10:00:00",
+          "source_doc": "g703/sub_27_202607.xlsx"
+        }
+      ],
+      "releases": [
+        {
+          "id": "rel_c_pr_sub_27_2",
+          "sub_id": "sub_27",
+          "job_id": "job_27",
+          "kind": "conditional_progress",
+          "through_date": "2026-08-31",
+          "amount": "9000.00",
+          "signed": true,
+          "received_at": "2026-08-26"
+        },
+        {
+          "id": "rel_u_pr_sub_27_1",
+          "sub_id": "sub_27",
+          "job_id": "job_27",
+          "kind": "unconditional_progress",
+          "through_date": "2026-07-31",
+          "amount": "13500.00",
+          "signed": true,
+          "received_at": "2026-08-14"
+        }
+      ],
+      "lower_tier_notices": [],
+      "coi": {
+        "id": "coi_sub_27",
+        "sub_id": "sub_27",
+        "gl_expiry": "2027-04-30",
+        "wc_expiry": "2027-04-30",
+        "additional_insured": true
+      },
+      "ledger": [
+        {
+          "id": "pay_pr_sub_27_1",
+          "job_id": "job_27",
+          "kind": "sub_payment",
+          "amount": "13500.00",
+          "date": "2026-08-11",
+          "period_end": "2026-07-31",
+          "sub_id": "sub_27",
+          "request_id": "pr_sub_27_1",
+          "bank_account": "121000021:111222334"
+        },
+        {
+          "id": "draw_job_27_2",
+          "job_id": "job_27",
+          "kind": "owner_draw",
+          "amount": "40000.00",
+          "date": "2026-09-02",
+          "period_end": "2026-08-31",
+          "sub_id": null,
+          "request_id": null,
+          "bank_account": null
+        }
+      ],
+      "emails": [],
+      "site_evidence": {
+        "id": "se_job_27_20260828",
+        "job_id": "job_27",
+        "date": "2026-08-28",
+        "frames": [
+          "cam27_0828.jpg"
+        ],
+        "estimates": {
+          "22-11": "41.67"
+        }
+      },
+      "known_bank_account": "121000021:111222334",
+      "contract": {
+        "auto_release_limit_usd": 25000,
+        "escalation_confidence_threshold": 0.85
+      },
+      "proposal": {
+        "action": "release",
+        "confidences": {
+          "progress_plausible": 0.95,
+          "bank_change_suspicious": 0.99
+        },
+        "reasons": [
+          "Piping progress matches site inspection logs and billing reconciles."
+        ],
+        "answers": {}
+      }
+    },
+    "request": {
+      "id": "pr_sub_27_2",
+      "number": 2,
+      "sub_id": "sub_27",
+      "job_id": "job_27",
+      "period_end": "2026-08-31",
+      "lines": [
+        {
+          "item_no": "22-11",
+          "description": "Domestic water piping and distribution",
+          "scheduled_value": "60000.00",
+          "previous_applications": "15000.00",
+          "this_period": "10000.00",
+          "stored_materials": "0.00",
+          "total_to_date": "25000.00",
+          "pct_complete": "41.67",
+          "balance_to_finish": "35000.00",
+          "retainage": "2500.00"
+        }
+      ],
+      "g702": {
+        "original_contract_sum": "60000.00",
+        "net_change_orders": "0.00",
+        "contract_sum_to_date": "60000.00",
+        "total_completed_stored": "25000.00",
+        "retainage": "2500.00",
+        "total_earned_less_retainage": "22500.00",
+        "less_previous_certificates": "13500.00",
+        "current_payment_due": "9000.00"
+      },
+      "bank_account": "121000021:111222334",
+      "submitted_at": "2026-08-26T11:00:00",
+      "source_doc": "g703/sub_27_202608.xlsx"
+    },
+    "label": {
+      "anomaly": null,
+      "expected_action": "release",
+      "why": "Standard progress billing with matching banking details, active insurance, verified site progress, and proper lien release coverage."
+    }
+  },
+  {
+    "state": {
+      "job": {
+        "id": "job_28",
+        "name": "Highland Commerce Park",
+        "owner": "Highland Industrial LLC",
+        "lender": "First Interstate Bank",
+        "architect": "DLR Group",
+        "contract_sum": "750000.00",
+        "retainage_rate": "0.10",
+        "pay_when_paid": true
+      },
+      "subcontract": {
+        "id": "sc_sub_28",
+        "sub_id": "sub_28",
+        "job_id": "job_28",
+        "sov": [
+          {
+            "item_no": "09-22",
+            "description": "Light gauge metal framing",
+            "scheduled_value": "70000.00"
+          }
+        ],
+        "retainage_rate": "0.10"
+      },
+      "vendor": {
+        "id": "sub_28",
+        "legal_name": "Apex Framing Contractors LLC",
+        "ein": "23-6677889",
+        "email_domain": "apexframing.com",
+        "bank_account": "021000021:334455778",
+        "first_paid": "2026-05-18",
+        "crs_status": "verified"
+      },
+      "change_orders": [],
+      "prior_requests": [
+        {
+          "id": "pr_sub_28_1",
+          "number": 1,
+          "sub_id": "sub_28",
+          "job_id": "job_28",
+          "period_end": "2026-07-31",
+          "lines": [
+            {
+              "item_no": "09-22",
+              "description": "Light gauge metal framing",
+              "scheduled_value": "70000.00",
+              "previous_applications": "0.00",
+              "this_period": "20000.00",
+              "stored_materials": "0.00",
+              "total_to_date": "20000.00",
+              "pct_complete": "28.57",
+              "balance_to_finish": "50000.00",
+              "retainage": "2000.00"
+            }
+          ],
+          "g702": {
+            "original_contract_sum": "70000.00",
+            "net_change_orders": "0.00",
+            "contract_sum_to_date": "70000.00",
+            "total_completed_stored": "20000.00",
+            "retainage": "2000.00",
+            "total_earned_less_retainage": "18000.00",
+            "less_previous_certificates": "0.00",
+            "current_payment_due": "18000.00"
+          },
+          "bank_account": "021000021:334455778",
+          "submitted_at": "2026-07-28T10:00:00",
+          "source_doc": "g703/sub_28_202607.xlsx"
+        }
+      ],
+      "all_requests": [
+        {
+          "id": "pr_sub_28_1",
+          "number": 1,
+          "sub_id": "sub_28",
+          "job_id": "job_28",
+          "period_end": "2026-07-31",
+          "lines": [
+            {
+              "item_no": "09-22",
+              "description": "Light gauge metal framing",
+              "scheduled_value": "70000.00",
+              "previous_applications": "0.00",
+              "this_period": "20000.00",
+              "stored_materials": "0.00",
+              "total_to_date": "20000.00",
+              "pct_complete": "28.57",
+              "balance_to_finish": "50000.00",
+              "retainage": "2000.00"
+            }
+          ],
+          "g702": {
+            "original_contract_sum": "70000.00",
+            "net_change_orders": "0.00",
+            "contract_sum_to_date": "70000.00",
+            "total_completed_stored": "20000.00",
+            "retainage": "2000.00",
+            "total_earned_less_retainage": "18000.00",
+            "less_previous_certificates": "0.00",
+            "current_payment_due": "18000.00"
+          },
+          "bank_account": "021000021:334455778",
+          "submitted_at": "2026-07-28T10:00:00",
+          "source_doc": "g703/sub_28_202607.xlsx"
+        }
+      ],
+      "releases": [
+        {
+          "id": "rel_c_pr_sub_28_2",
+          "sub_id": "sub_28",
+          "job_id": "job_28",
+          "kind": "conditional_progress",
+          "through_date": "2026-08-31",
+          "amount": "13500.00",
+          "signed": true,
+          "received_at": "2026-08-26"
+        },
+        {
+          "id": "rel_u_pr_sub_28_1",
+          "sub_id": "sub_28",
+          "job_id": "job_28",
+          "kind": "unconditional_progress",
+          "through_date": "2026-07-31",
+          "amount": "18000.00",
+          "signed": true,
+          "received_at": "2026-08-14"
+        }
+      ],
+      "lower_tier_notices": [],
+      "coi": {
+        "id": "coi_sub_28",
+        "sub_id": "sub_28",
+        "gl_expiry": "2027-05-31",
+        "wc_expiry": "2027-05-31",
+        "additional_insured": true
+      },
+      "ledger": [
+        {
+          "id": "pay_pr_sub_28_1",
+          "job_id": "job_28",
+          "kind": "sub_payment",
+          "amount": "18000.00",
+          "date": "2026-08-11",
+          "period_end": "2026-07-31",
+          "sub_id": "sub_28",
+          "request_id": "pr_sub_28_1",
+          "bank_account": "021000021:334455778"
+        },
+        {
+          "id": "draw_job_28_2",
+          "job_id": "job_28",
+          "kind": "owner_draw",
+          "amount": "50000.00",
+          "date": "2026-09-02",
+          "period_end": "2026-08-31",
+          "sub_id": null,
+          "request_id": null,
+          "bank_account": null
+        }
+      ],
+      "emails": [],
+      "site_evidence": {
+        "id": "se_job_28_20260828",
+        "job_id": "job_28",
+        "date": "2026-08-28",
+        "frames": [
+          "cam28_0828.jpg"
+        ],
+        "estimates": {
+          "09-22": "50.00"
+        }
+      },
+      "known_bank_account": "021000021:334455778",
+      "contract": {
+        "auto_release_limit_usd": 25000,
+        "escalation_confidence_threshold": 0.85
+      },
+      "proposal": {
+        "action": "release",
+        "confidences": {
+          "progress_plausible": 0.95,
+          "bank_change_suspicious": 0.99
+        },
+        "reasons": [
+          "Stud framing layout conforms to video inspection."
+        ],
+        "answers": {}
+      }
+    },
+    "request": {
+      "id": "pr_sub_28_2",
+      "number": 2,
+      "sub_id": "sub_28",
+      "job_id": "job_28",
+      "period_end": "2026-08-31",
+      "lines": [
+        {
+          "item_no": "09-22",
+          "description": "Light gauge metal framing",
+          "scheduled_value": "70000.00",
+          "previous_applications": "20000.00",
+          "this_period": "15000.00",
+          "stored_materials": "0.00",
+          "total_to_date": "35000.00",
+          "pct_complete": "50",
+          "balance_to_finish": "35000.00",
+          "retainage": "3500.00"
+        }
+      ],
+      "g702": {
+        "original_contract_sum": "70000.00",
+        "net_change_orders": "0.00",
+        "contract_sum_to_date": "70000.00",
+        "total_completed_stored": "35000.00",
+        "retainage": "3500.00",
+        "total_earned_less_retainage": "31500.00",
+        "less_previous_certificates": "18000.00",
+        "current_payment_due": "13500.00"
+      },
+      "bank_account": "021000021:334455778",
+      "submitted_at": "2026-08-26T12:00:00",
+      "source_doc": "g703/sub_28_202608.xlsx"
+    },
+    "label": {
+      "anomaly": null,
+      "expected_action": "release",
+      "why": "Framing application matches all historical draw records, has correct retainage withholding, and aligns with site evidence."
+    }
+  },
+  {
+    "state": {
+      "job": {
+        "id": "job_29",
+        "name": "Cascade Distribution Center",
+        "owner": "Cascade Logistics LLC",
+        "lender": "KeyBank",
+        "architect": "MG2",
+        "contract_sum": "850000.00",
+        "retainage_rate": "0.10",
+        "pay_when_paid": true
+      },
+      "subcontract": {
+        "id": "sc_sub_29",
+        "sub_id": "sub_29",
+        "job_id": "job_29",
+        "sov": [
+          {
+            "item_no": "07-52",
+            "description": "SBS modified bitumen roofing",
+            "scheduled_value": "80000.00"
+          }
+        ],
+        "retainage_rate": "0.10"
+      },
+      "vendor": {
+        "id": "sub_29",
+        "legal_name": "Northwest Roofing Systems Inc",
+        "ein": "34-1122334",
+        "email_domain": "nwroofingsystems.com",
+        "bank_account": "125000024:889900223",
+        "first_paid": "2026-05-10",
+        "crs_status": "verified"
+      },
+      "change_orders": [],
+      "prior_requests": [
+        {
+          "id": "pr_sub_29_1",
+          "number": 1,
+          "sub_id": "sub_29",
+          "job_id": "job_29",
+          "period_end": "2026-07-31",
+          "lines": [
+            {
+              "item_no": "07-52",
+              "description": "SBS modified bitumen roofing",
+              "scheduled_value": "80000.00",
+              "previous_applications": "0.00",
+              "this_period": "25000.00",
+              "stored_materials": "0.00",
+              "total_to_date": "25000.00",
+              "pct_complete": "31.25",
+              "balance_to_finish": "55000.00",
+              "retainage": "2500.00"
+            }
+          ],
+          "g702": {
+            "original_contract_sum": "80000.00",
+            "net_change_orders": "0.00",
+            "contract_sum_to_date": "80000.00",
+            "total_completed_stored": "25000.00",
+            "retainage": "2500.00",
+            "total_earned_less_retainage": "22500.00",
+            "less_previous_certificates": "0.00",
+            "current_payment_due": "22500.00"
+          },
+          "bank_account": "125000024:889900223",
+          "submitted_at": "2026-07-28T10:00:00",
+          "source_doc": "g703/sub_29_202607.xlsx"
+        }
+      ],
+      "all_requests": [
+        {
+          "id": "pr_sub_29_1",
+          "number": 1,
+          "sub_id": "sub_29",
+          "job_id": "job_29",
+          "period_end": "2026-07-31",
+          "lines": [
+            {
+              "item_no": "07-52",
+              "description": "SBS modified bitumen roofing",
+              "scheduled_value": "80000.00",
+              "previous_applications": "0.00",
+              "this_period": "25000.00",
+              "stored_materials": "0.00",
+              "total_to_date": "25000.00",
+              "pct_complete": "31.25",
+              "balance_to_finish": "55000.00",
+              "retainage": "2500.00"
+            }
+          ],
+          "g702": {
+            "original_contract_sum": "80000.00",
+            "net_change_orders": "0.00",
+            "contract_sum_to_date": "80000.00",
+            "total_completed_stored": "25000.00",
+            "retainage": "2500.00",
+            "total_earned_less_retainage": "22500.00",
+            "less_previous_certificates": "0.00",
+            "current_payment_due": "22500.00"
+          },
+          "bank_account": "125000024:889900223",
+          "submitted_at": "2026-07-28T10:00:00",
+          "source_doc": "g703/sub_29_202607.xlsx"
+        }
+      ],
+      "releases": [
+        {
+          "id": "rel_c_pr_sub_29_2",
+          "sub_id": "sub_29",
+          "job_id": "job_29",
+          "kind": "conditional_progress",
+          "through_date": "2026-08-31",
+          "amount": "18000.00",
+          "signed": true,
+          "received_at": "2026-08-26"
+        },
+        {
+          "id": "rel_u_pr_sub_29_1",
+          "sub_id": "sub_29",
+          "job_id": "job_29",
+          "kind": "unconditional_progress",
+          "through_date": "2026-07-31",
+          "amount": "22500.00",
+          "signed": true,
+          "received_at": "2026-08-14"
+        }
+      ],
+      "lower_tier_notices": [],
+      "coi": {
+        "id": "coi_sub_29",
+        "sub_id": "sub_29",
+        "gl_expiry": "2027-04-30",
+        "wc_expiry": "2027-04-30",
+        "additional_insured": true
+      },
+      "ledger": [
+        {
+          "id": "pay_pr_sub_29_1",
+          "job_id": "job_29",
+          "kind": "sub_payment",
+          "amount": "22500.00",
+          "date": "2026-08-11",
+          "period_end": "2026-07-31",
+          "sub_id": "sub_29",
+          "request_id": "pr_sub_29_1",
+          "bank_account": "125000024:889900223"
+        },
+        {
+          "id": "draw_job_29_2",
+          "job_id": "job_29",
+          "kind": "owner_draw",
+          "amount": "60000.00",
+          "date": "2026-09-02",
+          "period_end": "2026-08-31",
+          "sub_id": null,
+          "request_id": null,
+          "bank_account": null
+        }
+      ],
+      "emails": [],
+      "site_evidence": {
+        "id": "se_job_29_20260828",
+        "job_id": "job_29",
+        "date": "2026-08-28",
+        "frames": [
+          "cam29_0828.jpg"
+        ],
+        "estimates": {
+          "07-52": "56.25"
+        }
+      },
+      "known_bank_account": "125000024:889900223",
+      "contract": {
+        "auto_release_limit_usd": 25000,
+        "escalation_confidence_threshold": 0.85
+      },
+      "proposal": {
+        "action": "release",
+        "confidences": {
+          "progress_plausible": 0.95,
+          "bank_change_suspicious": 0.99
+        },
+        "reasons": [
+          "Roof membrane seams and parapet flashing verified complete."
+        ],
+        "answers": {}
+      }
+    },
+    "request": {
+      "id": "pr_sub_29_2",
+      "number": 2,
+      "sub_id": "sub_29",
+      "job_id": "job_29",
+      "period_end": "2026-08-31",
+      "lines": [
+        {
+          "item_no": "07-52",
+          "description": "SBS modified bitumen roofing",
+          "scheduled_value": "80000.00",
+          "previous_applications": "25000.00",
+          "this_period": "20000.00",
+          "stored_materials": "0.00",
+          "total_to_date": "45000.00",
+          "pct_complete": "56.25",
+          "balance_to_finish": "35000.00",
+          "retainage": "4500.00"
+        }
+      ],
+      "g702": {
+        "original_contract_sum": "80000.00",
+        "net_change_orders": "0.00",
+        "contract_sum_to_date": "80000.00",
+        "total_completed_stored": "45000.00",
+        "retainage": "4500.00",
+        "total_earned_less_retainage": "40500.00",
+        "less_previous_certificates": "22500.00",
+        "current_payment_due": "18000.00"
+      },
+      "bank_account": "125000024:889900223",
+      "submitted_at": "2026-08-26T13:30:00",
+      "source_doc": "g703/sub_29_202608.xlsx"
+    },
+    "label": {
+      "anomaly": null,
+      "expected_action": "release",
+      "why": "Roofing application shows verified progress, matching historical disbursements, active insurance, and correct retainage."
+    }
+  },
+  {
+    "state": {
+      "job": {
+        "id": "job_30",
+        "name": "Pioneer Square Tech Offices",
+        "owner": "Pioneer Tech LLC",
+        "lender": "Columbia Bank",
+        "architect": "Olson Kundig",
+        "contract_sum": "900000.00",
+        "retainage_rate": "0.10",
+        "pay_when_paid": true
+      },
+      "subcontract": {
+        "id": "sc_sub_30",
+        "sub_id": "sub_30",
+        "job_id": "job_30",
+        "sov": [
+          {
+            "item_no": "26-24",
+            "description": "Distribution switchboards and panelboards",
+            "scheduled_value": "65000.00"
+          }
+        ],
+        "retainage_rate": "0.10"
+      },
+      "vendor": {
+        "id": "sub_30",
+        "legal_name": "Pacific Electrical Power LLC",
+        "ein": "45-2233445",
+        "email_domain": "pacificelectrical.com",
+        "bank_account": "121000021:776655443",
+        "first_paid": "2026-05-12",
+        "crs_status": "verified"
+      },
+      "change_orders": [],
+      "prior_requests": [
+        {
+          "id": "pr_sub_30_1",
+          "number": 1,
+          "sub_id": "sub_30",
+          "job_id": "job_30",
+          "period_end": "2026-07-31",
+          "lines": [
+            {
+              "item_no": "26-24",
+              "description": "Distribution switchboards and panelboards",
+              "scheduled_value": "65000.00",
+              "previous_applications": "0.00",
+              "this_period": "10000.00",
+              "stored_materials": "0.00",
+              "total_to_date": "10000.00",
+              "pct_complete": "15.38",
+              "balance_to_finish": "55000.00",
+              "retainage": "1000.00"
+            }
+          ],
+          "g702": {
+            "original_contract_sum": "65000.00",
+            "net_change_orders": "0.00",
+            "contract_sum_to_date": "65000.00",
+            "total_completed_stored": "10000.00",
+            "retainage": "1000.00",
+            "total_earned_less_retainage": "9000.00",
+            "less_previous_certificates": "0.00",
+            "current_payment_due": "9000.00"
+          },
+          "bank_account": "121000021:776655443",
+          "submitted_at": "2026-07-28T10:00:00",
+          "source_doc": "g703/sub_30_202607.xlsx"
+        }
+      ],
+      "all_requests": [
+        {
+          "id": "pr_sub_30_1",
+          "number": 1,
+          "sub_id": "sub_30",
+          "job_id": "job_30",
+          "period_end": "2026-07-31",
+          "lines": [
+            {
+              "item_no": "26-24",
+              "description": "Distribution switchboards and panelboards",
+              "scheduled_value": "65000.00",
+              "previous_applications": "0.00",
+              "this_period": "10000.00",
+              "stored_materials": "0.00",
+              "total_to_date": "10000.00",
+              "pct_complete": "15.38",
+              "balance_to_finish": "55000.00",
+              "retainage": "1000.00"
+            }
+          ],
+          "g702": {
+            "original_contract_sum": "65000.00",
+            "net_change_orders": "0.00",
+            "contract_sum_to_date": "65000.00",
+            "total_completed_stored": "10000.00",
+            "retainage": "1000.00",
+            "total_earned_less_retainage": "9000.00",
+            "less_previous_certificates": "0.00",
+            "current_payment_due": "9000.00"
+          },
+          "bank_account": "121000021:776655443",
+          "submitted_at": "2026-07-28T10:00:00",
+          "source_doc": "g703/sub_30_202607.xlsx"
+        }
+      ],
+      "releases": [
+        {
+          "id": "rel_c_pr_sub_30_2",
+          "sub_id": "sub_30",
+          "job_id": "job_30",
+          "kind": "conditional_progress",
+          "through_date": "2026-08-31",
+          "amount": "10800.00",
+          "signed": true,
+          "received_at": "2026-08-26"
+        },
+        {
+          "id": "rel_u_pr_sub_30_1",
+          "sub_id": "sub_30",
+          "job_id": "job_30",
+          "kind": "unconditional_progress",
+          "through_date": "2026-07-31",
+          "amount": "9000.00",
+          "signed": true,
+          "received_at": "2026-08-14"
+        }
+      ],
+      "lower_tier_notices": [],
+      "coi": {
+        "id": "coi_sub_30",
+        "sub_id": "sub_30",
+        "gl_expiry": "2027-05-31",
+        "wc_expiry": "2027-05-31",
+        "additional_insured": true
+      },
+      "ledger": [
+        {
+          "id": "pay_pr_sub_30_1",
+          "job_id": "job_30",
+          "kind": "sub_payment",
+          "amount": "9000.00",
+          "date": "2026-08-11",
+          "period_end": "2026-07-31",
+          "sub_id": "sub_30",
+          "request_id": "pr_sub_30_1",
+          "bank_account": "121000021:776655443"
+        },
+        {
+          "id": "draw_job_30_2",
+          "job_id": "job_30",
+          "kind": "owner_draw",
+          "amount": "45000.00",
+          "date": "2026-09-02",
+          "period_end": "2026-08-31",
+          "sub_id": null,
+          "request_id": null,
+          "bank_account": null
+        }
+      ],
+      "emails": [],
+      "site_evidence": {
+        "id": "se_job_30_20260828",
+        "job_id": "job_30",
+        "date": "2026-08-28",
+        "frames": [
+          "cam30_0828.jpg"
+        ],
+        "estimates": {
+          "26-24": "33.85"
+        }
+      },
+      "known_bank_account": "121000021:776655443",
+      "contract": {
+        "auto_release_limit_usd": 25000,
+        "escalation_confidence_threshold": 0.85
+      },
+      "proposal": {
+        "action": "release",
+        "confidences": {
+          "progress_plausible": 0.95,
+          "bank_change_suspicious": 0.99
+        },
+        "reasons": [
+          "Switchgear placement in main electrical room verified against plans."
+        ],
+        "answers": {}
+      }
+    },
+    "request": {
+      "id": "pr_sub_30_2",
+      "number": 2,
+      "sub_id": "sub_30",
+      "job_id": "job_30",
+      "period_end": "2026-08-31",
+      "lines": [
+        {
+          "item_no": "26-24",
+          "description": "Distribution switchboards and panelboards",
+          "scheduled_value": "65000.00",
+          "previous_applications": "10000.00",
+          "this_period": "12000.00",
+          "stored_materials": "0.00",
+          "total_to_date": "22000.00",
+          "pct_complete": "33.85",
+          "balance_to_finish": "43000.00",
+          "retainage": "2200.00"
+        }
+      ],
+      "g702": {
+        "original_contract_sum": "65000.00",
+        "net_change_orders": "0.00",
+        "contract_sum_to_date": "65000.00",
+        "total_completed_stored": "22000.00",
+        "retainage": "2200.00",
+        "total_earned_less_retainage": "19800.00",
+        "less_previous_certificates": "9000.00",
+        "current_payment_due": "10800.00"
+      },
+      "bank_account": "121000021:776655443",
+      "submitted_at": "2026-08-26T14:00:00",
+      "source_doc": "g703/sub_30_202608.xlsx"
+    },
+    "label": {
+      "anomaly": null,
+      "expected_action": "release",
+      "why": "Electrical switchboard installation is verified on site, supported by matching banking and signed waivers under the release threshold."
+    }
+  },
+  {
+    "state": {
+      "job": {
+        "id": "job_31",
+        "name": "Valley View Business Park",
+        "owner": "Valley View Partners LLC",
+        "lender": "First Sound Bank",
+        "architect": "BCRA Design",
+        "contract_sum": "500000.00",
+        "retainage_rate": "0.10",
+        "pay_when_paid": true
+      },
+      "subcontract": {
+        "id": "sc_sub_31",
+        "sub_id": "sub_31",
+        "job_id": "job_31",
+        "sov": [
+          {
+            "item_no": "33-10",
+            "description": "Water utility distribution piping",
+            "scheduled_value": "55000.00"
+          }
+        ],
+        "retainage_rate": "0.10"
+      },
+      "vendor": {
+        "id": "sub_31",
+        "legal_name": "Cascade Civil Utilities LLC",
+        "ein": "56-3344556",
+        "email_domain": "cascadecivil.com",
+        "bank_account": "125000024:332211445",
+        "first_paid": "2026-05-14",
+        "crs_status": "verified"
+      },
+      "change_orders": [],
+      "prior_requests": [
+        {
+          "id": "pr_sub_31_1",
+          "number": 1,
+          "sub_id": "sub_31",
+          "job_id": "job_31",
+          "period_end": "2026-07-31",
+          "lines": [
+            {
+              "item_no": "33-10",
+              "description": "Water utility distribution piping",
+              "scheduled_value": "55000.00",
+              "previous_applications": "0.00",
+              "this_period": "15000.00",
+              "stored_materials": "0.00",
+              "total_to_date": "15000.00",
+              "pct_complete": "27.27",
+              "balance_to_finish": "40000.00",
+              "retainage": "1500.00"
+            }
+          ],
+          "g702": {
+            "original_contract_sum": "55000.00",
+            "net_change_orders": "0.00",
+            "contract_sum_to_date": "55000.00",
+            "total_completed_stored": "15000.00",
+            "retainage": "1500.00",
+            "total_earned_less_retainage": "13500.00",
+            "less_previous_certificates": "0.00",
+            "current_payment_due": "13500.00"
+          },
+          "bank_account": "125000024:332211445",
+          "submitted_at": "2026-07-28T10:00:00",
+          "source_doc": "g703/sub_31_202607.xlsx"
+        }
+      ],
+      "all_requests": [
+        {
+          "id": "pr_sub_31_1",
+          "number": 1,
+          "sub_id": "sub_31",
+          "job_id": "job_31",
+          "period_end": "2026-07-31",
+          "lines": [
+            {
+              "item_no": "33-10",
+              "description": "Water utility distribution piping",
+              "scheduled_value": "55000.00",
+              "previous_applications": "0.00",
+              "this_period": "15000.00",
+              "stored_materials": "0.00",
+              "total_to_date": "15000.00",
+              "pct_complete": "27.27",
+              "balance_to_finish": "40000.00",
+              "retainage": "1500.00"
+            }
+          ],
+          "g702": {
+            "original_contract_sum": "55000.00",
+            "net_change_orders": "0.00",
+            "contract_sum_to_date": "55000.00",
+            "total_completed_stored": "15000.00",
+            "retainage": "1500.00",
+            "total_earned_less_retainage": "13500.00",
+            "less_previous_certificates": "0.00",
+            "current_payment_due": "13500.00"
+          },
+          "bank_account": "125000024:332211445",
+          "submitted_at": "2026-07-28T10:00:00",
+          "source_doc": "g703/sub_31_202607.xlsx"
+        }
+      ],
+      "releases": [
+        {
+          "id": "rel_c_pr_sub_31_2",
+          "sub_id": "sub_31",
+          "job_id": "job_31",
+          "kind": "conditional_progress",
+          "through_date": "2026-08-31",
+          "amount": "9000.00",
+          "signed": true,
+          "received_at": "2026-08-26"
+        },
+        {
+          "id": "rel_u_pr_sub_31_1",
+          "sub_id": "sub_31",
+          "job_id": "job_31",
+          "kind": "unconditional_progress",
+          "through_date": "2026-07-31",
+          "amount": "13500.00",
+          "signed": true,
+          "received_at": "2026-08-14"
+        }
+      ],
+      "lower_tier_notices": [],
+      "coi": {
+        "id": "coi_sub_31",
+        "sub_id": "sub_31",
+        "gl_expiry": "2027-04-30",
+        "wc_expiry": "2027-04-30",
+        "additional_insured": true
+      },
+      "ledger": [
+        {
+          "id": "pay_pr_sub_31_1",
+          "job_id": "job_31",
+          "kind": "sub_payment",
+          "amount": "13500.00",
+          "date": "2026-08-11",
+          "period_end": "2026-07-31",
+          "sub_id": "sub_31",
+          "request_id": "pr_sub_31_1",
+          "bank_account": "125000024:332211445"
+        },
+        {
+          "id": "draw_job_31_2",
+          "job_id": "job_31",
+          "kind": "owner_draw",
+          "amount": "40000.00",
+          "date": "2026-09-02",
+          "period_end": "2026-08-31",
+          "sub_id": null,
+          "request_id": null,
+          "bank_account": null
+        }
+      ],
+      "emails": [],
+      "site_evidence": {
+        "id": "se_job_31_20260828",
+        "job_id": "job_31",
+        "date": "2026-08-28",
+        "frames": [
+          "cam31_0828.jpg"
+        ],
+        "estimates": {
+          "33-10": "45.45"
+        }
+      },
+      "known_bank_account": "125000024:332211445",
+      "contract": {
+        "auto_release_limit_usd": 25000,
+        "escalation_confidence_threshold": 0.85
+      },
+      "proposal": {
+        "action": "release",
+        "confidences": {
+          "progress_plausible": 0.95,
+          "bank_change_suspicious": 0.99
+        },
+        "reasons": [
+          "Trenching and pipe installation footage confirms claimed utility progress."
+        ],
+        "answers": {}
+      }
+    },
+    "request": {
+      "id": "pr_sub_31_2",
+      "number": 2,
+      "sub_id": "sub_31",
+      "job_id": "job_31",
+      "period_end": "2026-08-31",
+      "lines": [
+        {
+          "item_no": "33-10",
+          "description": "Water utility distribution piping",
+          "scheduled_value": "55000.00",
+          "previous_applications": "15000.00",
+          "this_period": "10000.00",
+          "stored_materials": "0.00",
+          "total_to_date": "25000.00",
+          "pct_complete": "45.45",
+          "balance_to_finish": "30000.00",
+          "retainage": "2500.00"
+        }
+      ],
+      "g702": {
+        "original_contract_sum": "55000.00",
+        "net_change_orders": "0.00",
+        "contract_sum_to_date": "55000.00",
+        "total_completed_stored": "25000.00",
+        "retainage": "2500.00",
+        "total_earned_less_retainage": "22500.00",
+        "less_previous_certificates": "13500.00",
+        "current_payment_due": "9000.00"
+      },
+      "bank_account": "125000024:332211445",
+      "submitted_at": "2026-08-26T15:00:00",
+      "source_doc": "g703/sub_31_202608.xlsx"
+    },
+    "label": {
+      "anomaly": null,
+      "expected_action": "release",
+      "why": "Utility pipe progress billing is fully substantiated by site footage, consistent with ledger accounts, and accurately computed."
+    }
+  },
+  {
+    "state": {
+      "job": {
+        "id": "job_32",
+        "name": "Canyon Creek Logistics Hub",
+        "owner": "Canyon Creek Logistics LLC",
+        "lender": "First Interstate Bank",
+        "architect": "MG2",
+        "contract_sum": "650000.00",
+        "retainage_rate": "0.10",
+        "pay_when_paid": true
+      },
+      "subcontract": {
+        "id": "sc_sub_32",
+        "sub_id": "sub_32",
+        "job_id": "job_32",
+        "sov": [
+          {
+            "item_no": "03-20",
+            "description": "Concrete reinforcing rebar installation",
+            "scheduled_value": "50000.00"
+          }
+        ],
+        "retainage_rate": "0.10"
+      },
+      "vendor": {
+        "id": "sub_32",
+        "legal_name": "Apex Rebar Ironworkers LLC",
+        "ein": "67-3344556",
+        "email_domain": "apexrebar.com",
+        "bank_account": "121000021:667788991",
+        "first_paid": "2026-05-10",
+        "crs_status": "verified"
+      },
+      "change_orders": [],
+      "prior_requests": [
+        {
+          "id": "pr_sub_32_1",
+          "number": 1,
+          "sub_id": "sub_32",
+          "job_id": "job_32",
+          "period_end": "2026-07-31",
+          "lines": [
+            {
+              "item_no": "03-20",
+              "description": "Concrete reinforcing rebar installation",
+              "scheduled_value": "50000.00",
+              "previous_applications": "0.00",
+              "this_period": "20000.00",
+              "stored_materials": "0.00",
+              "total_to_date": "20000.00",
+              "pct_complete": "40",
+              "balance_to_finish": "30000.00",
+              "retainage": "2000.00"
+            }
+          ],
+          "g702": {
+            "original_contract_sum": "50000.00",
+            "net_change_orders": "0.00",
+            "contract_sum_to_date": "50000.00",
+            "total_completed_stored": "20000.00",
+            "retainage": "2000.00",
+            "total_earned_less_retainage": "18000.00",
+            "less_previous_certificates": "0.00",
+            "current_payment_due": "18000.00"
+          },
+          "bank_account": "121000021:667788991",
+          "submitted_at": "2026-07-28T10:00:00",
+          "source_doc": "g703/sub_32_202607.xlsx"
+        }
+      ],
+      "all_requests": [
+        {
+          "id": "pr_sub_32_1",
+          "number": 1,
+          "sub_id": "sub_32",
+          "job_id": "job_32",
+          "period_end": "2026-07-31",
+          "lines": [
+            {
+              "item_no": "03-20",
+              "description": "Concrete reinforcing rebar installation",
+              "scheduled_value": "50000.00",
+              "previous_applications": "0.00",
+              "this_period": "20000.00",
+              "stored_materials": "0.00",
+              "total_to_date": "20000.00",
+              "pct_complete": "40",
+              "balance_to_finish": "30000.00",
+              "retainage": "2000.00"
+            }
+          ],
+          "g702": {
+            "original_contract_sum": "50000.00",
+            "net_change_orders": "0.00",
+            "contract_sum_to_date": "50000.00",
+            "total_completed_stored": "20000.00",
+            "retainage": "2000.00",
+            "total_earned_less_retainage": "18000.00",
+            "less_previous_certificates": "0.00",
+            "current_payment_due": "18000.00"
+          },
+          "bank_account": "121000021:667788991",
+          "submitted_at": "2026-07-28T10:00:00",
+          "source_doc": "g703/sub_32_202607.xlsx"
+        },
+        {
+          "id": "pr_sub_32_2",
+          "number": 2,
+          "sub_id": "sub_32",
+          "job_id": "job_32",
+          "period_end": "2026-08-31",
+          "lines": [
+            {
+              "item_no": "03-20",
+              "description": "Concrete reinforcing rebar installation",
+              "scheduled_value": "50000.00",
+              "previous_applications": "20000.00",
+              "this_period": "15000.00",
+              "stored_materials": "0.00",
+              "total_to_date": "35000.00",
+              "pct_complete": "70",
+              "balance_to_finish": "15000.00",
+              "retainage": "3500.00"
+            }
+          ],
+          "g702": {
+            "original_contract_sum": "50000.00",
+            "net_change_orders": "0.00",
+            "contract_sum_to_date": "50000.00",
+            "total_completed_stored": "35000.00",
+            "retainage": "3500.00",
+            "total_earned_less_retainage": "31500.00",
+            "less_previous_certificates": "18000.00",
+            "current_payment_due": "13500.00"
+          },
+          "bank_account": "121000021:667788991",
+          "submitted_at": "2026-08-25T09:00:00",
+          "source_doc": "g703/sub_32_202608.xlsx"
+        }
+      ],
+      "releases": [
+        {
+          "id": "rel_c_pr_sub_32_2",
+          "sub_id": "sub_32",
+          "job_id": "job_32",
+          "kind": "conditional_progress",
+          "through_date": "2026-08-31",
+          "amount": "13500.00",
+          "signed": true,
+          "received_at": "2026-08-25"
+        },
+        {
+          "id": "rel_u_pr_sub_32_1",
+          "sub_id": "sub_32",
+          "job_id": "job_32",
+          "kind": "unconditional_progress",
+          "through_date": "2026-07-31",
+          "amount": "18000.00",
+          "signed": true,
+          "received_at": "2026-08-14"
+        }
+      ],
+      "lower_tier_notices": [],
+      "coi": {
+        "id": "coi_sub_32",
+        "sub_id": "sub_32",
+        "gl_expiry": "2027-04-30",
+        "wc_expiry": "2027-04-30",
+        "additional_insured": true
+      },
+      "ledger": [
+        {
+          "id": "pay_pr_sub_32_1",
+          "job_id": "job_32",
+          "kind": "sub_payment",
+          "amount": "18000.00",
+          "date": "2026-08-11",
+          "period_end": "2026-07-31",
+          "sub_id": "sub_32",
+          "request_id": "pr_sub_32_1",
+          "bank_account": "121000021:667788991"
+        },
+        {
+          "id": "draw_job_32_2",
+          "job_id": "job_32",
+          "kind": "owner_draw",
+          "amount": "45000.00",
+          "date": "2026-09-02",
+          "period_end": "2026-08-31",
+          "sub_id": null,
+          "request_id": null,
+          "bank_account": null
+        }
+      ],
+      "emails": [],
+      "site_evidence": {
+        "id": "se_job_32_20260828",
+        "job_id": "job_32",
+        "date": "2026-08-28",
+        "frames": [
+          "cam32_0828.jpg"
+        ],
+        "estimates": {
+          "03-20": "70.00"
+        }
+      },
+      "known_bank_account": "121000021:667788991",
+      "contract": {
+        "auto_release_limit_usd": 25000,
+        "escalation_confidence_threshold": 0.85
+      },
+      "proposal": {
+        "action": "hold",
+        "confidences": {
+          "progress_plausible": 0.95,
+          "bank_change_suspicious": 0.99
+        },
+        "reasons": [
+          "Identical pay application already submitted for period ending 2026-08-31."
+        ],
+        "answers": {}
+      }
+    },
+    "request": {
+      "id": "pr_sub_32_2_dup",
+      "number": 2,
+      "sub_id": "sub_32",
+      "job_id": "job_32",
+      "period_end": "2026-08-31",
+      "lines": [
+        {
+          "item_no": "03-20",
+          "description": "Concrete reinforcing rebar installation",
+          "scheduled_value": "50000.00",
+          "previous_applications": "20000.00",
+          "this_period": "15000.00",
+          "stored_materials": "0.00",
+          "total_to_date": "35000.00",
+          "pct_complete": "70",
+          "balance_to_finish": "15000.00",
+          "retainage": "3500.00"
+        }
+      ],
+      "g702": {
+        "original_contract_sum": "50000.00",
+        "net_change_orders": "0.00",
+        "contract_sum_to_date": "50000.00",
+        "total_completed_stored": "35000.00",
+        "retainage": "3500.00",
+        "total_earned_less_retainage": "31500.00",
+        "less_previous_certificates": "18000.00",
+        "current_payment_due": "13500.00"
+      },
+      "bank_account": "121000021:667788991",
+      "submitted_at": "2026-08-27T14:30:00",
+      "source_doc": "g703/sub_32_202608_resubmission.xlsx"
+    },
+    "label": {
+      "anomaly": "duplicate_pay_application",
+      "expected_action": "hold",
+      "why": "This pay request is an unapproved duplicate of Application 2 already pending in the submission registry for the exact same billing cycle."
+    }
+  },
+  {
+    "state": {
+      "job": {
+        "id": "job_33",
+        "name": "Redmond Ridge Medical Campus",
+        "owner": "Redmond Health Properties LLC",
+        "lender": "Banner Bank",
+        "architect": "ZGF Architects",
+        "contract_sum": "700000.00",
+        "retainage_rate": "0.10",
+        "pay_when_paid": true
+      },
+      "subcontract": {
+        "id": "sc_sub_33",
+        "sub_id": "sub_33",
+        "job_id": "job_33",
+        "sov": [
+          {
+            "item_no": "23-05",
+            "description": "HVAC hydronic piping and pumps",
+            "scheduled_value": "75000.00"
+          }
+        ],
+        "retainage_rate": "0.10"
+      },
+      "vendor": {
+        "id": "sub_33",
+        "legal_name": "Sound Mechanical Contracting Inc",
+        "ein": "78-4455667",
+        "email_domain": "soundmechanical.com",
+        "bank_account": "021000021:445566998",
+        "first_paid": "2026-04-10",
+        "crs_status": "verified"
+      },
+      "change_orders": [],
+      "prior_requests": [
+        {
+          "id": "pr_sub_33_2",
+          "number": 2,
+          "sub_id": "sub_33",
+          "job_id": "job_33",
+          "period_end": "2026-07-31",
+          "lines": [
+            {
+              "item_no": "23-05",
+              "description": "HVAC hydronic piping and pumps",
+              "scheduled_value": "75000.00",
+              "previous_applications": "15000.00",
+              "this_period": "15000.00",
+              "stored_materials": "0.00",
+              "total_to_date": "30000.00",
+              "pct_complete": "40",
+              "balance_to_finish": "45000.00",
+              "retainage": "3000.00"
+            }
+          ],
+          "g702": {
+            "original_contract_sum": "75000.00",
+            "net_change_orders": "0.00",
+            "contract_sum_to_date": "75000.00",
+            "total_completed_stored": "30000.00",
+            "retainage": "3000.00",
+            "total_earned_less_retainage": "27000.00",
+            "less_previous_certificates": "13500.00",
+            "current_payment_due": "13500.00"
+          },
+          "bank_account": "021000021:445566998",
+          "submitted_at": "2026-07-28T10:00:00",
+          "source_doc": "g703/sub_33_202607.xlsx"
+        }
+      ],
+      "all_requests": [
+        {
+          "id": "pr_sub_33_2",
+          "number": 2,
+          "sub_id": "sub_33",
+          "job_id": "job_33",
+          "period_end": "2026-07-31",
+          "lines": [
+            {
+              "item_no": "23-05",
+              "description": "HVAC hydronic piping and pumps",
+              "scheduled_value": "75000.00",
+              "previous_applications": "15000.00",
+              "this_period": "15000.00",
+              "stored_materials": "0.00",
+              "total_to_date": "30000.00",
+              "pct_complete": "40",
+              "balance_to_finish": "45000.00",
+              "retainage": "3000.00"
+            }
+          ],
+          "g702": {
+            "original_contract_sum": "75000.00",
+            "net_change_orders": "0.00",
+            "contract_sum_to_date": "75000.00",
+            "total_completed_stored": "30000.00",
+            "retainage": "3000.00",
+            "total_earned_less_retainage": "27000.00",
+            "less_previous_certificates": "13500.00",
+            "current_payment_due": "13500.00"
+          },
+          "bank_account": "021000021:445566998",
+          "submitted_at": "2026-07-28T10:00:00",
+          "source_doc": "g703/sub_33_202607.xlsx"
+        }
+      ],
+      "releases": [
+        {
+          "id": "rel_c_pr_sub_33_3",
+          "sub_id": "sub_33",
+          "job_id": "job_33",
+          "kind": "conditional_progress",
+          "through_date": "2026-07-31",
+          "amount": "13500.00",
+          "signed": true,
+          "received_at": "2026-08-26"
+        },
+        {
+          "id": "rel_u_pr_sub_33_2",
+          "sub_id": "sub_33",
+          "job_id": "job_33",
+          "kind": "unconditional_progress",
+          "through_date": "2026-07-31",
+          "amount": "13500.00",
+          "signed": true,
+          "received_at": "2026-08-14"
+        }
+      ],
+      "lower_tier_notices": [],
+      "coi": {
+        "id": "coi_sub_33",
+        "sub_id": "sub_33",
+        "gl_expiry": "2027-04-30",
+        "wc_expiry": "2027-04-30",
+        "additional_insured": true
+      },
+      "ledger": [
+        {
+          "id": "pay_pr_sub_33_2",
+          "job_id": "job_33",
+          "kind": "sub_payment",
+          "amount": "13500.00",
+          "date": "2026-08-11",
+          "period_end": "2026-07-31",
+          "sub_id": "sub_33",
+          "request_id": "pr_sub_33_2",
+          "bank_account": "021000021:445566998"
+        },
+        {
+          "id": "draw_job_33_3",
+          "job_id": "job_33",
+          "kind": "owner_draw",
+          "amount": "50000.00",
+          "date": "2026-09-02",
+          "period_end": "2026-08-31",
+          "sub_id": null,
+          "request_id": null,
+          "bank_account": null
+        }
+      ],
+      "emails": [],
+      "site_evidence": {
+        "id": "se_job_33_20260828",
+        "job_id": "job_33",
+        "date": "2026-08-28",
+        "frames": [
+          "cam33_0828.jpg"
+        ],
+        "estimates": {
+          "23-05": "40.00"
+        }
+      },
+      "known_bank_account": "021000021:445566998",
+      "contract": {
+        "auto_release_limit_usd": 25000,
+        "escalation_confidence_threshold": 0.85
+      },
+      "proposal": {
+        "action": "hold",
+        "confidences": {
+          "progress_plausible": 0.95,
+          "bank_change_suspicious": 0.99
+        },
+        "reasons": [
+          "Billing period end date matches the previously paid application period."
+        ],
+        "answers": {}
+      }
+    },
+    "request": {
+      "id": "pr_sub_33_3",
+      "number": 3,
+      "sub_id": "sub_33",
+      "job_id": "job_33",
+      "period_end": "2026-07-31",
+      "lines": [
+        {
+          "item_no": "23-05",
+          "description": "HVAC hydronic piping and pumps",
+          "scheduled_value": "75000.00",
+          "previous_applications": "30000.00",
+          "this_period": "15000.00",
+          "stored_materials": "0.00",
+          "total_to_date": "45000.00",
+          "pct_complete": "60",
+          "balance_to_finish": "30000.00",
+          "retainage": "4500.00"
+        }
+      ],
+      "g702": {
+        "original_contract_sum": "75000.00",
+        "net_change_orders": "0.00",
+        "contract_sum_to_date": "75000.00",
+        "total_completed_stored": "45000.00",
+        "retainage": "4500.00",
+        "total_earned_less_retainage": "40500.00",
+        "less_previous_certificates": "27000.00",
+        "current_payment_due": "13500.00"
+      },
+      "bank_account": "021000021:445566998",
+      "submitted_at": "2026-08-26T16:00:00",
+      "source_doc": "g703/sub_33_202607_rebill.xlsx"
+    },
+    "label": {
+      "anomaly": "duplicate_billing_period",
+      "expected_action": "hold",
+      "why": "Application 3 bills under an overlapping period end date (2026-07-31) that was already fully settled in Application 2."
+    }
+  },
+  {
+    "state": {
+      "job": {
+        "id": "job_34",
+        "name": "Cascade Valley Science Complex",
+        "owner": "Cascade Science Partners LLC",
+        "lender": "First Sound Bank",
+        "architect": "Perkins Eastman",
+        "contract_sum": "1100000.00",
+        "retainage_rate": "0.10",
+        "pay_when_paid": true
+      },
+      "subcontract": {
+        "id": "sc_sub_34",
+        "sub_id": "sub_34",
+        "job_id": "job_34",
+        "sov": [
+          {
+            "item_no": "05-12",
+            "description": "Structural steel framing and connections",
+            "scheduled_value": "90000.00"
+          }
+        ],
+        "retainage_rate": "0.10"
+      },
+      "vendor": {
+        "id": "sub_34",
+        "legal_name": "Apex Structural Fabricators Inc",
+        "ein": "89-1122334",
+        "email_domain": "apexsteel.com",
+        "bank_account": "021000021:999888777",
+        "first_paid": "2026-04-15",
+        "crs_status": "verified"
+      },
+      "change_orders": [],
+      "prior_requests": [
+        {
+          "id": "pr_sub_34_1",
+          "number": 1,
+          "sub_id": "sub_34",
+          "job_id": "job_34",
+          "period_end": "2026-07-31",
+          "lines": [
+            {
+              "item_no": "05-12",
+              "description": "Structural steel framing and connections",
+              "scheduled_value": "90000.00",
+              "previous_applications": "0.00",
+              "this_period": "30000.00",
+              "stored_materials": "0.00",
+              "total_to_date": "30000.00",
+              "pct_complete": "33.33",
+              "balance_to_finish": "60000.00",
+              "retainage": "3000.00"
+            }
+          ],
+          "g702": {
+            "original_contract_sum": "90000.00",
+            "net_change_orders": "0.00",
+            "contract_sum_to_date": "90000.00",
+            "total_completed_stored": "30000.00",
+            "retainage": "3000.00",
+            "total_earned_less_retainage": "27000.00",
+            "less_previous_certificates": "0.00",
+            "current_payment_due": "27000.00"
+          },
+          "bank_account": "021000021:999888777",
+          "submitted_at": "2026-07-28T10:00:00",
+          "source_doc": "g703/sub_34_202607.xlsx"
+        }
+      ],
+      "all_requests": [
+        {
+          "id": "pr_sub_34_1",
+          "number": 1,
+          "sub_id": "sub_34",
+          "job_id": "job_34",
+          "period_end": "2026-07-31",
+          "lines": [
+            {
+              "item_no": "05-12",
+              "description": "Structural steel framing and connections",
+              "scheduled_value": "90000.00",
+              "previous_applications": "0.00",
+              "this_period": "30000.00",
+              "stored_materials": "0.00",
+              "total_to_date": "30000.00",
+              "pct_complete": "33.33",
+              "balance_to_finish": "60000.00",
+              "retainage": "3000.00"
+            }
+          ],
+          "g702": {
+            "original_contract_sum": "90000.00",
+            "net_change_orders": "0.00",
+            "contract_sum_to_date": "90000.00",
+            "total_completed_stored": "30000.00",
+            "retainage": "3000.00",
+            "total_earned_less_retainage": "27000.00",
+            "less_previous_certificates": "0.00",
+            "current_payment_due": "27000.00"
+          },
+          "bank_account": "021000021:999888777",
+          "submitted_at": "2026-07-28T10:00:00",
+          "source_doc": "g703/sub_34_202607.xlsx"
+        }
+      ],
+      "releases": [
+        {
+          "id": "rel_c_pr_sub_34_2",
+          "sub_id": "sub_34",
+          "job_id": "job_34",
+          "kind": "conditional_progress",
+          "through_date": "2026-08-31",
+          "amount": "18000.00",
+          "signed": true,
+          "received_at": "2026-08-26"
+        },
+        {
+          "id": "rel_u_pr_sub_34_1",
+          "sub_id": "sub_34",
+          "job_id": "job_34",
+          "kind": "unconditional_progress",
+          "through_date": "2026-07-31",
+          "amount": "27000.00",
+          "signed": true,
+          "received_at": "2026-08-14"
+        }
+      ],
+      "lower_tier_notices": [],
+      "coi": {
+        "id": "coi_sub_34",
+        "sub_id": "sub_34",
+        "gl_expiry": "2027-04-30",
+        "wc_expiry": "2027-04-30",
+        "additional_insured": true
+      },
+      "ledger": [
+        {
+          "id": "pay_pr_sub_34_1",
+          "job_id": "job_34",
+          "kind": "sub_payment",
+          "amount": "27000.00",
+          "date": "2026-08-11",
+          "period_end": "2026-07-31",
+          "sub_id": "sub_34",
+          "request_id": "pr_sub_34_1",
+          "bank_account": "021000021:999888777"
+        },
+        {
+          "id": "draw_job_34_2",
+          "job_id": "job_34",
+          "kind": "owner_draw",
+          "amount": "70000.00",
+          "date": "2026-09-02",
+          "period_end": "2026-08-31",
+          "sub_id": null,
+          "request_id": null,
+          "bank_account": null
+        }
+      ],
+      "emails": [
+        {
+          "id": "em_34",
+          "from_addr": "ar@apexsteel.com",
+          "from_domain": "apexsteel.com",
+          "sent_at": "2026-08-25T11:00:00",
+          "subject": "Urgent: Remittance account updated for August billing",
+          "body": "Hello, please ensure all August disbursements route to our primary operating account listed on the invoice.",
+          "claims": {
+            "bank_change": true,
+            "new_account": "021000089:444555666",
+            "urgency": true
+          }
+        }
+      ],
+      "site_evidence": {
+        "id": "se_job_34_20260828",
+        "job_id": "job_34",
+        "date": "2026-08-28",
+        "frames": [
+          "cam34_0828.jpg"
+        ],
+        "estimates": {
+          "05-12": "55.56"
+        }
+      },
+      "known_bank_account": "021000021:999888777",
+      "contract": {
+        "auto_release_limit_usd": 25000,
+        "escalation_confidence_threshold": 0.85
+      },
+      "proposal": {
+        "action": "hold",
+        "confidences": {
+          "progress_plausible": 0.95,
+          "bank_change_suspicious": 0.15
+        },
+        "reasons": [
+          "Bank account mismatch between vendor profile and pay request originating from email account update."
+        ],
+        "answers": {}
+      }
+    },
+    "request": {
+      "id": "pr_sub_34_2",
+      "number": 2,
+      "sub_id": "sub_34",
+      "job_id": "job_34",
+      "period_end": "2026-08-31",
+      "lines": [
+        {
+          "item_no": "05-12",
+          "description": "Structural steel framing and connections",
+          "scheduled_value": "90000.00",
+          "previous_applications": "30000.00",
+          "this_period": "20000.00",
+          "stored_materials": "0.00",
+          "total_to_date": "50000.00",
+          "pct_complete": "55.56",
+          "balance_to_finish": "40000.00",
+          "retainage": "5000.00"
+        }
+      ],
+      "g702": {
+        "original_contract_sum": "90000.00",
+        "net_change_orders": "0.00",
+        "contract_sum_to_date": "90000.00",
+        "total_completed_stored": "50000.00",
+        "retainage": "5000.00",
+        "total_earned_less_retainage": "45000.00",
+        "less_previous_certificates": "27000.00",
+        "current_payment_due": "18000.00"
+      },
+      "bank_account": "021000089:444555666",
+      "submitted_at": "2026-08-26T12:00:00",
+      "source_doc": "g703/sub_34_202608.xlsx"
+    },
+    "label": {
+      "anomaly": "compromised_email_bank_swap",
+      "expected_action": "hold",
+      "why": "A compromised authentic vendor email address attempted an unauthorized bank account swap on the pay request without verified corporate authorization."
+    }
+  },
+  {
+    "state": {
+      "job": {
+        "id": "job_35",
+        "name": "Puget Sound Research Center",
+        "owner": "Puget Sound Science LLC",
+        "lender": "First Sound Bank",
+        "architect": "NBBJ",
+        "contract_sum": "800000.00",
+        "retainage_rate": "0.10",
+        "pay_when_paid": true
+      },
+      "subcontract": {
+        "id": "sc_sub_35",
+        "sub_id": "sub_35",
+        "job_id": "job_35",
+        "sov": [
+          {
+            "item_no": "09-29",
+            "description": "Interior drywall partitions and finishing",
+            "scheduled_value": "60000.00"
+          }
+        ],
+        "retainage_rate": "0.10"
+      },
+      "vendor": {
+        "id": "sub_35",
+        "legal_name": "Puget Sound Drywall Specialists LLC",
+        "ein": "91-3344556",
+        "email_domain": "psdrywall.com",
+        "bank_account": "121000021:554433889",
+        "first_paid": null,
+        "crs_status": "flagged"
+      },
+      "change_orders": [],
+      "prior_requests": [],
+      "all_requests": [],
+      "releases": [
+        {
+          "id": "rel_c_pr_sub_35_1",
+          "sub_id": "sub_35",
+          "job_id": "job_35",
+          "kind": "conditional_progress",
+          "through_date": "2026-08-31",
+          "amount": "16200.00",
+          "signed": true,
+          "received_at": "2026-08-26"
+        }
+      ],
+      "lower_tier_notices": [],
+      "coi": {
+        "id": "coi_sub_35",
+        "sub_id": "sub_35",
+        "gl_expiry": "2027-04-30",
+        "wc_expiry": "2027-04-30",
+        "additional_insured": true
+      },
+      "ledger": [
+        {
+          "id": "draw_job_35_1",
+          "job_id": "job_35",
+          "kind": "owner_draw",
+          "amount": "40000.00",
+          "date": "2026-09-02",
+          "period_end": "2026-08-31",
+          "sub_id": null,
+          "request_id": null,
+          "bank_account": null
+        }
+      ],
+      "emails": [],
+      "site_evidence": {
+        "id": "se_job_35_20260828",
+        "job_id": "job_35",
+        "date": "2026-08-28",
+        "frames": [
+          "cam35_0828.jpg"
+        ],
+        "estimates": {
+          "09-29": "30.00"
+        }
+      },
+      "known_bank_account": null,
+      "contract": {
+        "auto_release_limit_usd": 25000,
+        "escalation_confidence_threshold": 0.85
+      },
+      "proposal": {
+        "action": "hold",
+        "confidences": {
+          "progress_plausible": 0.95,
+          "bank_change_suspicious": 0.99
+        },
+        "reasons": [
+          "Vendor compliance registry returned flagged status for corporate registration."
+        ],
+        "answers": {}
+      }
+    },
+    "request": {
+      "id": "pr_sub_35_1",
+      "number": 1,
+      "sub_id": "sub_35",
+      "job_id": "job_35",
+      "period_end": "2026-08-31",
+      "lines": [
+        {
+          "item_no": "09-29",
+          "description": "Interior drywall partitions and finishing",
+          "scheduled_value": "60000.00",
+          "previous_applications": "0.00",
+          "this_period": "18000.00",
+          "stored_materials": "0.00",
+          "total_to_date": "18000.00",
+          "pct_complete": "30",
+          "balance_to_finish": "42000.00",
+          "retainage": "1800.00"
+        }
+      ],
+      "g702": {
+        "original_contract_sum": "60000.00",
+        "net_change_orders": "0.00",
+        "contract_sum_to_date": "60000.00",
+        "total_completed_stored": "18000.00",
+        "retainage": "1800.00",
+        "total_earned_less_retainage": "16200.00",
+        "less_previous_certificates": "0.00",
+        "current_payment_due": "16200.00"
+      },
+      "bank_account": "121000021:554433889",
+      "submitted_at": "2026-08-26T14:00:00",
+      "source_doc": "g703/sub_35_202608.xlsx"
+    },
+    "label": {
+      "anomaly": "vendor_identity_flagged",
+      "expected_action": "hold",
+      "why": "The vendor's tax ID and corporate entity are flagged as suspicious in the compliance screening database, precluding payment release."
+    }
+  },
+  {
+    "state": {
+      "job": {
+        "id": "job_36",
+        "name": "Cascade Vista Senior Living",
+        "owner": "Cascade Senior Living LLC",
+        "lender": "First Interstate Bank",
+        "architect": "Ankrom Moisan",
+        "contract_sum": "750000.00",
+        "retainage_rate": "0.10",
+        "pay_when_paid": true
+      },
+      "subcontract": {
+        "id": "sc_sub_36",
+        "sub_id": "sub_36",
+        "job_id": "job_36",
+        "sov": [
+          {
+            "item_no": "21-12",
+            "description": "Fire protection piping and heads",
+            "scheduled_value": "70000.00"
+          }
+        ],
+        "retainage_rate": "0.10"
+      },
+      "vendor": {
+        "id": "sub_36",
+        "legal_name": "Olympic Fire Protection Inc",
+        "ein": "45-8899001",
+        "email_domain": "olympicfire.com",
+        "bank_account": "121000021:334455667",
+        "first_paid": "2026-05-18",
+        "crs_status": "verified"
+      },
+      "change_orders": [],
+      "prior_requests": [
+        {
+          "id": "pr_sub_36_1",
+          "number": 1,
+          "sub_id": "sub_36",
+          "job_id": "job_36",
+          "period_end": "2026-07-31",
+          "lines": [
+            {
+              "item_no": "21-12",
+              "description": "Fire protection piping and heads",
+              "scheduled_value": "70000.00",
+              "previous_applications": "0.00",
+              "this_period": "20000.00",
+              "stored_materials": "0.00",
+              "total_to_date": "20000.00",
+              "pct_complete": "28.57",
+              "balance_to_finish": "50000.00",
+              "retainage": "2000.00"
+            }
+          ],
+          "g702": {
+            "original_contract_sum": "70000.00",
+            "net_change_orders": "0.00",
+            "contract_sum_to_date": "70000.00",
+            "total_completed_stored": "20000.00",
+            "retainage": "2000.00",
+            "total_earned_less_retainage": "18000.00",
+            "less_previous_certificates": "0.00",
+            "current_payment_due": "18000.00"
+          },
+          "bank_account": "121000021:334455667",
+          "submitted_at": "2026-07-28T10:00:00",
+          "source_doc": "g703/sub_36_202607.xlsx"
+        }
+      ],
+      "all_requests": [
+        {
+          "id": "pr_sub_36_1",
+          "number": 1,
+          "sub_id": "sub_36",
+          "job_id": "job_36",
+          "period_end": "2026-07-31",
+          "lines": [
+            {
+              "item_no": "21-12",
+              "description": "Fire protection piping and heads",
+              "scheduled_value": "70000.00",
+              "previous_applications": "0.00",
+              "this_period": "20000.00",
+              "stored_materials": "0.00",
+              "total_to_date": "20000.00",
+              "pct_complete": "28.57",
+              "balance_to_finish": "50000.00",
+              "retainage": "2000.00"
+            }
+          ],
+          "g702": {
+            "original_contract_sum": "70000.00",
+            "net_change_orders": "0.00",
+            "contract_sum_to_date": "70000.00",
+            "total_completed_stored": "20000.00",
+            "retainage": "2000.00",
+            "total_earned_less_retainage": "18000.00",
+            "less_previous_certificates": "0.00",
+            "current_payment_due": "18000.00"
+          },
+          "bank_account": "121000021:334455667",
+          "submitted_at": "2026-07-28T10:00:00",
+          "source_doc": "g703/sub_36_202607.xlsx"
+        }
+      ],
+      "releases": [
+        {
+          "id": "rel_c_pr_sub_36_2",
+          "sub_id": "sub_36",
+          "job_id": "job_36",
+          "kind": "conditional_progress",
+          "through_date": "2026-08-31",
+          "amount": "18000.00",
+          "signed": true,
+          "received_at": "2026-08-26"
+        },
+        {
+          "id": "rel_u_pr_sub_36_1",
+          "sub_id": "sub_36",
+          "job_id": "job_36",
+          "kind": "unconditional_progress",
+          "through_date": "2026-07-31",
+          "amount": "18000.00",
+          "signed": true,
+          "received_at": "2026-08-14"
+        }
+      ],
+      "lower_tier_notices": [],
+      "coi": {
+        "id": "coi_sub_36",
+        "sub_id": "sub_36",
+        "gl_expiry": "2027-04-30",
+        "wc_expiry": "2027-04-30",
+        "additional_insured": true
+      },
+      "ledger": [
+        {
+          "id": "pay_pr_sub_36_1",
+          "job_id": "job_36",
+          "kind": "sub_payment",
+          "amount": "18000.00",
+          "date": "2026-08-11",
+          "period_end": "2026-07-31",
+          "sub_id": "sub_36",
+          "request_id": "pr_sub_36_1",
+          "bank_account": "121000021:334455667"
+        },
+        {
+          "id": "draw_job_36_2",
+          "job_id": "job_36",
+          "kind": "owner_draw",
+          "amount": "50000.00",
+          "date": "2026-09-02",
+          "period_end": "2026-08-31",
+          "sub_id": null,
+          "request_id": null,
+          "bank_account": null
+        }
+      ],
+      "emails": [],
+      "site_evidence": {
+        "id": "se_job_36_20260828",
+        "job_id": "job_36",
+        "date": "2026-08-28",
+        "frames": [
+          "cam36_0828.jpg"
+        ],
+        "estimates": {
+          "21-12": "57.14"
+        }
+      },
+      "known_bank_account": "121000021:334455667",
+      "contract": {
+        "auto_release_limit_usd": 25000,
+        "escalation_confidence_threshold": 0.85
+      },
+      "proposal": {
+        "action": "hold",
+        "confidences": {
+          "progress_plausible": 0.95,
+          "bank_change_suspicious": 0.25
+        },
+        "reasons": [
+          "Remittance bank details on pay application differ from verified vendor record."
+        ],
+        "answers": {}
+      }
+    },
+    "request": {
+      "id": "pr_sub_36_2",
+      "number": 2,
+      "sub_id": "sub_36",
+      "job_id": "job_36",
+      "period_end": "2026-08-31",
+      "lines": [
+        {
+          "item_no": "21-12",
+          "description": "Fire protection piping and heads",
+          "scheduled_value": "70000.00",
+          "previous_applications": "20000.00",
+          "this_period": "20000.00",
+          "stored_materials": "0.00",
+          "total_to_date": "40000.00",
+          "pct_complete": "57.14",
+          "balance_to_finish": "30000.00",
+          "retainage": "4000.00"
+        }
+      ],
+      "g702": {
+        "original_contract_sum": "70000.00",
+        "net_change_orders": "0.00",
+        "contract_sum_to_date": "70000.00",
+        "total_completed_stored": "40000.00",
+        "retainage": "4000.00",
+        "total_earned_less_retainage": "36000.00",
+        "less_previous_certificates": "18000.00",
+        "current_payment_due": "18000.00"
+      },
+      "bank_account": "044000037:998877665",
+      "submitted_at": "2026-08-26T15:00:00",
+      "source_doc": "g703/sub_36_202608.xlsx"
+    },
+    "label": {
+      "anomaly": "unauthorized_remittance_alteration",
+      "expected_action": "hold",
+      "why": "The bank account extracted from the G703 document does not match the vendor's verified record, indicating unauthorized remittance tampering."
+    }
+  },
+  {
+    "state": {
+      "job": {
+        "id": "job_37",
+        "name": "Cascade Tech Center",
+        "owner": "Cascade Tech Holdings LLC",
+        "lender": "First Sound Bank",
+        "architect": "Gensler",
+        "contract_sum": "950000.00",
+        "retainage_rate": "0.10",
+        "pay_when_paid": true
+      },
+      "subcontract": {
+        "id": "sc_sub_37",
+        "sub_id": "sub_37",
+        "job_id": "job_37",
+        "sov": [
+          {
+            "item_no": "26-01",
+            "description": "General conduit rough-in",
+            "scheduled_value": "80000.00"
+          }
+        ],
+        "retainage_rate": "0.10"
+      },
+      "vendor": {
+        "id": "sub_37",
+        "legal_name": "Northwest Electrical Group LLC",
+        "ein": "91-4455667",
+        "email_domain": "nwelectrical.com",
+        "bank_account": "021000021:889900445",
+        "first_paid": "2026-04-12",
+        "crs_status": "verified"
+      },
+      "change_orders": [],
+      "prior_requests": [
+        {
+          "id": "pr_sub_37_1",
+          "number": 1,
+          "sub_id": "sub_37",
+          "job_id": "job_37",
+          "period_end": "2026-06-30",
+          "lines": [
+            {
+              "item_no": "26-01",
+              "description": "General conduit rough-in",
+              "scheduled_value": "80000.00",
+              "previous_applications": "0.00",
+              "this_period": "20000.00",
+              "stored_materials": "0.00",
+              "total_to_date": "20000.00",
+              "pct_complete": "25",
+              "balance_to_finish": "60000.00",
+              "retainage": "2000.00"
+            }
+          ],
+          "g702": {
+            "original_contract_sum": "80000.00",
+            "net_change_orders": "0.00",
+            "contract_sum_to_date": "80000.00",
+            "total_completed_stored": "20000.00",
+            "retainage": "2000.00",
+            "total_earned_less_retainage": "18000.00",
+            "less_previous_certificates": "0.00",
+            "current_payment_due": "18000.00"
+          },
+          "bank_account": "021000021:889900445",
+          "submitted_at": "2026-06-27T10:00:00",
+          "source_doc": "g703/sub_37_202606.xlsx"
+        },
+        {
+          "id": "pr_sub_37_2",
+          "number": 2,
+          "sub_id": "sub_37",
+          "job_id": "job_37",
+          "period_end": "2026-07-31",
+          "lines": [
+            {
+              "item_no": "26-01",
+              "description": "General conduit rough-in",
+              "scheduled_value": "80000.00",
+              "previous_applications": "20000.00",
+              "this_period": "20000.00",
+              "stored_materials": "0.00",
+              "total_to_date": "40000.00",
+              "pct_complete": "50",
+              "balance_to_finish": "40000.00",
+              "retainage": "4000.00"
+            }
+          ],
+          "g702": {
+            "original_contract_sum": "80000.00",
+            "net_change_orders": "0.00",
+            "contract_sum_to_date": "80000.00",
+            "total_completed_stored": "40000.00",
+            "retainage": "4000.00",
+            "total_earned_less_retainage": "36000.00",
+            "less_previous_certificates": "18000.00",
+            "current_payment_due": "18000.00"
+          },
+          "bank_account": "021000021:889900445",
+          "submitted_at": "2026-07-28T10:00:00",
+          "source_doc": "g703/sub_37_202607.xlsx"
+        }
+      ],
+      "all_requests": [
+        {
+          "id": "pr_sub_37_1",
+          "number": 1,
+          "sub_id": "sub_37",
+          "job_id": "job_37",
+          "period_end": "2026-06-30",
+          "lines": [
+            {
+              "item_no": "26-01",
+              "description": "General conduit rough-in",
+              "scheduled_value": "80000.00",
+              "previous_applications": "0.00",
+              "this_period": "20000.00",
+              "stored_materials": "0.00",
+              "total_to_date": "20000.00",
+              "pct_complete": "25",
+              "balance_to_finish": "60000.00",
+              "retainage": "2000.00"
+            }
+          ],
+          "g702": {
+            "original_contract_sum": "80000.00",
+            "net_change_orders": "0.00",
+            "contract_sum_to_date": "80000.00",
+            "total_completed_stored": "20000.00",
+            "retainage": "2000.00",
+            "total_earned_less_retainage": "18000.00",
+            "less_previous_certificates": "0.00",
+            "current_payment_due": "18000.00"
+          },
+          "bank_account": "021000021:889900445",
+          "submitted_at": "2026-06-27T10:00:00",
+          "source_doc": "g703/sub_37_202606.xlsx"
+        },
+        {
+          "id": "pr_sub_37_2",
+          "number": 2,
+          "sub_id": "sub_37",
+          "job_id": "job_37",
+          "period_end": "2026-07-31",
+          "lines": [
+            {
+              "item_no": "26-01",
+              "description": "General conduit rough-in",
+              "scheduled_value": "80000.00",
+              "previous_applications": "20000.00",
+              "this_period": "20000.00",
+              "stored_materials": "0.00",
+              "total_to_date": "40000.00",
+              "pct_complete": "50",
+              "balance_to_finish": "40000.00",
+              "retainage": "4000.00"
+            }
+          ],
+          "g702": {
+            "original_contract_sum": "80000.00",
+            "net_change_orders": "0.00",
+            "contract_sum_to_date": "80000.00",
+            "total_completed_stored": "40000.00",
+            "retainage": "4000.00",
+            "total_earned_less_retainage": "36000.00",
+            "less_previous_certificates": "18000.00",
+            "current_payment_due": "18000.00"
+          },
+          "bank_account": "021000021:889900445",
+          "submitted_at": "2026-07-28T10:00:00",
+          "source_doc": "g703/sub_37_202607.xlsx"
+        }
+      ],
+      "releases": [
+        {
+          "id": "rel_c_pr_sub_37_3",
+          "sub_id": "sub_37",
+          "job_id": "job_37",
+          "kind": "conditional_progress",
+          "through_date": "2026-08-31",
+          "amount": "18000.00",
+          "signed": true,
+          "received_at": "2026-08-26"
+        },
+        {
+          "id": "rel_u_pr_sub_37_2",
+          "sub_id": "sub_37",
+          "job_id": "job_37",
+          "kind": "unconditional_progress",
+          "through_date": "2026-07-31",
+          "amount": "18000.00",
+          "signed": true,
+          "received_at": "2026-08-14"
+        }
+      ],
+      "lower_tier_notices": [],
+      "coi": {
+        "id": "coi_sub_37",
+        "sub_id": "sub_37",
+        "gl_expiry": "2027-04-30",
+        "wc_expiry": "2027-04-30",
+        "additional_insured": true
+      },
+      "ledger": [
+        {
+          "id": "pay_pr_sub_37_1",
+          "job_id": "job_37",
+          "kind": "sub_payment",
+          "amount": "18000.00",
+          "date": "2026-07-15",
+          "period_end": "2026-06-30",
+          "sub_id": "sub_37",
+          "request_id": "pr_sub_37_1",
+          "bank_account": "021000021:889900445"
+        },
+        {
+          "id": "pay_pr_sub_37_2",
+          "job_id": "job_37",
+          "kind": "sub_payment",
+          "amount": "18000.00",
+          "date": "2026-08-11",
+          "period_end": "2026-07-31",
+          "sub_id": "sub_37",
+          "request_id": "pr_sub_37_2",
+          "bank_account": "021000021:889900445"
+        },
+        {
+          "id": "draw_job_37_3",
+          "job_id": "job_37",
+          "kind": "owner_draw",
+          "amount": "60000.00",
+          "date": "2026-09-02",
+          "period_end": "2026-08-31",
+          "sub_id": null,
+          "request_id": null,
+          "bank_account": null
+        }
+      ],
+      "emails": [],
+      "site_evidence": {
+        "id": "se_job_37_20260828",
+        "job_id": "job_37",
+        "date": "2026-08-28",
+        "frames": [
+          "cam37_0828.jpg"
+        ],
+        "estimates": {
+          "26-01": "50.00"
+        }
+      },
+      "known_bank_account": "021000021:889900445",
+      "contract": {
+        "auto_release_limit_usd": 25000,
+        "escalation_confidence_threshold": 0.85
+      },
+      "proposal": {
+        "action": "hold",
+        "confidences": {
+          "progress_plausible": 0.30,
+          "bank_change_suspicious": 0.99
+        },
+        "reasons": [
+          "Application 3 claims zero previous applications and rebills initial rough-in work already certified and paid."
+        ],
+        "answers": {}
+      }
+    },
+    "request": {
+      "id": "pr_sub_37_3",
+      "number": 3,
+      "sub_id": "sub_37",
+      "job_id": "job_37",
+      "period_end": "2026-08-31",
+      "lines": [
+        {
+          "item_no": "26-01",
+          "description": "General conduit rough-in",
+          "scheduled_value": "80000.00",
+          "previous_applications": "0.00",
+          "this_period": "20000.00",
+          "stored_materials": "0.00",
+          "total_to_date": "20000.00",
+          "pct_complete": "25",
+          "balance_to_finish": "60000.00",
+          "retainage": "2000.00"
+        }
+      ],
+      "g702": {
+        "original_contract_sum": "80000.00",
+        "net_change_orders": "0.00",
+        "contract_sum_to_date": "80000.00",
+        "total_completed_stored": "20000.00",
+        "retainage": "2000.00",
+        "total_earned_less_retainage": "18000.00",
+        "less_previous_certificates": "0.00",
+        "current_payment_due": "18000.00"
+      },
+      "bank_account": "021000021:889900445",
+      "submitted_at": "2026-08-26T16:00:00",
+      "source_doc": "g703/sub_37_202608.xlsx"
+    },
+    "label": {
+      "anomaly": "disguised_duplicate_billing",
+      "expected_action": "hold",
+      "why": "The subcontractor reset previous applications to zero, attempting to re-bill $18,000.00 of baseline rough-in work that was already funded."
+    }
+  },
+  {
+    "state": {
+      "job": {
+        "id": "job_38",
+        "name": "Evergreen Research Center",
+        "owner": "Evergreen Bioscience LLC",
+        "lender": "KeyBank",
+        "architect": "Perkins & Will",
+        "contract_sum": "1200000.00",
+        "retainage_rate": "0.10",
+        "pay_when_paid": true
+      },
+      "subcontract": {
+        "id": "sc_sub_38",
+        "sub_id": "sub_38",
+        "job_id": "job_38",
+        "sov": [
+          {
+            "item_no": "22-01",
+            "description": "Plumbing waste and sanitary rough-in",
+            "scheduled_value": "85000.00"
+          }
+        ],
+        "retainage_rate": "0.10"
+      },
+      "vendor": {
+        "id": "sub_38",
+        "legal_name": "Cascade Plumbing & Piping LLC",
+        "ein": "91-5566778",
+        "email_domain": "cascadeplumbing.com",
+        "bank_account": "125000024:112233990",
+        "first_paid": "2026-05-15",
+        "crs_status": "verified"
+      },
+      "change_orders": [],
+      "prior_requests": [
+        {
+          "id": "pr_sub_38_1",
+          "number": 1,
+          "sub_id": "sub_38",
+          "job_id": "job_38",
+          "period_end": "2026-07-31",
+          "lines": [
+            {
+              "item_no": "22-01",
+              "description": "Plumbing waste and sanitary rough-in",
+              "scheduled_value": "85000.00",
+              "previous_applications": "0.00",
+              "this_period": "25000.00",
+              "stored_materials": "0.00",
+              "total_to_date": "25000.00",
+              "pct_complete": "29.41",
+              "balance_to_finish": "60000.00",
+              "retainage": "2500.00"
+            }
+          ],
+          "g702": {
+            "original_contract_sum": "85000.00",
+            "net_change_orders": "0.00",
+            "contract_sum_to_date": "85000.00",
+            "total_completed_stored": "25000.00",
+            "retainage": "2500.00",
+            "total_earned_less_retainage": "22500.00",
+            "less_previous_certificates": "0.00",
+            "current_payment_due": "22500.00"
+          },
+          "bank_account": "125000024:112233990",
+          "submitted_at": "2026-07-28T10:00:00",
+          "source_doc": "g703/sub_38_202607.xlsx"
+        }
+      ],
+      "all_requests": [
+        {
+          "id": "pr_sub_38_1",
+          "number": 1,
+          "sub_id": "sub_38",
+          "job_id": "job_38",
+          "period_end": "2026-07-31",
+          "lines": [
+            {
+              "item_no": "22-01",
+              "description": "Plumbing waste and sanitary rough-in",
+              "scheduled_value": "85000.00",
+              "previous_applications": "0.00",
+              "this_period": "25000.00",
+              "stored_materials": "0.00",
+              "total_to_date": "25000.00",
+              "pct_complete": "29.41",
+              "balance_to_finish": "60000.00",
+              "retainage": "2500.00"
+            }
+          ],
+          "g702": {
+            "original_contract_sum": "85000.00",
+            "net_change_orders": "0.00",
+            "contract_sum_to_date": "85000.00",
+            "total_completed_stored": "25000.00",
+            "retainage": "2500.00",
+            "total_earned_less_retainage": "22500.00",
+            "less_previous_certificates": "0.00",
+            "current_payment_due": "22500.00"
+          },
+          "bank_account": "125000024:112233990",
+          "submitted_at": "2026-07-28T10:00:00",
+          "source_doc": "g703/sub_38_202607.xlsx"
+        }
+      ],
+      "releases": [
+        {
+          "id": "rel_c_pr_sub_38_2",
+          "sub_id": "sub_38",
+          "job_id": "job_38",
+          "kind": "conditional_progress",
+          "through_date": "2026-08-31",
+          "amount": "18000.00",
+          "signed": true,
+          "received_at": "2026-08-26"
+        },
+        {
+          "id": "rel_u_pr_sub_38_1",
+          "sub_id": "sub_38",
+          "job_id": "job_38",
+          "kind": "unconditional_progress",
+          "through_date": "2026-07-31",
+          "amount": "22500.00",
+          "signed": true,
+          "received_at": "2026-08-14"
+        }
+      ],
+      "lower_tier_notices": [],
+      "coi": {
+        "id": "coi_sub_38",
+        "sub_id": "sub_38",
+        "gl_expiry": "2027-04-30",
+        "wc_expiry": "2027-04-30",
+        "additional_insured": true
+      },
+      "ledger": [
+        {
+          "id": "pay_pr_sub_38_1",
+          "job_id": "job_38",
+          "kind": "sub_payment",
+          "amount": "22500.00",
+          "date": "2026-08-11",
+          "period_end": "2026-07-31",
+          "sub_id": "sub_38",
+          "request_id": "pr_sub_38_1",
+          "bank_account": "125000024:112233990"
+        },
+        {
+          "id": "draw_job_38_2",
+          "job_id": "job_38",
+          "kind": "owner_draw",
+          "amount": "65000.00",
+          "date": "2026-09-02",
+          "period_end": "2026-08-31",
+          "sub_id": null,
+          "request_id": null,
+          "bank_account": null
+        }
+      ],
+      "emails": [
+        {
+          "id": "em_38",
+          "from_addr": "cfo@cascadeplumbing.com",
+          "from_domain": "cascadeplumbing.com",
+          "sent_at": "2026-08-25T16:00:00",
+          "subject": "CRITICAL: Immediate Wire Instructions for Pay App 2",
+          "body": "Due to bank reconciliation changes, wire this cycle's funds immediately to our offshore treasury account.",
+          "claims": {
+            "bank_change": true,
+            "new_account": "026009593:112233445",
+            "urgency": true
+          }
+        }
+      ],
+      "site_evidence": {
+        "id": "se_job_38_20260828",
+        "job_id": "job_38",
+        "date": "2026-08-28",
+        "frames": [
+          "cam38_0828.jpg"
+        ],
+        "estimates": {
+          "22-01": "52.94"
+        }
+      },
+      "known_bank_account": "125000024:112233990",
+      "contract": {
+        "auto_release_limit_usd": 25000,
+        "escalation_confidence_threshold": 0.85
+      },
+      "proposal": {
+        "action": "hold",
+        "confidences": {
+          "progress_plausible": 0.95,
+          "bank_change_suspicious": 0.10
+        },
+        "reasons": [
+          "Urgent email wire redirect from compromised authentic mailbox alters destination bank details."
+        ],
+        "answers": {}
+      }
+    },
+    "request": {
+      "id": "pr_sub_38_2",
+      "number": 2,
+      "sub_id": "sub_38",
+      "job_id": "job_38",
+      "period_end": "2026-08-31",
+      "lines": [
+        {
+          "item_no": "22-01",
+          "description": "Plumbing waste and sanitary rough-in",
+          "scheduled_value": "85000.00",
+          "previous_applications": "25000.00",
+          "this_period": "20000.00",
+          "stored_materials": "0.00",
+          "total_to_date": "45000.00",
+          "pct_complete": "52.94",
+          "balance_to_finish": "40000.00",
+          "retainage": "4500.00"
+        }
+      ],
+      "g702": {
+        "original_contract_sum": "85000.00",
+        "net_change_orders": "0.00",
+        "contract_sum_to_date": "85000.00",
+        "total_completed_stored": "45000.00",
+        "retainage": "4500.00",
+        "total_earned_less_retainage": "40500.00",
+        "less_previous_certificates": "22500.00",
+        "current_payment_due": "18000.00"
+      },
+      "bank_account": "026009593:112233445",
+      "submitted_at": "2026-08-26T16:30:00",
+      "source_doc": "g703/sub_38_202608.xlsx"
+    },
+    "label": {
+      "anomaly": "compromised_email_wire_diversion",
+      "expected_action": "hold",
+      "why": "A compromised corporate executive mailbox transmitted urgent fraudulent wire instructions, redirecting pay application proceeds to an unverified third-party account."
+    }
+  },
+  {
+    "state": {
+      "job": {
+        "id": "job_39",
+        "name": "Puget Sound Medical Tower",
+        "owner": "Puget Sound Health System",
+        "lender": "First Interstate Bank",
+        "architect": "HDR Architecture",
+        "contract_sum": "650000.00",
+        "retainage_rate": "0.10",
+        "pay_when_paid": true
+      },
+      "subcontract": {
+        "id": "sc_sub_39",
+        "sub_id": "sub_39",
+        "job_id": "job_39",
+        "sov": [
+          {
+            "item_no": "09-51",
+            "description": "Acoustical ceiling suspension systems",
+            "scheduled_value": "55000.00"
+          }
+        ],
+        "retainage_rate": "0.10"
+      },
+      "vendor": {
+        "id": "sub_39",
+        "legal_name": "Sound Ceiling Solutions LLC",
+        "ein": "56-8899112",
+        "email_domain": "soundceilings.com",
+        "bank_account": "121000021:776655112",
+        "first_paid": "2026-05-18",
+        "crs_status": "verified"
+      },
+      "change_orders": [],
+      "prior_requests": [
+        {
+          "id": "pr_sub_39_1",
+          "number": 1,
+          "sub_id": "sub_39",
+          "job_id": "job_39",
+          "period_end": "2026-07-31",
+          "lines": [
+            {
+              "item_no": "09-51",
+              "description": "Acoustical ceiling suspension systems",
+              "scheduled_value": "55000.00",
+              "previous_applications": "0.00",
+              "this_period": "15000.00",
+              "stored_materials": "0.00",
+              "total_to_date": "15000.00",
+              "pct_complete": "27.27",
+              "balance_to_finish": "40000.00",
+              "retainage": "1500.00"
+            }
+          ],
+          "g702": {
+            "original_contract_sum": "55000.00",
+            "net_change_orders": "0.00",
+            "contract_sum_to_date": "55000.00",
+            "total_completed_stored": "15000.00",
+            "retainage": "1500.00",
+            "total_earned_less_retainage": "13500.00",
+            "less_previous_certificates": "0.00",
+            "current_payment_due": "13500.00"
+          },
+          "bank_account": "121000021:776655112",
+          "submitted_at": "2026-07-28T10:00:00",
+          "source_doc": "g703/sub_39_202607.xlsx"
+        }
+      ],
+      "all_requests": [
+        {
+          "id": "pr_sub_39_1",
+          "number": 1,
+          "sub_id": "sub_39",
+          "job_id": "job_39",
+          "period_end": "2026-07-31",
+          "lines": [
+            {
+              "item_no": "09-51",
+              "description": "Acoustical ceiling suspension systems",
+              "scheduled_value": "55000.00",
+              "previous_applications": "0.00",
+              "this_period": "15000.00",
+              "stored_materials": "0.00",
+              "total_to_date": "15000.00",
+              "pct_complete": "27.27",
+              "balance_to_finish": "40000.00",
+              "retainage": "1500.00"
+            }
+          ],
+          "g702": {
+            "original_contract_sum": "55000.00",
+            "net_change_orders": "0.00",
+            "contract_sum_to_date": "55000.00",
+            "total_completed_stored": "15000.00",
+            "retainage": "1500.00",
+            "total_earned_less_retainage": "13500.00",
+            "less_previous_certificates": "0.00",
+            "current_payment_due": "13500.00"
+          },
+          "bank_account": "121000021:776655112",
+          "submitted_at": "2026-07-28T10:00:00",
+          "source_doc": "g703/sub_39_202607.xlsx"
+        }
+      ],
+      "releases": [
+        {
+          "id": "rel_c_pr_sub_39_2",
+          "sub_id": "sub_39",
+          "job_id": "job_39",
+          "kind": "conditional_progress",
+          "through_date": "2026-08-31",
+          "amount": "13500.00",
+          "signed": true,
+          "received_at": "2026-08-26"
+        },
+        {
+          "id": "rel_u_pr_sub_39_1",
+          "sub_id": "sub_39",
+          "job_id": "job_39",
+          "kind": "unconditional_progress",
+          "through_date": "2026-07-31",
+          "amount": "13500.00",
+          "signed": true,
+          "received_at": "2026-08-14"
+        }
+      ],
+      "lower_tier_notices": [],
+      "coi": {
+        "id": "coi_sub_39",
+        "sub_id": "sub_39",
+        "gl_expiry": "2027-04-30",
+        "wc_expiry": "2027-04-30",
+        "additional_insured": true
+      },
+      "ledger": [
+        {
+          "id": "pay_pr_sub_39_1",
+          "job_id": "job_39",
+          "kind": "sub_payment",
+          "amount": "13500.00",
+          "date": "2026-08-11",
+          "period_end": "2026-07-31",
+          "sub_id": "sub_39",
+          "request_id": "pr_sub_39_1",
+          "bank_account": "121000021:776655112"
+        },
+        {
+          "id": "draw_job_39_2",
+          "job_id": "job_39",
+          "kind": "owner_draw",
+          "amount": "40000.00",
+          "date": "2026-09-02",
+          "period_end": "2026-08-31",
+          "sub_id": null,
+          "request_id": null,
+          "bank_account": null
+        }
+      ],
+      "emails": [],
+      "site_evidence": {
+        "id": "se_job_39_20260828",
+        "job_id": "job_39",
+        "date": "2026-08-28",
+        "frames": [
+          "cam39_0828.jpg"
+        ],
+        "estimates": {
+          "09-51": "54.55"
+        }
+      },
+      "known_bank_account": "121000021:776655112",
+      "contract": {
+        "auto_release_limit_usd": 25000,
+        "escalation_confidence_threshold": 0.85
+      },
+      "proposal": {
+        "action": "hold",
+        "confidences": {
+          "progress_plausible": 0.95,
+          "bank_change_suspicious": 0.30
+        },
+        "reasons": [
+          "Pay request specifies a newly entered bank account that has not been confirmed through corporate callback."
+        ],
+        "answers": {}
+      }
+    },
+    "request": {
+      "id": "pr_sub_39_2",
+      "number": 2,
+      "sub_id": "sub_39",
+      "job_id": "job_39",
+      "period_end": "2026-08-31",
+      "lines": [
+        {
+          "item_no": "09-51",
+          "description": "Acoustical ceiling suspension systems",
+          "scheduled_value": "55000.00",
+          "previous_applications": "15000.00",
+          "this_period": "15000.00",
+          "stored_materials": "0.00",
+          "total_to_date": "30000.00",
+          "pct_complete": "54.55",
+          "balance_to_finish": "25000.00",
+          "retainage": "3000.00"
+        }
+      ],
+      "g702": {
+        "original_contract_sum": "55000.00",
+        "net_change_orders": "0.00",
+        "contract_sum_to_date": "55000.00",
+        "total_completed_stored": "30000.00",
+        "retainage": "3000.00",
+        "total_earned_less_retainage": "27000.00",
+        "less_previous_certificates": "13500.00",
+        "current_payment_due": "13500.00"
+      },
+      "bank_account": "031100209:998877443",
+      "submitted_at": "2026-08-26T14:45:00",
+      "source_doc": "g703/sub_39_202608.xlsx"
+    },
+    "label": {
+      "anomaly": "unverified_bank_account_mismatch",
+      "expected_action": "hold",
+      "why": "The pay application lists an unverified bank account differing from vendor master records without completed out-of-band security authentication."
+    }
+  },
+  {
+    "state": {
+      "job": {
+        "id": "job_40",
+        "name": "Northwest Logistics Center",
+        "owner": "Northwest Industrial Partners",
+        "lender": "Banner Bank",
+        "architect": "Warehaus Architecture",
+        "contract_sum": "450000.00",
+        "retainage_rate": "0.10",
+        "pay_when_paid": true
+      },
+      "subcontract": {
+        "id": "sc_sub_40",
+        "sub_id": "sub_40",
+        "job_id": "job_40",
+        "sov": [
+          {
+            "item_no": "04-22",
+            "description": "Concrete unit masonry walls",
+            "scheduled_value": "50000.00"
+          }
+        ],
+        "retainage_rate": "0.10"
+      },
+      "vendor": {
+        "id": "sub_40",
+        "legal_name": "Sound Masonry Construction LLC",
+        "ein": "91-8877665",
+        "email_domain": "soundmasonry.com",
+        "bank_account": "125000024:665544332",
+        "first_paid": null,
+        "crs_status": "verified"
+      },
+      "change_orders": [],
+      "prior_requests": [],
+      "all_requests": [],
+      "releases": [
+        {
+          "id": "rel_c_pr_sub_40_1",
+          "sub_id": "sub_40",
+          "job_id": "job_40",
+          "kind": "conditional_progress",
+          "through_date": "2026-08-31",
+          "amount": "14400.00",
+          "signed": true,
+          "received_at": "2026-08-26"
+        }
+      ],
+      "lower_tier_notices": [],
+      "coi": {
+        "id": "coi_sub_40",
+        "sub_id": "sub_40",
+        "gl_expiry": "2027-05-31",
+        "wc_expiry": "2027-05-31",
+        "additional_insured": true
+      },
+      "ledger": [
+        {
+          "id": "draw_job_40_1",
+          "job_id": "job_40",
+          "kind": "owner_draw",
+          "amount": "30000.00",
+          "date": "2026-09-02",
+          "period_end": "2026-08-31",
+          "sub_id": null,
+          "request_id": null,
+          "bank_account": null
+        }
+      ],
+      "emails": [],
+      "site_evidence": {
+        "id": "se_job_40_20260828",
+        "job_id": "job_40",
+        "date": "2026-08-28",
+        "frames": [
+          "cam40_0828.jpg"
+        ],
+        "estimates": {
+          "04-22": "32.00"
+        }
+      },
+      "known_bank_account": null,
+      "contract": {
+        "auto_release_limit_usd": 25000,
+        "escalation_confidence_threshold": 0.85
+      },
+      "proposal": {
+        "action": "release",
+        "confidences": {
+          "progress_plausible": 0.95,
+          "bank_change_suspicious": 0.99
+        },
+        "reasons": [
+          "CMU block laying matches site survey and billing math reconciles."
+        ],
+        "answers": {}
+      }
+    },
+    "request": {
+      "id": "pr_sub_40_1",
+      "number": 1,
+      "sub_id": "sub_40",
+      "job_id": "job_40",
+      "period_end": "2026-08-31",
+      "lines": [
+        {
+          "item_no": "04-22",
+          "description": "Concrete unit masonry walls",
+          "scheduled_value": "50000.00",
+          "previous_applications": "0.00",
+          "this_period": "16000.00",
+          "stored_materials": "0.00",
+          "total_to_date": "16000.00",
+          "pct_complete": "32",
+          "balance_to_finish": "34000.00",
+          "retainage": "1600.00"
+        }
+      ],
+      "g702": {
+        "original_contract_sum": "50000.00",
+        "net_change_orders": "0.00",
+        "contract_sum_to_date": "50000.00",
+        "total_completed_stored": "16000.00",
+        "retainage": "1600.00",
+        "total_earned_less_retainage": "14400.00",
+        "less_previous_certificates": "0.00",
+        "current_payment_due": "14400.00"
+      },
+      "bank_account": "125000024:665544332",
+      "submitted_at": "2026-08-26T11:00:00",
+      "source_doc": "g703/sub_40_202608.xlsx"
+    },
+    "label": {
+      "anomaly": "new_vendor_first_disbursement",
+      "expected_action": "escalate",
+      "why": "This is the newly onboarded masonry subcontractor's initial payment on record, mandating executive hardware key approval."
+    }
+  },
+  {
+    "state": {
+      "job": {
+        "id": "job_41",
+        "name": "Cascade Valley Science Complex",
+        "owner": "Cascade Science Partners LLC",
+        "lender": "First Sound Bank",
+        "architect": "Perkins & Will",
+        "contract_sum": "900000.00",
+        "retainage_rate": "0.10",
+        "pay_when_paid": true
+      },
+      "subcontract": {
+        "id": "sc_sub_41",
+        "sub_id": "sub_41",
+        "job_id": "job_41",
+        "sov": [
+          {
+            "item_no": "08-44",
+            "description": "Curtain wall framing and vision glass",
+            "scheduled_value": "80000.00"
+          }
+        ],
+        "retainage_rate": "0.10"
+      },
+      "vendor": {
+        "id": "sub_41",
+        "legal_name": "Sound Glazing Contractors Inc",
+        "ein": "91-1122445",
+        "email_domain": "soundglazing.com",
+        "bank_account": "021000089:123456789",
+        "first_paid": "2026-05-15",
+        "crs_status": "verified"
+      },
+      "change_orders": [],
+      "prior_requests": [
+        {
+          "id": "pr_sub_41_1",
+          "number": 1,
+          "sub_id": "sub_41",
+          "job_id": "job_41",
+          "period_end": "2026-07-31",
+          "lines": [
+            {
+              "item_no": "08-44",
+              "description": "Curtain wall framing and vision glass",
+              "scheduled_value": "80000.00",
+              "previous_applications": "0.00",
+              "this_period": "20000.00",
+              "stored_materials": "0.00",
+              "total_to_date": "20000.00",
+              "pct_complete": "25",
+              "balance_to_finish": "60000.00",
+              "retainage": "2000.00"
+            }
+          ],
+          "g702": {
+            "original_contract_sum": "80000.00",
+            "net_change_orders": "0.00",
+            "contract_sum_to_date": "80000.00",
+            "total_completed_stored": "20000.00",
+            "retainage": "2000.00",
+            "total_earned_less_retainage": "18000.00",
+            "less_previous_certificates": "0.00",
+            "current_payment_due": "18000.00"
+          },
+          "bank_account": "021000021:987654321",
+          "submitted_at": "2026-07-28T10:00:00",
+          "source_doc": "g703/sub_41_202607.xlsx"
+        }
+      ],
+      "all_requests": [
+        {
+          "id": "pr_sub_41_1",
+          "number": 1,
+          "sub_id": "sub_41",
+          "job_id": "job_41",
+          "period_end": "2026-07-31",
+          "lines": [
+            {
+              "item_no": "08-44",
+              "description": "Curtain wall framing and vision glass",
+              "scheduled_value": "80000.00",
+              "previous_applications": "0.00",
+              "this_period": "20000.00",
+              "stored_materials": "0.00",
+              "total_to_date": "20000.00",
+              "pct_complete": "25",
+              "balance_to_finish": "60000.00",
+              "retainage": "2000.00"
+            }
+          ],
+          "g702": {
+            "original_contract_sum": "80000.00",
+            "net_change_orders": "0.00",
+            "contract_sum_to_date": "80000.00",
+            "total_completed_stored": "20000.00",
+            "retainage": "2000.00",
+            "total_earned_less_retainage": "18000.00",
+            "less_previous_certificates": "0.00",
+            "current_payment_due": "18000.00"
+          },
+          "bank_account": "021000021:987654321",
+          "submitted_at": "2026-07-28T10:00:00",
+          "source_doc": "g703/sub_41_202607.xlsx"
+        }
+      ],
+      "releases": [
+        {
+          "id": "rel_c_pr_sub_41_2",
+          "sub_id": "sub_41",
+          "job_id": "job_41",
+          "kind": "conditional_progress",
+          "through_date": "2026-08-31",
+          "amount": "18000.00",
+          "signed": true,
+          "received_at": "2026-08-26"
+        },
+        {
+          "id": "rel_u_pr_sub_41_1",
+          "sub_id": "sub_41",
+          "job_id": "job_41",
+          "kind": "unconditional_progress",
+          "through_date": "2026-07-31",
+          "amount": "18000.00",
+          "signed": true,
+          "received_at": "2026-08-14"
+        }
+      ],
+      "lower_tier_notices": [],
+      "coi": {
+        "id": "coi_sub_41",
+        "sub_id": "sub_41",
+        "gl_expiry": "2027-04-30",
+        "wc_expiry": "2027-04-30",
+        "additional_insured": true
+      },
+      "ledger": [
+        {
+          "id": "pay_pr_sub_41_1",
+          "job_id": "job_41",
+          "kind": "sub_payment",
+          "amount": "18000.00",
+          "date": "2026-08-11",
+          "period_end": "2026-07-31",
+          "sub_id": "sub_41",
+          "request_id": "pr_sub_41_1",
+          "bank_account": "021000021:987654321"
+        },
+        {
+          "id": "draw_job_41_2",
+          "job_id": "job_41",
+          "kind": "owner_draw",
+          "amount": "60000.00",
+          "date": "2026-09-02",
+          "period_end": "2026-08-31",
+          "sub_id": null,
+          "request_id": null,
+          "bank_account": null
+        }
+      ],
+      "emails": [],
+      "site_evidence": {
+        "id": "se_job_41_20260828",
+        "job_id": "job_41",
+        "date": "2026-08-28",
+        "frames": [
+          "cam41_0828.jpg"
+        ],
+        "estimates": {
+          "08-44": "50.00"
+        }
+      },
+      "known_bank_account": "021000021:987654321",
+      "contract": {
+        "auto_release_limit_usd": 25000,
+        "escalation_confidence_threshold": 0.85
+      },
+      "proposal": {
+        "action": "release",
+        "confidences": {
+          "progress_plausible": 0.95,
+          "bank_change_suspicious": 0.99
+        },
+        "reasons": [
+          "Curtain wall progress verified and bank change was confirmed via out-of-band callback."
+        ],
+        "answers": {}
+      }
+    },
+    "request": {
+      "id": "pr_sub_41_2",
+      "number": 2,
+      "sub_id": "sub_41",
+      "job_id": "job_41",
+      "period_end": "2026-08-31",
+      "lines": [
+        {
+          "item_no": "08-44",
+          "description": "Curtain wall framing and vision glass",
+          "scheduled_value": "80000.00",
+          "previous_applications": "20000.00",
+          "this_period": "20000.00",
+          "stored_materials": "0.00",
+          "total_to_date": "40000.00",
+          "pct_complete": "50",
+          "balance_to_finish": "40000.00",
+          "retainage": "4000.00"
+        }
+      ],
+      "g702": {
+        "original_contract_sum": "80000.00",
+        "net_change_orders": "0.00",
+        "contract_sum_to_date": "80000.00",
+        "total_completed_stored": "40000.00",
+        "retainage": "4000.00",
+        "total_earned_less_retainage": "36000.00",
+        "less_previous_certificates": "18000.00",
+        "current_payment_due": "18000.00"
+      },
+      "bank_account": "021000089:123456789",
+      "submitted_at": "2026-08-26T16:00:00",
+      "source_doc": "g703/sub_41_202608.xlsx"
+    },
+    "label": {
+      "anomaly": "verified_bank_change_first_payout",
+      "expected_action": "escalate",
+      "why": "A legitimately updated and verified bank account is being paid for the first time, triggering mandatory policy escalation."
+    }
+  }
+]

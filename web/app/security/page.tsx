@@ -2,13 +2,12 @@
 
 import { ChevronDown } from "lucide-react";
 import { type ReactNode, useEffect, useMemo, useState } from "react";
-import { CartesianGrid, ComposedChart, Line, ReferenceLine, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { Mark } from "@/components/evidence";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Textarea } from "@/components/ui/textarea";
 import { useLive } from "@/hooks/use-live";
-import { api, ApiError, money, type AttackResult, type Calibration, type RequestRow, type Scorecard } from "@/lib/api";
+import { api, ApiError, money, type AttackResult, type RequestRow, type Scorecard } from "@/lib/api";
 import { attackLabel, humanize, RULE_NAMES } from "@/lib/labels";
 import { cn } from "@/lib/utils";
 
@@ -26,14 +25,12 @@ export default function SecurityPage() {
   const { version } = useLive();
   const [card, setCard] = useState<Scorecard | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [calib, setCalib] = useState<Calibration | { error: string; missing: boolean } | null>(null);
 
   useEffect(() => {
     api.scorecard().then(
       (c) => (setCard(c), setError(null)),
       (e: ApiError) => setError(e.status === 404 ? "No scorecard yet. Run `make fuzz N=5000` on the server, then reload." : e.message),
     );
-    api.calibration().then(setCalib, (e: ApiError) => setCalib({ error: e.message, missing: e.status === 404 }));
   }, [version]);
 
   return (
@@ -45,7 +42,6 @@ export default function SecurityPage() {
 
       <AttackConsole />
       {card && card.limit_sweep?.length > 0 && <LimitDial card={card} />}
-      <CalibrationCurve calib={calib} />
       {card && <AttackLedger card={card} />}
 
       {card && (
@@ -218,105 +214,6 @@ function LimitDial({ card }: { card: Scorecard }) {
             </tbody>
           </table>
         </div>
-      </div>
-    </Section>
-  );
-}
-
-function CalibrationCurve({ calib }: { calib: Calibration | { error: string; missing: boolean } | null }) {
-  const intro = "When Jev says it's 80% sure, it should be right about 80% of the time. That's what makes the escalation threshold mean something.";
-  if (calib && "curve" in calib && calib.curve.bins.length > 0) {
-    const ece = calib.curve.expected_calibration_error;
-    const axis = { fill: "var(--muted-foreground)", fontSize: 12 };
-    return (
-      <Section id="calib" title="Is Jev's confidence honest?" intro={intro}>
-        <div className="h-[320px] max-w-[640px]">
-          <ResponsiveContainer width="100%" height="100%">
-            <ComposedChart data={calib.curve.bins} margin={{ top: 8, right: 16, bottom: 24, left: 8 }}>
-              <CartesianGrid stroke="var(--border)" />
-              <XAxis
-                type="number"
-                dataKey="mean_confidence"
-                domain={[0, 1]}
-                ticks={[0, 0.25, 0.5, 0.75, 1]}
-                tickFormatter={(v) => pct(v, 0)}
-                tick={axis}
-                stroke="var(--border-strong)"
-                label={{ value: "How sure Jev said it was", position: "bottom", offset: 4, fill: "var(--muted-foreground)", fontSize: 13 }}
-              />
-              <YAxis
-                type="number"
-                domain={[0, 1]}
-                ticks={[0, 0.25, 0.5, 0.75, 1]}
-                tickFormatter={(v) => pct(v, 0)}
-                tick={axis}
-                stroke="var(--border-strong)"
-                width={48}
-                label={{ value: "How often it was right", angle: -90, position: "insideLeft", fill: "var(--muted-foreground)", fontSize: 13 }}
-              />
-              <ReferenceLine segment={[{ x: 0, y: 0 }, { x: 1, y: 1 }]} stroke="var(--border-strong)" strokeDasharray="6 6" ifOverflow="extendDomain" />
-              <Tooltip
-                contentStyle={{ background: "var(--popover)", border: "1px solid var(--border)", borderRadius: 8, color: "var(--foreground)" }}
-                labelFormatter={(v) => `Said ${pct(Number(v), 0)} sure`}
-                formatter={(v) => [pct(Number(v), 0), "Right"]}
-              />
-              <Line dataKey="accuracy" stroke="var(--foreground)" strokeWidth={2.5} dot={{ r: 4, fill: "var(--foreground)" }} isAnimationActive={false} />
-            </ComposedChart>
-          </ResponsiveContainer>
-        </div>
-        <p className="mt-3 max-w-[64ch] text-body">
-          The dashed line is perfect honesty. Across <span className="font-mono tnum">{n(calib.answers)}</span> answers
-          {ece != null && (
-            <>
-              , Jev&apos;s stated confidence was off from how often it was right by <span className="font-mono tnum">{(ece * 100).toFixed(1)}</span> points
-              on average
-            </>
-          )}
-          .
-        </p>
-      </Section>
-    );
-  }
-  const ticks = [0, 50, 100];
-  return (
-    <Section id="calib" title="Is Jev's confidence honest?" intro={intro}>
-      <div className="max-w-[640px] rounded-lg border border-dashed border-border-strong p-5">
-        <svg viewBox="0 0 600 300" role="img" aria-label="Empty chart: no calibration run yet" className="block h-auto w-full">
-          <g className="stroke-border-strong">
-            <line x1="50" y1="260" x2="580" y2="260" />
-            <line x1="50" y1="20" x2="50" y2="260" />
-            <line x1="50" y1="260" x2="580" y2="20" strokeDasharray="6 6" />
-          </g>
-          <g fill="var(--muted-foreground)" fontSize="12">
-            {ticks.map((t) => (
-              <g key={t}>
-                <text x={50 + t * 5.3} y="280" textAnchor="middle">
-                  {t}%
-                </text>
-                <text x="40" y={264 - t * 2.4} textAnchor="end">
-                  {t}%
-                </text>
-              </g>
-            ))}
-            <text x="315" y="298" textAnchor="middle">
-              How sure Jev said it was
-            </text>
-            <text x="440" y="70" textAnchor="middle">
-              Honest confidence
-            </text>
-          </g>
-        </svg>
-        <p className="mt-3 text-body">
-          {!calib ? (
-            "Loading the calibration run…"
-          ) : "error" in calib && !calib.missing ? (
-            `Couldn't load the calibration: ${calib.error}`
-          ) : (
-            <>
-              No calibration run yet. It shows up here after <span className="font-mono">python -m fuzzer.calibration</span> runs on the server.
-            </>
-          )}
-        </p>
       </div>
     </Section>
   );

@@ -24,6 +24,7 @@ def test_cases_are_mutated_and_cover_every_type():
 
 def test_scorecard_with_hold_everything_kernel(monkeypatch):
     monkeypatch.setattr(f, "decide", lambda state, rid, **kw: Decision(request_id=rid, action=Action.hold, results=[]))
+    monkeypatch.setattr(f.heldout, "rows", lambda: ([], []))  # held-out cases run the real kernel, not this fake
     card = f.run(200, rng_seed=3)
     assert card["cases"] == 200 and card["mutated"] + card["clean"] == 200
     assert card["wrongful_releases"] == 0 and card["catch_rate"] == 1.0 and card["false_hold_rate"] == 1.0
@@ -46,6 +47,7 @@ def test_attack_console():
 
 def test_rules_only_headline_ignores_the_button(monkeypatch):
     monkeypatch.setattr(f, "decide", lambda state, rid, **kw: Decision(request_id=rid, action=Action.escalate, results=[]))
+    monkeypatch.setattr(f.heldout, "rows", lambda: ([], []))  # held-out cases run the real kernel, not this fake
     card = f.run(100)
     assert card["wrongful_releases"] == 0  # the button stopped them...
     assert card["wrongful_if_every_button_approved"] == card["mutated"]  # ...but no rule did

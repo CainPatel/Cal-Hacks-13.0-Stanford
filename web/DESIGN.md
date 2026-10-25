@@ -157,7 +157,7 @@ An 8px base. In Tailwind units: 2 = 8px, 4 = 16px, 6 = 24px, 10 = 40px, 16 = 64p
 
 **Upload Portal.** The Upload tab's name. A ruled radio list of document kinds, the sub picker (every known vendor, then "Other (new subcontractor)"), the file drop, one button.
 
-**Security.** Order: the opening sentence from the scorecard, "Your turn: try to get paid", the auto-release limit dial, the calibration curve, then "Every kind of attack we tried" as a closed `details` that opens to the ledger table.
+**Security.** Order: the opening sentence from the scorecard, "Your turn: try to get paid", the auto-release limit dial, then "Every kind of attack we tried" as a closed `details` that opens to the ledger table. The scorecard counts the fuzzer's cases and the held-out set (`fuzzer/heldout/`) as one run; held-out attack types get their own ledger rows unless they are the same attack as a fuzzer type. No calibration chart (its API endpoint and `fuzzer/calibration.py` stay).
 
 **Ledger table (Security).** Same rules as the lines table, with a margin column of ticks, mono numbers right-aligned, a 2px ink rule under the headers and a double-ruled total.
 
