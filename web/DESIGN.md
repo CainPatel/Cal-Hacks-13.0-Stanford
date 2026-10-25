@@ -181,7 +181,7 @@ An 8px base. In Tailwind units: 2 = 8px, 4 = 16px, 6 = 24px, 10 = 40px, 16 = 64p
 
 - Gradients, purple, glassmorphism, drop shadows, glows, emoji.
 - KPI tiles, stat cards, or cards inside cards. (The status board's columns and the evidence boxes are the allowed exceptions: each is a list, not a number on a tile.)
-- Stock or decorative icons. Icons exist only as status marks (chips, checklist, top bar, evidence boxes) and in the attack ledger.
+- Stock or decorative icons. Icons exist only as status marks (chips, checklist, top bar, evidence boxes), in the attack ledger, and as the info mark beside "Check {month}" that explains what checking does (hover, tap or focus).
 - Blue for anything that isn't an action or selection. Status colours for decoration, branding or emphasis.
 - All-caps labels, eyebrow labels above headings, "A · B · C" meta strings, arrows appended to buttons or links.
 - Tilted or "hand-drawn" marks. Marks are upright.
