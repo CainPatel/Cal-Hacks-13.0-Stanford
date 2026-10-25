@@ -120,8 +120,10 @@ def log_and_stream(api: Api) -> None:
     if seqs:
         body = api.get("/events", params={"after": seqs[0] - 3, "follow": "false"}).text
         # on Vercel a "retry:" block comes first (a 10 s poll, not a held connection), so count only events
-        n = sum(b.startswith("id: ") for b in body.split("\n\n"))
-        check("live stream (Server-Sent Events)", n == 3, f"{n} events after #{seqs[0] - 3}")
+        ids = [int(b.split("\n")[0][4:]) for b in body.split("\n\n") if b.startswith("id: ")]
+        # the log may grow between the two calls, so newer events after these three are fine
+        check("live stream (Server-Sent Events)", ids[:3] == list(range(seqs[0] - 2, seqs[0] + 1)),
+              f"{len(ids)} events after #{seqs[0] - 3}")
 
 
 def security(api: Api) -> None:
