@@ -11,7 +11,6 @@ const TABS = [
   { href: "/upload", label: "Upload Portal" },
   { href: "/log", label: "Log" },
   { href: "/security", label: "Security" },
-  { href: "/how", label: "How it works" },
 ];
 
 export function TopBar() {
