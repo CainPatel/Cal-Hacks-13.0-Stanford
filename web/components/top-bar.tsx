@@ -20,7 +20,7 @@ export function TopBar() {
       <div className="mx-auto flex min-h-16 max-w-[1440px] flex-wrap items-center gap-x-8 gap-y-2 px-4 sm:px-8">
         <div className="flex flex-wrap items-baseline gap-x-3 gap-y-0.5 py-2 *:whitespace-nowrap">
           <Link href="/" className="flex items-center">
-            <Image src="/imgs/draw-logo.png" alt="Draw" width={1108} height={372} priority className="h-8 w-auto" />
+            <Image src="/imgs/draw-logo.png" alt="Draw" width={676} height={238} priority className="h-8 w-auto" />
           </Link>
         </div>
         <nav aria-label="Main" className="flex gap-1 overflow-x-auto max-sm:-mx-4 max-sm:w-[calc(100%+2rem)] sm:ml-auto">
