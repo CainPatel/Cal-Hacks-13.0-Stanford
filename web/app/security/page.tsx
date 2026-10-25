@@ -357,6 +357,7 @@ function AttackOutcome({ plan, out, error, assessment, gapSaved }: { plan?: stri
 const VERDICT: Record<Assessment["verdict"], { mark?: "pass" | "ok" | "fail"; tone: string; say: string }> = {
   blocked: { mark: "pass", tone: "text-pass", say: "Draw would catch this before the rules even run." },
   stopped: { mark: "pass", tone: "text-pass", say: "The rules would put this on hold." },
+  refused: { mark: "pass", tone: "text-pass", say: "Draw would refuse to pay this." },
   needs_key: { mark: "ok", tone: "text-hold", say: "No rule would hold it, but it would still need your key." },
   capped: { mark: "fail", tone: "text-fail", say: "No check would stop it, but the damage is capped." },
   jev: { mark: "ok", tone: "text-hold", say: "Only Jev’s review would likely flag it." },
@@ -377,8 +378,13 @@ const BACKSTOP_NAMES: Record<Assessment["backstops"][number]["backstop"], string
   new_payee: "New sub or bank account",
   bank_lock: "Bank account on file",
   recompute: "Amounts recomputed",
-  paid_once: "Paid once only",
   confidence: "Jev unsure",
+};
+
+const EXECUTOR_NAMES: Record<NonNullable<Assessment["executor"]>[number]["gate"], string> = {
+  registered_key: "Registered key only",
+  single_use: "One-time signature",
+  one_payment: "Paid once only",
 };
 
 /** An attack that isn't one we can run: Claude's read of it against Draw's own checks, labelled as an estimate. */
@@ -412,6 +418,12 @@ function AssessmentOutcome({ a, gapSaved }: { a: Assessment; gapSaved?: boolean 
             </span>
           </li>
         ))}
+        {(a.executor ?? []).map((h) => (
+          <li key={`executor-${h.gate}`} className={row}>
+            <span className={name}>{EXECUTOR_NAMES[h.gate] ?? h.gate}</span>
+            <span>{h.why}</span>
+          </li>
+        ))}
         {a.backstops.map((h) => (
           <li key={`backstop-${h.backstop}`} className={row}>
             <span className={name}>{BACKSTOP_NAMES[h.backstop] ?? h.backstop}</span>
@@ -430,7 +442,7 @@ function AssessmentOutcome({ a, gapSaved }: { a: Assessment; gapSaved?: boolean 
             <span>{a.out_of_scope}</span>
           </li>
         )}
-        {a.gap && a.verdict !== "stopped" && a.verdict !== "blocked" && (
+        {a.gap && !["stopped", "blocked", "refused"].includes(a.verdict) && (
           <li className={row}>
             <span className={name}>What gets through</span>
             <span>

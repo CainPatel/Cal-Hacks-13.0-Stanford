@@ -271,9 +271,10 @@ export type Assessment = {
   summary: string;
   intake: { defence: "visible_text" | "exact_sender" | "known_forms" | "no_guessing" | "data_not_orders"; why: string }[];
   holds: { rule: string; why: string }[];
-  backstops: { backstop: "limit" | "new_payee" | "bank_lock" | "recompute" | "paid_once" | "confidence"; why: string }[];
+  backstops: { backstop: "limit" | "new_payee" | "bank_lock" | "recompute" | "confidence"; why: string }[];
+  executor?: { gate: "registered_key" | "single_use" | "one_payment"; why: string }[];
   jev: string | null;
   gap: string | null;
   out_of_scope: string | null;
-  verdict: "blocked" | "stopped" | "out_of_scope" | "needs_key" | "capped" | "jev" | "gap";
+  verdict: "blocked" | "stopped" | "refused" | "needs_key" | "out_of_scope" | "capped" | "jev" | "gap";
 };

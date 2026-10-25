@@ -118,6 +118,14 @@ def test_the_verdict_is_worked_out_in_code_strongest_first(assessment, expected)
     assert n.verdict(n.Assessment(summary="x", intake=[], **assessment)) == expected
 
 
+def test_an_executor_refusal_and_the_key_outrank_out_of_scope():
+    replay = [{"gate": "single_use", "why": "a signature works once"}]
+    assert n.verdict(n.Assessment(summary="x", intake=[], holds=[], backstops=[], executor=replay)) == "refused"
+    deepfake = n.Assessment(summary="x", intake=[], holds=[], backstops=[{"backstop": "new_payee", "why": "new account"}],
+                            out_of_scope="the phone call is social engineering")
+    assert n.verdict(deepfake) == "needs_key"  # whatever Draw can't see, the money still waits for the owner
+
+
 def test_intake_defences_come_before_backstops_but_after_a_rule_hold():
     hidden = [{"defence": "visible_text", "why": "invisible text is ignored"}]
     assert n.verdict(n.Assessment(summary="x", intake=hidden, holds=[], backstops=[{"backstop": "limit", "why": "b"}])) == "blocked"
