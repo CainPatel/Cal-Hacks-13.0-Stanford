@@ -1,12 +1,114 @@
 # Draw
 
+## Introduction
+
 An AI accounts-payable clerk for small general contractors. The model can only *propose* a
 payment; a deterministic policy kernel, a calibrated judgment layer, and a hardware-held
 signing key decide whether money moves. Built at Cal Hacks 13.0.
 
+## The problem
+
+Every month, each subcontractor on a commercial job sends the general contractor (GC) a pay
+application: an AIA G702 summary and a G703 continuation sheet listing cumulative percent complete on
+every contract line. Before paying, someone in the GC's office checks it by hand: the cumulative math,
+retainage, lien releases, insurance, supplier notices, whether the owner's draw has cleared, whether the
+bank details changed, whether the progress claimed matches the job site. A 10-30 person GC does this for
+40-60 lines per sub per project, from Excel and email. The failures are expensive: a lookalike-domain
+email that redirects a six-figure wire, a supplier lien that surfaces after the sub is paid, months of
+quiet over-billing.
+
+## What Draw does
+
+Draw reads the documents that already exist (G702/G703 as PDF or spreadsheet, lien releases, insurance
+certificates, the sub's emails, the superintendent's site video), checks each pay request against 15
+rules, and tells the office one of three things in a plain sentence with the evidence:
+
+- **Ready to pay**: every check passed and the amount is under the auto-release limit.
+- **Needs your OK**: over the limit, a new vendor, or a judgment call. The owner approves on a physical
+  key on their desk, which signs that exact payee and amount.
+- **On hold**: a rule failed. The screen shows why and what to do next ("Ask the sub for their supplier's
+  release").
+
+No AI output can move money. Claude reads documents and Jev (TypeSafe) answers judgment questions, but
+both are treated as untrusted input to a pure-function rule kernel, and every payment above the limit
+needs a hardware signature. Draw also ships with its own attacker: a fuzzer that tries to get wrong
+payments through and a scorecard that reports how often it succeeds.
+
+**Live:** [drawweb.vercel.app](https://drawweb.vercel.app) (dashboard) · [drawapi.vercel.app/docs](https://drawapi.vercel.app/docs) (API).
+The data is one fictional GC with 3 jobs, 15 subs and six months of history.
+
+## How it works
+
+1. **Perception** (`perception/`): pdfplumber reads the G703's text layer; Claude handles scans, emails
+   and site video frames. Output is a set of facts, never a decision.
+2. **Event log** (`events/`): every fact, judgment, decision, signature and payment is appended to one
+   log (SQLite locally, Neon Postgres in production, append-only enforced by trigger). Decisions are
+   replayable from it.
+3. **Judgment** (`judgment/`): Jev answers five questions per request (is the release the right form,
+   does the bank change look like account takeover, is the progress plausible, is it a duplicate, what
+   should happen), each with a confidence. Claude is the fallback.
+4. **Kernel** (`kernel/`): 15 pure-function rules, no network or model calls. All pass and under the limit
+   means release; rule 14 (over the limit) or 15 (low confidence) means escalate; anything else holds.
+5. **Approval key** (`device/`, `firmware/`): a Raspberry Pi (or ESP32) with green and red buttons holds a
+   P-256 private key and signs the request id, payee, amount and a one-time nonce.
+6. **Executor** (`kernel/executor.py`): the only code that can call the bank (Capital One's Nessie
+   sandbox). It re-checks the decision, verifies the signature against exactly what it is about to pay,
+   refuses anything Nessie already holds, and pays once.
+
+| # | Rule | # | Rule |
+|---|---|---|---|
+| 01 | Cumulative billing adds up | 09 | Vendor identity verified (CRS) |
+| 02 | Within the scheduled value plus approved change orders | 10 | Bank details unchanged |
+| 03 | Retainage withheld at the contract rate | 11 | Sender domain authentic (lookalike check) |
+| 04 | Conditional lien release covers this payment | 12 | Not a duplicate |
+| 05 | Last payment's unconditional release received | 13 | Progress matches the site video |
+| 06 | Insurance current | 14 | Within the auto-release limit |
+| 07 | Lower-tier suppliers released | 15 | Every judgment above the confidence floor |
+| 08 | Owner's draw funded | | |
+
+The full data flow is under [How a pay request flows](#how-a-pay-request-flows).
+
+## Results
+
+From [`docs/results.md`](docs/results.md), measured on `main`, Oct 25, 2026 (synthetic data):
+
+| | |
+|---|---|
+| Generated attacks the rules stop on their own | **100%** of 8,029 (16 attack types and 35 two-fault combinations) |
+| Held-out attacks written outside the codebase | **32 of 38** stopped; the 6 gaps are documented |
+| Honest requests wrongly held | **0** of 1,994 |
+| Owner's button presses in an honest month | **1.83** per job (63% of payments need no tap, at a $25K limit) |
+| Pay applications read exactly by the code extractor | **940 / 940** (no model calls) |
+| Jev's calibration over 6,000 answers | expected calibration error **0.029** |
+
+## Built with
+
+Python (FastAPI, Pydantic, pdfplumber) · Next.js, TypeScript, Tailwind, shadcn/ui · SQLite and Neon
+Postgres · Vercel (dashboard, API, Blob storage) · Claude (document and video reading) · Jev by TypeSafe
+(judgment) · Capital One Nessie (sandbox bank) · CRS (vendor identity) · Raspberry Pi / ESP32 (approval
+key, ECDSA P-256).
+
+## Repository layout
+
+| Path | What's there |
+|---|---|
+| `shared/schema.py` | Pydantic models every stage uses |
+| `perception/` | Document and video extraction |
+| `judgment/` | Jev questions, Claude fallback |
+| `kernel/` | The 15 rules, the decision runner, the payment executor |
+| `events/`, `pipeline.py` | Append-only log, replay, the decision path |
+| `fuzzer/` | Attack generators, held-out set, scorecard, attack console |
+| `api/`, `web/` | FastAPI backend and Next.js dashboard |
+| `device/`, `firmware/` | Approval key (Raspberry Pi; ESP32 fallback) |
+| `seed/`, `synthetic/` | The fictional GC and its rendered documents |
+| `crs/` | Vendor identity check |
+| `docs/` | Spec, results, deploy guide, device and kernel contracts |
+
 Spec: [`docs/spec.pdf`](docs/spec.pdf). Team rules: [`CLAUDE.md`](CLAUDE.md). Secrets: [`SECURITY.md`](SECURITY.md) (public repo; read before adding any key).
 
-## Setup
+## Getting started
+
+### Setup
 
 ```
 uv venv .venv && uv pip install -p .venv -r requirements.txt
@@ -15,7 +117,7 @@ make hooks                  # once per clone: blocks commits that contain secret
 make test
 ```
 
-## Run the demo
+### Run the demo
 
 ```
 make demo                   # fresh log, decide May-Oct, score 5,000 attacks, API on :8000
@@ -38,7 +140,6 @@ make web                          # 4. dashboard on :3000 (npm install on first 
 Open `localhost:3000` for the views: the pay-request list (with **Pay** on requests that are ready),
 the owner's **Approve** screen (mirrors whatever the device is showing), **Security** (scorecard,
 calibration, attack console), **Upload**, and **Log** (every row of the event log, newest first, live).
-Or exercise the API directly:
 
 **One log for the laptop and the deployment.** Put the Neon `DATABASE_URL` in `.env`
 (docs/deploy.md, step 5) and every command above works on the same Postgres log as
@@ -46,6 +147,8 @@ drawapi.vercel.app: what you do locally shows up on the site and the other way r
 never touches it. `make demo-online` starts that shared log over with the demo company (the old log is
 renamed, never deleted); `make snapshot` copies it to `data/events.db` and `make offline` serves the
 copy with no network, as a fallback.
+
+Or exercise the API directly:
 
 | Stage | Try it |
 |---|---|
@@ -84,10 +187,6 @@ asked, nothing is paid. `POST /sync` (or `make sync`) copies the bank's ledger i
 are blocked until `POST /requests/{id}/resolve` (or `python -m events nessie-resolve <id>`) finds out
 from Nessie. Payments run one at a time across every API instance (a Postgres advisory lock on Vercel, a
 file lock locally).
-
-## Results
-
-Every measured number (kernel vs. 16 attack types, the limit dial, perception accuracy, Jev calibration), with commands to reproduce: [`docs/results.md`](docs/results.md).
 
 ## Deploy
 

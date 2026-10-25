@@ -1,44 +1,61 @@
 # Draw: results
 
-All numbers measured on `main`, Sat Oct 24, 2026 (~2 AM), unless a row says otherwise. Demo data is
+All numbers measured on `main` (`38751a4`), Sun Oct 25, 2026, unless a row says otherwise. Demo data is
 synthetic (one fictional GC). Every figure has a command to reproduce it.
 
 ## Headline
 
 | | |
 |---|---|
-| Attacks the rules stop on their own | **100%** of 8,029 (16 attack types, plus 1,244 two-fault combos) |
-| Attacks paid with no human tap | **0** |
-| Attacks paid even if the owner taps approve without reading | **0** |
-| Honest requests wrongly held | **0** of 1,971 fuzzed, **0** of 720 replayed clean decisions (8 companies × 6 months) |
-| Dollars in the attacks stopped | **$425.5M** (synthetic) |
+| Generated attacks the rules stop on their own | **100%** of 8,029 (16 attack types, plus 1,244 two-fault combos) |
+| Held-out attacks (written outside the codebase) the rules stop | **32 of 38** (84%); 6 known gaps, listed in section 1 |
+| Generated attacks paid with no human tap | **0** |
+| Honest requests wrongly held | **0** of 1,994 fuzzed (incl. 23 held-out), **0** of 720 replayed clean decisions (8 companies × 6 months) |
+| Dollars in the attacks stopped | **$426.0M** (synthetic) |
 | Owner's button presses, honest month | **1.83 per job per month** (63% of a clean month pays out with no tap) |
 | Perception: synthetic pay apps read exactly | **940 / 940** (every field, three number styles, no Claude calls) |
 | Jev: calibration, 6,000 real answers | 4 of 5 questions **100%** accurate; expected calibration error **0.029** |
 
 ## 1. Kernel vs. attacks (`make fuzz N=10000`)
 
-Each attack type, 10,000 cases, rules 01-15:
+10,061 cases: 8,029 generated attacks, 1,971 generated honest requests, and the 61-case held-out set
+(`fuzzer/heldout/`). Each attack type, rules 01-15 (counts include the few held-out cases that share a type):
 
 | Attack | Tried | Caught by the intended rule | Paid with no tap |
 |---|---|---|---|
-| Bills more progress than the site video shows | 407 | 100% (13) | 0 |
+| Bills more progress than the site video shows | 408 | 100% (13) | 0 |
 | Inflates the contract value to hide over-billing | 437 | 100% (13) | 0 |
-| Bills past the contract with no approved change order | 449 | 100% (02) | 0 |
-| Withholds less retainage than the contract | 466 | 100% (03) | 0 |
+| Bills past the contract with no approved change order | 450 | 100% (02) | 0 |
+| Withholds less retainage than the contract | 467 | 100% (03) | 0 |
 | Pads the amount due on the summary page | 452 | 100% (01) | 0 |
 | No lien release for this month | 509 | 100% (04) | 0 |
-| Lien release covers less than the payment | 457 | 100% (04) | 0 |
-| Last month's final waiver never came in | 455 | 100% (05) | 0 |
-| Workers' comp has expired | 469 | 100% (06) | 0 |
-| Supplier filed a notice and hasn't released | 466 | 100% (07) | 0 |
+| Lien release covers less than the payment | 458 | 100% (04) | 0 |
+| Last month's final waiver never came in | 456 | 100% (05) | 0 |
+| Workers' comp has expired | 470 | 100% (06) | 0 |
+| Supplier filed a notice and hasn't released | 470 | 100% (07) | 0 |
 | Owner's draw hasn't cleared yet | 425 | 100% (08) | 0 |
 | New sub whose tax ID doesn't match | 454 | 100% (09) | 0 |
 | Email asks to pay a new bank account | 210 | 100% (10) | 0 |
 | New bank account, from a lookalike domain | 212 | 100% (10, 11) | 0 |
-| Resubmits last month's paid request | 464 | 100% (12) | 0 |
-| Submits this month's request twice | 453 | 100% (12) | 0 |
+| Resubmits last month's paid request | 465 | 100% (12) | 0 |
+| Submits this month's request twice | 454 | 100% (12) | 0 |
 | Two of the above at once (35 pairs) | 1,244 | 100% (both rules) | 0 |
+
+### Held-out set (`fuzzer/heldout/`, 61 cases written by another model)
+
+55 of 61 decided as labelled: 32 of 38 attacks held, 16 of 16 honest requests released, 7 of 7
+escalations. The 6 that were paid although labelled hold, all small paperwork or change-order tricks
+($13,500-$22,950):
+
+| Case | Why it got through |
+|---|---|
+| Change order for work already in the base scope | Rule 02 trusts an approved change order's scope |
+| Prior final waiver covers less than was paid | Rule 05 checks the waiver exists, not its amount |
+| Change order approved after the period end | Rule 02 ignores the change order's date |
+| Billing against an unapproved change order, twice (under the original contract) | No ceiling is exceeded; debatable |
+| Final waiver used for a progress payment | Gives the GC more lien protection, not less; debatable |
+
+The live deployment's scorecard (2,061 cases) shows the same 6.
 
 ### How we got here (each step found by the fuzzer or by hand probes)
 
@@ -51,7 +68,8 @@ Each attack type, 10,000 cases, rules 01-15:
 | + 2 new attacks found by hand (inflated contract value, padded amount due) | 88% | 351 |
 | + fixes to rules 01 and 13 | 100% | 0 |
 | + 1 new attack found by hand (lien release for less than the payment) | 94% | 274 |
-| + fix to rule 04 (**now**) | **100%** | **0** |
+| + fix to rule 04 | **100%** | **0** |
+| + 61-case held-out set (Oct 24) | 99.93% (generated: 100%) | 6 held-out cases (**now**) |
 
 ### Hand probes outside the fuzzer (all held by the right rule)
 New bank account with no email (10) · lookalike domain using a Cyrillic "а" (10, 11) · same request
@@ -70,7 +88,8 @@ tolerance is 10.
 | $50K | 1.46 | 71% | 0 |
 | $100K | 0.25 | 95% | 0 |
 
-With all 15 rules, no limit lets an attack through; the limit only sets how often the owner taps.
+With all 15 rules, no limit lets a generated attack through; the limit only sets how often the owner taps.
+The sweep runs on the fuzzer's cases only, not the held-out set.
 (With rules 01-04 the same sweep went from $0.9M auto-paid at $10K to $90.8M at $100K.)
 
 ## 3. The money path (`tests/test_executor_gates.py`)
@@ -115,16 +134,17 @@ Each was a way money moved wrongly; each is now refused, with a test:
   of these regardless.
 - **Pooled threshold** from the data: 0.93 (keeps 83% of answers; held-out error 0.32%).
 - **October with Jev in the loop** (current `main`): Jev's proposal matched the kernel on **15/15**,
-  lowest confidence 0.91, no extra button presses. (Before Jason's Oct 24 change, a 0.85 floor sent
-  6 of 10 honest auto-releases to the button.)
+  lowest confidence 0.91, no extra button presses. (Measured Oct 24; with the earlier 0.85 confidence
+  floor, 6 of 10 honest auto-releases went to the button.)
 - Speed: ~0.1-0.2 s per request (15 requests in 1.7 s).
 
 ## 6. The live deployment
 
 - **drawweb.vercel.app** (dashboard) and **drawapi.vercel.app** (API). Neon Postgres event log
   (append-only by trigger), private Blob for uploads.
-- Demo company loaded in 2.9 s (419 facts, 90 decisions). The live scorecard (2,000 attacks, scored on
-  Vercel): 100% caught, 0 false holds.
+- Demo company loaded in 2.9 s (419 facts, 90 decisions; measured Oct 24). The live scorecard (2,061
+  cases, scored on Vercel, Oct 25): every generated attack caught, the same 6 held-out gaps as section 1,
+  0 false holds.
 
 ## 7. The demo company
 
@@ -133,9 +153,15 @@ May-October 2026 · October: 15 payments, $609,276. The three demo stories, each
 Coastal Concrete (07, supplier lien notice), Summit Drywall (13, 70% claimed vs 45% on video),
 Brightline Electric (10 + 11, `brightIineelectric.com`).
 
+Plus one company whose first pay application arrives by email during the demo: Larkspur Construction
+LLC (Harbor Light Hotel, `sub_16` / `job_4`), $595,008.60 due, passes rules 01-13 and needs the owner's
+OK (rule 14: over the limit, first payment to this sub).
+
 ## Tests
 
-`make test`: 477 passed (6 skipped: Postgres tests need `TEST_DATABASE_URL`). Device: 5 passed.
+`make test`: 526 passed, 34 failed, 8 skipped (Postgres tests need `TEST_DATABASE_URL`). The 34 failures
+are all in `tests/test_rules.py`: rule 13 now fails when no site video is on file (`cfaf118`), and those
+fixtures have no video. `make device-test`: 11 passed.
 
 ## Reproduce
 
