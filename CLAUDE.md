@@ -29,6 +29,7 @@ perception/           Claude extraction: G702/G703, releases, COIs, emails, vide
 judgment/             Jev questions + Claude fallback       (C)
 crs/                  CRS vendor identity check (rule 09) (C)
 fuzzer/               mutators, scorecard, calibration, attack console (B)
+proofs/               Z3 model of the money rules; proved in tests/test_proofs.py
 api/                  FastAPI: dashboard reads, uploads, SSE (B started; A/D)
 web/                  Next.js + shadcn dashboard            (B/D)
 device/               approval key on a Raspberry Pi (in use) (D)
@@ -47,7 +48,8 @@ make demo        # fresh log, decide May-Oct, score 5,000 attacks, API on :8000 
 make seed        # regenerate seed data into data/seed.db
 make events      # load the seed into data/events.db as facts (refuses if the log exists)
 make replay M=3  # decide every request through month 3
-make test        # pytest, all rules against fixtures
+make test        # pytest, all rules against fixtures (+ Z3 proofs with requirements-dev.txt)
+make prove       # just the Z3 proofs in tests/test_proofs.py
 make fuzz N=500  # run N attacks, write scorecard to data/scorecard.json
 make synthetic   # render G703 PDF/XLSX, releases, COIs, emails + truth.json into data/synthetic
 make benchmark   # score perception against data/synthetic (no Claude calls)
@@ -87,7 +89,9 @@ Cumulative billing: this month's payment = (total_to_date − retainage) − pre
 
 ## Rules (kernel/rules/)
 
-01 cumulative continuity · 02 scheduled-value ceiling (+ approved COs) · 03 retainage math · 04 conditional release present · 05 prior unconditional received · 06 insurance current · 07 lower-tier released · 08 owner draw funded (Nessie) · 09 vendor verified (CRS) · 10 bank details unchanged · 11 sender domain authentic (homoglyph check) · 12 not a duplicate · 13 progress plausible (video vs claim, within `progress_tolerance_points`) · 14 within spend authority · 15 confidence floor (every Jev answer ≥ `escalation_confidence_threshold`)
+01 cumulative continuity (no repeated items; prior certified recomputed from its lines) · 02 scheduled-value ceiling (+ approved COs) · 03 retainage math · 04 conditional release present · 05 prior unconditional received · 06 insurance current · 07 lower-tier released · 08 owner draw funded (Nessie) · 09 vendor verified (CRS) · 10 bank details unchanged · 11 sender domain authentic (homoglyph check) · 12 not a duplicate · 13 progress plausible (video vs claim, within `progress_tolerance_points`) · 14 within spend authority · 15 confidence floor (every Jev answer ≥ `escalation_confidence_threshold`)
+
+Changing 01, 02, 03 or 13 means changing `proofs/kernel_model.py` too; `tests/test_proofs.py` fails until the model and the code agree.
 
 Decision: all pass + under limit → release. Over limit (rule 14), unsure judgment (rule 15), new vendor or bank change → escalate to the approval key. Any other rule failing → hold with failing rules, evidence, and a next action.
 

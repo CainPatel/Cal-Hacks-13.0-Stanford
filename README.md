@@ -9,7 +9,7 @@ Spec: [`docs/spec.pdf`](docs/spec.pdf). Team rules: [`CLAUDE.md`](CLAUDE.md). Se
 ## Setup
 
 ```
-uv venv .venv && uv pip install -p .venv -r requirements.txt
+uv venv .venv && uv pip install -p .venv -r requirements-dev.txt   # requirements.txt plus z3-solver for the proofs
 cp .env.example .env && chmod 600 .env   # fill in keys; never commit; share by DM (SECURITY.md)
 make hooks                  # once per clone: blocks commits that contain secrets
 make test
@@ -117,6 +117,7 @@ Vercel (dashboard + API), Neon Postgres for the event log, a private Blob store 
 | `make smoke` | check every stage of a running Draw over HTTP (`API=… WEB=…` for the deployment; read-only unless `FLAGS="--sync --pay --approve"`) |
 | `python -m fuzzer.describe_eval [N]` | score the attack console's "Or describe it" answers on 39 plain-English ideas, N times each (live Claude calls) |
 | `make test` | all tests |
+| `make prove` | just the Z3 proofs of what the money rules guarantee together (see below) |
 
 ## Demo company (first pay application by email)
 
@@ -161,6 +162,37 @@ Nessie (owner draws, sub payments) and CRS (vendor identity) are the simulated b
 registry; seed/ and fuzzer/ stand in for both until real sandbox accounts are wired up.
 fuzzer/ drives attacks through pipeline.py and writes the scorecard that api/ and web/ read.
 ```
+
+## Proofs (Z3)
+
+The fuzzer tries attacks someone thought of. `proofs/kernel_model.py` asks the opposite question
+with the [Z3](https://github.com/Z3Prover/z3) solver: is there *any* request that passes every hard
+rule and still breaks a money property? `unsat` means no such request exists, for any amounts.
+
+| Property | Rules it needs |
+|---|---|
+| `contract_cap`: paid to date never exceeds the contract plus approved change orders, less retainage | 01, 02, 03 |
+| `video_cap`: paid to date never exceeds what the site video shows plus tolerance | 01, 03, 13 |
+| `retainage_held`: billed minus paid is exactly the contract rate's retainage, to the cent | 01, 03 |
+
+Months are covered by induction: if what we've paid equals the last paid request's earned-less-retainage,
+it still does after paying one more request that passes the rules. Rules 14 and 15 aren't assumed, so
+the properties hold even if the owner approves every escalation. The model's assumptions (one paid
+request per application number, progress payments only, at most 4 lines over 3 items) are in its
+docstring.
+
+The model is written by hand, so `tests/test_proofs.py` also has Z3 build requests that pass the model's
+rules, or break exactly one, and runs them through the real rule functions, which must agree. Changing a
+money rule in `kernel/rules/` without changing the model fails those tests. Negative controls check that
+each proof finds the bug in the old version of rule 01 (see below), so a passing proof isn't vacuous.
+
+The first run found two ways to be paid twice, both now closed in rule 01:
+- the same line item listed twice: each copy passed rules 02 and 13 on its own, and both were paid;
+- last month's G702 line 6 was taken as "previously certified" but never checked, so understating it
+  one month paid that month's work again the next. Rule 01 now recomputes it from that request's lines.
+
+`z3-solver` is in `requirements-dev.txt`, not `requirements.txt`, to keep the 80 MB wheel out of the
+Vercel function. Without it, `make test` skips the proofs and says so.
 
 ## Scorecard fields
 

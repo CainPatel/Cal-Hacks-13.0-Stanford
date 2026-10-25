@@ -179,3 +179,58 @@ def test_low_confidence_escalates_instead_of_holding():
     both = state7.model_copy(update={"proposal": state.proposal, "contract": state.contract})
     d = decide(both, request7)
     assert d.action == Action.hold and "supplier" in d.next_action
+
+
+def _video_for(state, request):
+    """The clean fixture's state with a site video that matches every line, so rule 13 passes."""
+    from shared.schema import SiteEvidence
+    return state.model_copy(update={"site_evidence": SiteEvidence(
+        id="site", job_id=request.job_id, date=request.period_end, frames=[],
+        estimates={l.item_no: l.pct_complete for l in request.lines})})
+
+
+def test_rule_01_rejects_a_repeated_line_item():
+    """Listing an item twice passes every per-line check (each copy is under the contract and
+    the video) but pays both. proofs/ found it; the fix is rule 01 refusing repeats."""
+    from kernel.rules.rule_01_cumulative_continuity import check
+    state, request = load("rule_01_pass.json")
+    lines = request.lines + [request.lines[0]]
+    due = sum((l.total_to_date - l.retainage for l in lines), Decimal("0")) - request.g702.less_previous_certificates
+    doubled = request.model_copy(update={"lines": lines, "g702": request.g702.model_copy(update={
+        "current_payment_due": due, "retainage": sum((l.retainage for l in lines), Decimal("0"))})})
+    result = check(_video_for(state, request), doubled)
+    assert not result.passed and result.evidence["repeated_items"] == [request.lines[0].item_no]
+
+
+def test_rule_01_ignores_an_understated_prior_line_6():
+    """Last month's G702 line 6 is the sub's own number. Rule 01 used to take it as "previously
+    certified", so understating it one month paid that month's work again the next."""
+    from kernel.runner import decide
+    from shared.schema import Action
+    state, request = load("rule_01_pass.json")
+    prior = max(state.prior_requests, key=lambda r: r.number)
+    lied = prior.model_copy(update={"g702": prior.g702.model_copy(update={"total_earned_less_retainage": Decimal("0")})})
+    state = _video_for(state.model_copy(update={"prior_requests": [lied if r.id == prior.id else r for r in state.prior_requests]}), request)
+    assert decide(state, request).action == Action.release  # the honest request still pays its real amount
+
+    earned = sum((l.total_to_date - l.retainage for l in request.lines), Decimal("0"))
+    rebilled = request.model_copy(update={"g702": request.g702.model_copy(update={
+        "less_previous_certificates": Decimal("0"), "current_payment_due": earned})})
+    result = decide(state, rebilled)
+    assert result.action == Action.hold
+    assert not next(r for r in result.results if r.rule == "01_cumulative_continuity").passed
+
+
+def test_rule_01_rejects_a_negative_payment_due():
+    from kernel.rules.rule_01_cumulative_continuity import check
+    state, request = load("rule_01_pass.json")
+    prior = max(state.prior_requests, key=lambda r: r.number)
+    line = request.lines[0]
+    lower = line.previous_applications - Decimal("1000.00")
+    shrunk = line.model_copy(update={"total_to_date": lower, "retainage": (lower * state.subcontract.retainage_rate).quantize(Decimal("0.01")),
+                                     "this_period": lower - line.previous_applications})
+    certified = sum((l.total_to_date - l.retainage for l in prior.lines), Decimal("0"))
+    req = request.model_copy(update={"lines": [shrunk], "g702": request.g702.model_copy(update={
+        "less_previous_certificates": certified, "current_payment_due": shrunk.total_to_date - shrunk.retainage - certified})})
+    result = check(state, req)
+    assert not result.passed and "credit" in result.message

@@ -1,4 +1,4 @@
-.PHONY: seed test fuzz events replay reset api web synthetic demo demo-online snapshot offline sync smoke benchmark keys hooks device device-test
+.PHONY: seed test prove fuzz events replay reset api web synthetic demo demo-online snapshot offline sync smoke benchmark keys hooks device device-test
 PY = .venv/bin/python
 
 # Keys from .env (gitignored) reach every command below; missing .env is fine. With DATABASE_URL in
@@ -17,6 +17,9 @@ seed:
 
 test:
 	$(PY) -m pytest -q tests
+
+prove:
+	$(PY) -m pytest -v tests/test_proofs.py
 
 fuzz:
 	$(PY) -m fuzzer.run $(N)

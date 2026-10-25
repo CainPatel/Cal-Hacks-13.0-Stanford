@@ -160,7 +160,17 @@
       }
     ],
     "emails": [],
-    "site_evidence": null,
+    "site_evidence": {
+      "id": "site_job_1_4",
+      "job_id": "job_1",
+      "date": "2026-08-22",
+      "frames": [
+        "frames/job_1_202608_0.jpg"
+      ],
+      "estimates": {
+        "09-10": "45"
+      }
+    },
     "known_bank_account": "021000021:123456789",
     "contract": {
       "auto_release_limit_usd": 5000
