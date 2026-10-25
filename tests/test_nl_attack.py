@@ -36,7 +36,9 @@ def test_settings_only_for_the_chosen_mutator():
 
 
 def test_none_and_refusal():
-    assert n.run("make me a sandwich", FakeClient(n.AttackPlan(attack="none", target="", explanation="no match")))["result"] is None
+    sandwich = n.Assessment(summary="Not a payment.", holds=[], backstops=[], out_of_scope="it isn't a payment at all")
+    out = n.run("make me a sandwich", QueueClient(n.AttackPlan(attack="none", target="", explanation="no match"), sandwich))
+    assert out["result"] is None and out["assessment"]["verdict"] == "out_of_scope"
     with pytest.raises(n.AttackError):
         n.plan("anything", FakeClient(None, stop_reason="refusal"))
 
@@ -86,3 +88,48 @@ def test_a_date_that_isnt_one_falls_back_to_the_attacks_own():
     plan = n.AttackPlan(attack="expired_wc", target="sub_01", expiry="last week", explanation="x")
     assert n.settings_for(plan) == {}
     assert n.run("the concrete sub's workers comp expired last week", FakeClient(plan))["result"]["label"].anomaly == "expired_wc"
+
+
+class QueueClient(FakeClient):
+    """Returns each parsed output in turn: the menu plan, then the assessment."""
+
+    def __init__(self, *outputs):
+        super().__init__()
+        self._outputs, self.calls = list(outputs), []
+
+    def parse(self, **kw):
+        self.calls.append(kw)
+        return SimpleNamespace(parsed_output=self._outputs.pop(0), stop_reason="end_turn", _request_id="req_test")
+
+
+NOT_ON_MENU = n.AttackPlan(attack="none", target="", explanation="nothing on the menu fits")
+
+
+@pytest.mark.parametrize("assessment,expected", [
+    (dict(holds=[{"rule": "10", "why": "new account"}], backstops=[]), "stopped"),
+    (dict(holds=[{"rule": "14", "why": "over the limit"}], backstops=[]), "needs_key"),  # 14 escalates, never holds
+    (dict(holds=[], backstops=[{"backstop": "limit", "why": "big"}]), "needs_key"),
+    (dict(holds=[], backstops=[], jev="Jev would see the odd progress"), "jev"),
+    (dict(holds=[], backstops=[], out_of_scope="needs the owner's physical key"), "out_of_scope"),
+    (dict(holds=[], backstops=[]), "gap"),
+])
+def test_the_verdict_is_worked_out_in_code_strongest_first(assessment, expected):
+    assert n.verdict(n.Assessment(summary="x", **assessment)) == expected
+
+
+def test_an_idea_off_the_menu_gets_claudes_read_against_the_rules():
+    a = n.Assessment(summary="Bills a line twice under two item numbers.",
+                     holds=[{"rule": "02", "why": "past the contract amount"}], backstops=[])
+    client = QueueClient(NOT_ON_MENU, a)
+    out = n.run("bill the same drywall twice under two different line numbers", client)
+    assert out["result"] is None and out["assessment"]["verdict"] == "stopped"
+    sent = client.calls[1]
+    assert sent["output_format"] is n.Assessment and "two different line numbers" in sent["messages"][0]["content"]
+    assert "Rule 10: the request's payment destination" in sent["messages"][0]["content"]  # the rules' own words
+
+
+def test_only_real_rules_and_backstops_can_be_named():
+    with pytest.raises(Exception):
+        n.Assessment(summary="x", holds=[{"rule": "16", "why": "made up"}], backstops=[])
+    with pytest.raises(Exception):
+        n.Assessment(summary="x", holds=[], backstops=[{"backstop": "magic", "why": "made up"}])

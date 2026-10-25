@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Textarea } from "@/components/ui/textarea";
 import { useLive } from "@/hooks/use-live";
-import { api, ApiError, money, type AttackResult, type AttackTarget, type Scorecard } from "@/lib/api";
+import { api, ApiError, money, type Assessment, type AttackResult, type AttackTarget, type Scorecard } from "@/lib/api";
 import { attackLabel, humanize, RULE_NAMES } from "@/lib/labels";
 import { cn } from "@/lib/utils";
 
@@ -227,7 +227,7 @@ function AttackConsole() {
   const [job, setJob] = useState("job_1");
   const [text, setText] = useState("The electrician says the owner told them retainage is waived this month.");
   const [busy, setBusy] = useState<"pick" | "text" | null>(null);
-  const [result, setResult] = useState<{ plan?: string; out?: AttackResult; error?: string } | null>(null);
+  const [result, setResult] = useState<{ plan?: string; out?: AttackResult; error?: string; assessment?: Assessment; gapSaved?: boolean } | null>(null);
 
   useEffect(() => {
     api.attacks().then((a) => (setAttacks(a), setName(a[0]?.name ?? "")), () => {});
@@ -244,7 +244,13 @@ function AttackConsole() {
       if (mode === "pick") setResult({ out: await api.attack(name, jobTarget ? job : target) });
       else {
         const r = await api.describe(text);
-        setResult(r.decision ? { plan: r.plan.explanation, out: r as AttackResult } : { plan: `Nothing on the menu fits that: ${r.plan.explanation}` });
+        setResult(
+          r.decision
+            ? { plan: r.plan.explanation, out: r as AttackResult }
+            : r.assessment
+              ? { assessment: r.assessment, gapSaved: r.gap_saved }
+              : { plan: `Nothing on the menu fits that: ${r.plan.explanation}` },
+        );
       }
     } catch (e) {
       setResult({ error: (e as ApiError).message });
@@ -312,8 +318,9 @@ function AttackConsole() {
   );
 }
 
-function AttackOutcome({ plan, out, error }: { plan?: string; out?: AttackResult; error?: string }) {
+function AttackOutcome({ plan, out, error, assessment, gapSaved }: { plan?: string; out?: AttackResult; error?: string; assessment?: Assessment; gapSaved?: boolean }) {
   if (error) return <p className="mt-5 rounded-lg border border-fail/40 bg-fail-soft p-4 text-body text-fail">{error}</p>;
+  if (assessment) return <AssessmentOutcome a={assessment} gapSaved={gapSaved} />;
   const fired = out?.decision.results.filter((r) => !r.passed) ?? [];
   const held = out?.decision.action === "hold";
   const asked = out?.decision.action === "escalate";
@@ -343,6 +350,80 @@ function AttackOutcome({ plan, out, error }: { plan?: string; out?: AttackResult
           </ul>
         </>
       )}
+    </div>
+  );
+}
+
+const VERDICT: Record<Assessment["verdict"], { mark?: "pass" | "ok" | "fail"; tone: string; say: string }> = {
+  stopped: { mark: "pass", tone: "text-pass", say: "The rules would put this on hold." },
+  needs_key: { mark: "ok", tone: "text-hold", say: "No rule would hold it, but it would still need your key." },
+  jev: { mark: "ok", tone: "text-hold", say: "Only Jev’s review would likely flag it." },
+  gap: { mark: "fail", tone: "text-fail", say: "Nothing in Draw would stop this." },
+  out_of_scope: { tone: "text-foreground", say: "This is outside what Draw checks." },
+};
+
+const BACKSTOP_NAMES: Record<Assessment["backstops"][number]["backstop"], string> = {
+  limit: "Over your limit",
+  new_payee: "New sub or bank account",
+  bank_lock: "Bank account on file",
+  recompute: "Amounts recomputed",
+  paid_once: "Paid once only",
+  confidence: "Jev unsure",
+};
+
+/** An attack that isn't one we can run: Claude's read of it against Draw's own checks, labelled as an estimate. */
+function AssessmentOutcome({ a, gapSaved }: { a: Assessment; gapSaved?: boolean }) {
+  const v = VERDICT[a.verdict];
+  const row = "grid grid-cols-[10.5em_1fr] gap-3 border-t py-2 text-body max-sm:grid-cols-1 max-sm:gap-0.5";
+  const name = "pt-0.5 text-meta text-muted-foreground";
+  return (
+    <div className="mt-5 rounded-lg border bg-sheet p-5">
+      <p className="inline-flex rounded-lg border border-border-strong px-2.5 py-0.5 text-meta font-semibold">Claude’s read, not a test run</p>
+      <p className="mt-2 text-meta text-muted-foreground">
+        It isn’t one of the attacks we can run, so Claude compared it with Draw’s checks. Read as: {a.summary}
+      </p>
+      <p className={cn("mt-3 flex items-center gap-2 text-say font-semibold", v.tone)}>
+        {v.mark && <Mark kind={v.mark} />}
+        {v.say}
+      </p>
+      <ul className="mt-3">
+        {a.holds.map((h) => (
+          <li key={`rule-${h.rule}`} className={row}>
+            <span className={cn(name, "font-mono tnum")}>rule {h.rule}</span>
+            <span>
+              {RULE_NAMES[h.rule] && <b className="font-semibold">{RULE_NAMES[h.rule]}. </b>}
+              {h.why}
+            </span>
+          </li>
+        ))}
+        {a.backstops.map((h) => (
+          <li key={`backstop-${h.backstop}`} className={row}>
+            <span className={name}>{BACKSTOP_NAMES[h.backstop]}</span>
+            <span>{h.why}</span>
+          </li>
+        ))}
+        {a.jev && (
+          <li className={row}>
+            <span className={name}>Jev’s review</span>
+            <span>{a.jev}</span>
+          </li>
+        )}
+        {a.out_of_scope && (
+          <li className={row}>
+            <span className={name}>Out of scope</span>
+            <span>{a.out_of_scope}</span>
+          </li>
+        )}
+        {a.gap && a.verdict !== "stopped" && (
+          <li className={row}>
+            <span className={name}>What gets through</span>
+            <span>
+              {a.gap}
+              {gapSaved && <b className="font-semibold"> Saved for the team as a new check to write.</b>}
+            </span>
+          </li>
+        )}
+      </ul>
     </div>
   );
 }

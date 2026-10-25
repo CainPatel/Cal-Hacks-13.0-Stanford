@@ -242,7 +242,10 @@ export const api = {
   attack: (name: string, target: string) =>
     call<AttackResult>("/attacks", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ name, target }) }),
   describe: (text: string) =>
-    call<{ plan: { attack: string; target: string; explanation: string }; result?: null } & Partial<AttackResult>>("/attacks/describe", {
+    call<
+      { plan: { attack: string; target: string; explanation: string }; result?: null; assessment?: Assessment | null; gap_saved?: boolean } &
+        Partial<AttackResult>
+    >("/attacks/describe", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ text }),
@@ -262,3 +265,14 @@ export const ruleNumber = (rule: string) => rule.slice(0, 2);
 
 /** A sub the attack console can aim at, from the demo company as seeded (GET /attacks/targets). */
 export type AttackTarget = { id: string; name: string; trade: string; job: string; job_name: string };
+
+/** Claude's read of an attack that isn't on the menu, against Draw's own checks: an estimate, not a run. */
+export type Assessment = {
+  summary: string;
+  holds: { rule: string; why: string }[];
+  backstops: { backstop: "limit" | "new_payee" | "bank_lock" | "recompute" | "paid_once" | "confidence"; why: string }[];
+  jev: string | null;
+  gap: string | null;
+  out_of_scope: string | null;
+  verdict: "stopped" | "needs_key" | "jev" | "gap" | "out_of_scope";
+};
