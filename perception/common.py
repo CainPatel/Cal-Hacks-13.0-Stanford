@@ -45,6 +45,22 @@ def sha256_of(data: bytes) -> str:
 _INK_RESOLUTION = 144
 _INK_CONTRAST = 60  # grey levels between darkest and lightest pixel inside a glyph's box
 _MAX_HIDDEN_SHARE = 0.2
+_TINY_PT = 3  # text this small next to ordinary print is unreadable: treated as hidden
+_SMALL_PRINT_PT = 7  # the smallest ordinary print the 144 dpi check is tuned for
+_MAX_INK_RESOLUTION = 800
+
+
+def text_size(page) -> float:
+    """The page's ordinary text size in points (the median glyph). A wide spreadsheet printed
+    shrunk to fit one page can be 2 pt throughout; a person reads it zoomed in."""
+    sizes = sorted(c["size"] for c in page.chars if not c["text"].isspace())
+    return sizes[len(sizes) // 2] if sizes else 10.0
+
+
+def tolerance(page) -> float:
+    """pdfplumber's x/y tolerance for joining glyphs into words and lines. Its 3 pt default assumes
+    ordinary print; on a shrunk page it would join neighbouring rows and cells."""
+    return min(3.0, text_size(page) / 2)
 
 
 def _char_key(c: dict) -> tuple:
@@ -58,9 +74,15 @@ def _inked_char_keys(page) -> tuple[set[tuple], int]:
     mode, white or near-white fill, zero alpha, or glyphs covered by a shape.
     Rendering the page and looking for ink inside each glyph's box catches all
     of these at once, so the parser reads what the GC sees on screen.
+
+    A page printed shrunk to fit is rendered finer, so its glyphs get as many pixels
+    as ordinary print does, and "tiny" is judged against the page's own text size.
     """
-    img = np.asarray(page.to_image(resolution=_INK_RESOLUTION).original.convert("L"), dtype=np.int16)
-    scale = _INK_RESOLUTION / 72
+    size = text_size(page)
+    resolution = min(_MAX_INK_RESOLUTION, _INK_RESOLUTION * max(1.0, _SMALL_PRINT_PT / size))
+    tiny = min(_TINY_PT, size / 2)
+    img = np.asarray(page.to_image(resolution=resolution).original.convert("L"), dtype=np.int16)
+    scale = resolution / 72
     keep, hidden = set(), 0
     for c in page.chars:
         key = _char_key(c)
@@ -74,7 +96,7 @@ def _inked_char_keys(page) -> tuple[set[tuple], int]:
         x0, x1 = int((c["x0"] + dx) * scale), math.ceil((c["x1"] - dx) * scale)
         y0, y1 = int((c["top"] + dy) * scale), math.ceil((c["bottom"] - dy) * scale)
         crop = img[max(y0, 0):y1, max(x0, 0):x1]
-        if crop.size and int(crop.max()) - int(crop.min()) >= _INK_CONTRAST and c.get("size", 12) >= 3:
+        if crop.size and int(crop.max()) - int(crop.min()) >= _INK_CONTRAST and c.get("size", 12) >= tiny:
             keep.add(key)
         else:
             hidden += 1

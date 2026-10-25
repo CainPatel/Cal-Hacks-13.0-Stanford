@@ -8,6 +8,9 @@ python -m events nessie-resolve ID  settle a payment whose outcome is unknown by
 python -m events crs-verify [ID]    check vendors (all, or one) with CRS; record changed statuses
 python -m events snapshot [FILE]    copy the shared Postgres log into a new SQLite file (default data/events.db)
 python -m events archive --yes      set the whole log aside (renamed, never deleted) and start an empty one
+python -m events reset --yes        start over: set the log aside, load the seed, sync the bank, decide May-Oct
+
+`load` and `reset` add the demo company from data/demo_company/ when it is there (seed/demo_company.py).
 
 With DATABASE_URL set (in .env), every command works on the shared Postgres log, the same one the
 deployment uses; without it, on data/events.db.
@@ -19,6 +22,7 @@ from pathlib import Path
 import pipeline
 from events import log as events
 from events.replay import load_seed, replay
+from seed import demo_company
 from seed.anomalies import with_demo
 from seed.generate import generate
 
@@ -28,8 +32,36 @@ cmd = sys.argv[1] if len(sys.argv) > 1 else ""
 if cmd == "load":
     if not events.is_empty(PATH):  # never wipe a log that may hold real decisions and signatures
         sys.exit(f"{events.where(PATH)} already has events. Start a fresh log yourself (delete the file or the table).")
-    data, _ = with_demo(generate())
+    data = demo_company.add(with_demo(generate())[0])
     print(f"loaded {load_seed(data, path=PATH)} facts into {events.where(PATH)}")
+elif cmd == "reset":
+    import os
+    if "--yes" not in sys.argv:
+        sys.exit(f"This sets aside everything in {events.where(PATH)} (kept, not deleted), loads the demo company and "
+                 "decides May-October. Run again with --yes to do it.")
+    if not events.is_empty(PATH):
+        print(f"the old log is now {events.archive(PATH)}")
+    data = demo_company.add(with_demo(generate())[0])
+    print(f"loaded {load_seed(data, path=PATH)} facts into {events.where(PATH)}")
+    if os.environ.get("NESSIE_API_KEY") and os.environ.get("NESSIE_ACCOUNT_ID"):
+        from events.replay import sync_ledger
+        from kernel.executor import NessieError, nessie_ledger
+        try:
+            print(f"bank: {sync_ledger(nessie_ledger()[0], path=PATH)} ledger entries new to the log")
+        except NessieError as e:
+            print(f"bank: not synced ({e})")
+    from judgment.jev import JevError, _config as jev_config
+    try:
+        jev_config()
+        has_model = True
+    except JevError:
+        has_model = bool(os.environ.get("ANTHROPIC_API_KEY"))
+    judge = None
+    if has_model:  # with no model at all, judging would only escalate everything (rule 15 sees zero confidence)
+        from judgment import judge
+    decisions = replay(6, path=PATH, judge=judge)
+    print(f"{len(decisions)} decisions through October ({'with' if judge else 'without'} judgment): "
+          f"{dict(Counter(d.action.value for d in decisions))}")
 elif cmd == "replay":
     args = [a for a in sys.argv[2:] if not a.startswith("--")]
     month = int(args[0]) if args else 6

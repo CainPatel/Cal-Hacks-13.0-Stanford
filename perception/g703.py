@@ -21,7 +21,7 @@ import pdfplumber
 import pdfplumber.utils.exceptions
 
 from perception import llm
-from perception.common import ExtractionError, Note, UseFallback as _UseFallback, visible_page
+from perception.common import ExtractionError, Note, UseFallback as _UseFallback, text_size, tolerance, visible_page
 from perception.numbers import CellParseError, parse_date, parse_money, parse_pct
 from shared.schema import G702, LineItem, PayRequest
 
@@ -158,8 +158,8 @@ _HEADER_PATTERNS = {
 # Fields that decide where money goes or which period is billed: pages must agree.
 _MUST_AGREE = {"period_to": "billing period", "remit_account": "remit-to account", "application_no": "application number"}
 
-# G702 summary lines, by their printed label. The amount is whatever follows the
-# label (after an optional "(Line 1 + 2)"-style note), so a blank amount reads as 0
+# G702 summary lines, by their printed label. The amount is the first one after the
+# label (after an optional "(Line 1 + 2)"-style note, see _g702_amount), so a blank amount reads as 0
 # exactly like a blank G703 cell. Patterns are tried in order; the first label found wins.
 _G702_LABELS: dict[str, list[re.Pattern]] = {
     field_: [re.compile(p, re.I) for p in pats]
@@ -167,7 +167,7 @@ _G702_LABELS: dict[str, list[re.Pattern]] = {
         "original_contract_sum": [r"\b1\.\s*ORIGINAL\s+CONTRACT\s+SUM\b"],
         "net_change_orders": [r"\b2\.\s*NET\s+CHANGE\s+BY\s+CHANGE\s+ORDERS\b"],
         "contract_sum_to_date": [r"\b3\.\s*CONTRACT\s+SUM\s+TO\s+DATE\b"],
-        "total_completed_stored": [r"\b4\.\s*TOTAL\s+COMPLETED\s*(?:&|AND)\s*STORED\s+TO\s+DATE\b"],
+        "total_completed_stored": [r"\b4\.\s*TOTAL\s+COMPLETED\s*(?:&|AND)\s*STORED\s+TO(?:\s+DATE)?\b"],
         # The AIA form puts the amount on a "Total Retainage" sub-line under "5. RETAINAGE:".
         "retainage": [r"\bTOTAL\s+RETAINAGE\b", r"\b5\.\s*RETAINAGE\b"],
         "total_earned_less_retainage": [r"\b6\.\s*TOTAL\s+EARNED\s+LESS\s+RETAINAGE\b"],
@@ -178,7 +178,12 @@ _G702_LABELS: dict[str, list[re.Pattern]] = {
 _LEADER = re.compile(r"^\s*(?:\([^)]*\)\s*)?[:.\s]*")
 
 
-_AIA_G702_TITLE = re.compile(r"APPLICATION\s+AND\s+CERTIFICATE\s+FOR\s+PAYMENT", re.I)
+_AIA_G702_TITLE = re.compile(r"APPLICATION\s+AND\s+CERTIFICAT(?:E|ION)\s+FOR\s+PAYMENT", re.I)
+
+
+def _text(page) -> str:
+    tol = tolerance(page)
+    return page.extract_text(x_tolerance=tol, y_tolerance=tol) or ""
 
 
 def _g702_lines(page, text: str) -> list[str]:
@@ -187,7 +192,7 @@ def _g702_lines(page, text: str) -> list[str]:
     "1. ORIGINAL CONTRACT SUM $ 435,000.00 ARCHITECT'S CERTIFICATE..." would be one line."""
     if _AIA_G702_TITLE.search(text):
         left = page.crop((0, 0, float(page.width) / 2, float(page.height)))
-        return (left.extract_text() or "").splitlines()
+        return _text(left).splitlines()
     return text.splitlines()
 
 
@@ -202,7 +207,7 @@ def read_g702(path: str | Path) -> tuple[dict[str, str], dict[str, str], list[No
                 page = visible_page(page, page_no, notes)
                 if page is None:
                     continue
-                text = page.extract_text() or ""
+                text = _text(page)
                 lines += _g702_lines(page, text)
                 for key, pattern in _HEADER_PATTERNS.items():
                     for m in pattern.finditer(text):
@@ -220,14 +225,38 @@ def read_g702(path: str | Path) -> tuple[dict[str, str], dict[str, str], list[No
     return fields, {k: next(iter(v)) for k, v in header.items() if v}, notes
 
 
+_AMOUNT_TOKEN = re.compile(r"^(\(?-?\$?\(?[\d,]*\d(?:\.\d+)?\)?|-)$")
+_DOLLAR_AMOUNT = re.compile(r"\$\s*\$?\s*(\(?-?[\d,]*\d(?:\.\d+)?\)?)")
+_NEXT_ITEM = re.compile(r"^\s*(\d{1,2}|[a-z])\.\s*\S")  # "6. TOTAL EARNED...", "a. % of Completed Work"
+_LOOKAHEAD = 3
+
+
+def _g702_amount(lines: list[str], i: int, rest: str) -> str:
+    """The amount printed for a label found on lines[i], `rest` being the text after it. Only the
+    first amount counts: whatever follows on the line ("By:", the architect's column) isn't part of
+    it. A label that wraps ("7. LESS PREVIOUS CERTIFICATES FOR" / "PAYMENT (Line 6 ...) $ 0.00")
+    prints its amount on a following line, before the next numbered or lettered line starts."""
+    rest = _LEADER.sub("", rest, count=1).strip().lstrip("$ ")
+    token = rest.split()[0] if rest else ""
+    if _AMOUNT_TOKEN.match(token):
+        return token
+    for line in lines[i + 1:i + 1 + _LOOKAHEAD]:
+        if _NEXT_ITEM.match(line):
+            break
+        m = _DOLLAR_AMOUNT.search(line)
+        if m:
+            return m.group(1)
+    return ""  # printed blank: reads as 0, like a blank G703 cell
+
+
 def _g702_from_text(lines: list[str]) -> tuple[dict[str, str], list[str]]:
     """Printed amount per G702 field, and the fields whose label appears with conflicting amounts."""
     found: dict[str, set[str]] = {}
     for field_, patterns in _G702_LABELS.items():
         for pattern in patterns:
-            hits = [(line, m) for line in lines for m in [pattern.search(line)] if m]
+            hits = [(i, m) for i, line in enumerate(lines) for m in [pattern.search(line)] if m]
             if hits:
-                found[field_] = {_LEADER.sub("", line[m.end():], count=1).strip() for line, m in hits}
+                found[field_] = {_g702_amount(lines, i, lines[i][m.end():]) for i, m in hits}
                 break
     conflicts = [f for f, v in found.items() if len(v) > 1]
     return {f: next(iter(v)) for f, v in found.items() if len(v) == 1}, conflicts
@@ -249,14 +278,17 @@ def _read_text_layer(path: Path) -> RawSheet:
     st = _SheetState()
     header_values: dict[str, set[str]] = {k: set() for k in _HEADER_PATTERNS}
     text_lines: list[str] = []
+    seen: list[Note] = []  # what visible_page found; kept if the sheet is read again by position
 
     with pdfplumber.open(path) as pdf:
+        pages = []
         for page_no, page in enumerate(pdf.pages, start=1):
-            page = visible_page(page, page_no, st.notes)
+            page = visible_page(page, page_no, seen)
             if page is None:
                 continue  # blank page
+            pages.append((page_no, page))
 
-            text = page.extract_text() or ""
+            text = _text(page)
             text_lines.extend(_g702_lines(page, text))
             for key, pattern in _HEADER_PATTERNS.items():
                 m = pattern.search(text)
@@ -288,17 +320,19 @@ def _read_text_layer(path: Path) -> RawSheet:
                     raise _UseFallback(f"page {page_no}: unlabelled table with the sheet's column layout")
                 _collect_rows(body, st, page_no)
 
-    if st.mapping is None:
-        st = _SheetState()
-        with pdfplumber.open(path) as pdf:
-            for page_no, page in enumerate(pdf.pages, start=1):
-                page = visible_page(page, page_no, st.notes)
-                found = _position_rows(page) if page is not None else None
+        if st.mapping is None or not st.rows:
+            # No ruled table, or one around the header only (spreadsheet exports draw borders there)
+            st = _SheetState()
+            for page_no, page in pages:
+                found = _position_rows(page)
                 if found:
-                    st.mapping, body = found
+                    st.mapping, body, outside = found
                     _collect_rows(body, st, page_no)
-        if st.mapping is not None:
-            st.notes.append(Note("read_by_position", "line items read by position under the A-I column letters"))
+                    if outside:
+                        st.notes.append(Note("outside_sheet", f"page {page_no}: ignored {outside} words right of column I"))
+            if st.mapping is not None:
+                st.notes.append(Note("read_by_position", "line items read by position under the A-I column letters"))
+    st.notes[:0] = seen
     if st.mapping is None:
         raise _UseFallback("no G703 column header found in the text layer")
     if not st.rows:
@@ -413,19 +447,23 @@ def _is_amount(text: str) -> bool:
     return bool(re.search(r"\d", t)) and bool(_AMOUNT.match(t)) and bool(re.search(r"[$,.%]", t)) or t in ("-", "$-")
 
 
-def _lines(words: list[dict]) -> list[list[dict]]:
+def _lines(words: list[dict], tol: float = 3) -> list[list[dict]]:
     out: list[list[dict]] = []
     for w in sorted(words, key=lambda w: (w["top"], w["x0"])):
-        if out and abs(w["top"] - out[-1][0]["top"]) <= 3:
+        if out and abs(w["top"] - out[-1][0]["top"]) <= tol:
             out[-1].append(w)
         else:
             out.append([w])
     return [sorted(line, key=lambda w: w["x0"]) for line in out]
 
 
-def _position_rows(page) -> tuple[dict[int, str], list[list[str]]] | None:
-    """(column index -> key, rows of cells) read by word position under the A..I letter row, or None."""
-    lines = _lines(page.extract_words())
+def _position_rows(page) -> tuple[dict[int, str], list[list[str]], int] | None:
+    """(column index -> key, rows of cells) read by word position under the A..I letter row, or None.
+    Amounts right of column I (a spreadsheet's working columns printed alongside) are not the sheet's."""
+    tol = tolerance(page)
+    # Glyphs closer than a fraction of a space are one word: an export can print a right-aligned
+    # item number and the description after it less than a space apart ("2" "007316.13 - ...").
+    lines = _lines(page.extract_words(x_tolerance=0.15 * text_size(page), y_tolerance=tol), tol)
     at = next((i for i, line in enumerate(lines) if [w["text"] for w in line] == list("ABCDEFGHI")), None)
     if at is None:
         return None
@@ -439,14 +477,18 @@ def _position_rows(page) -> tuple[dict[int, str], list[list[str]]] | None:
     # the item column ends where its header words ("ITEM", "NO.") end
     a_words = [w for line in lines[at + 1:at + 6] for w in line if abs((w["x0"] + w["x1"]) / 2 - center["A"])
                < abs((w["x0"] + w["x1"]) / 2 - center["B"]) and not _is_amount(w["text"])]
-    item_right = max((w["x1"] for w in a_words), default=center["A"] + (center["B"] - center["A"]) / 4) + 3
+    item_right = max((w["x1"] for w in a_words), default=center["A"] + (center["B"] - center["A"]) / 4) + tol
     amounts_from = (center["B"] + center["C"]) / 2
+    sheet_right = center["I"] + (center["I"] - center["H"]) / 2
     keys = ["item_no", "description"] + [k for k, _ in columns]
-    rows, started = [], False
+    rows, started, outside = [], False, 0
     for line in lines[at + 1:]:
         cells = {k: [] for k in keys}
         for i, w in enumerate(line):
             mid = (w["x0"] + w["x1"]) / 2
+            if mid > sheet_right:
+                outside += 1
+                continue
             if i == 0 and w["x1"] <= item_right:
                 cells["item_no"].append(w["text"])
             elif mid >= amounts_from and _is_amount(w["text"]):
@@ -459,7 +501,7 @@ def _position_rows(page) -> tuple[dict[int, str], list[list[str]]] | None:
                 continue
             started = True
         rows.append([" ".join(cells[k]) for k in keys])
-    return dict(enumerate(keys)), rows
+    return dict(enumerate(keys)), rows, outside
 
 
 # --- Claude transcription ---------------------------------------------------
@@ -634,6 +676,13 @@ def _looks_misaligned(lines: list[LineItem]) -> bool:
 # --- Entry point ------------------------------------------------------------
 
 
+def _application_number(text: str | None) -> int | None:
+    """The application number as printed ("6", "#01", "Draw #1"), or None if it isn't one."""
+    m = re.fullmatch(r"(?:(?:DRAW|PAY\s*APP(?:LICATION)?|APPLICATION|APP|NO\.?)\s*)?#?\s*(\d{1,4})",
+                     (text or "").strip(), re.I)
+    return int(m.group(1)) if m else None
+
+
 def extract_pay_request(
     pdf_path: str | Path,
     *,
@@ -691,7 +740,9 @@ def extract_pay_request(
         try:
             for key in ("application_no", "period_to"):
                 theirs, ours = header.get(key), getattr(sheet, key)
-                same = theirs == ours or (key == "period_to" and theirs and ours and parse_date(theirs) == parse_date(ours))
+                same = theirs == ours or bool(theirs and ours and (
+                    parse_date(theirs) == parse_date(ours) if key == "period_to"
+                    else _application_number(theirs) == _application_number(ours) is not None))
                 if theirs and ours and not same:
                     raise ExtractionError(f"G702 and G703 disagree on {key}: {theirs!r} vs {ours!r}")
                 if theirs and not ours:
@@ -703,8 +754,7 @@ def extract_pay_request(
             raise ExtractionError(f"G702 value unreadable: {e}") from e
         sheet.g702 = sheet.g702 or fields or None
     # Everything the kernel needs besides the lines, said at once, so the sub can fix it in one go.
-    number = re.fullmatch(r"(?:(?:DRAW|PAY\s*APP(?:LICATION)?|APPLICATION|APP|NO\.?)\s*)?#?\s*(\d{1,4})",
-                          (sheet.application_no or "").strip(), re.I)
+    number = _application_number(sheet.application_no)
     missing = []
     if not sheet.period_to:
         missing.append("sheet has no 'period to' date")
@@ -720,7 +770,7 @@ def extract_pay_request(
         period_end = parse_date(sheet.period_to)
     except CellParseError as e:
         raise ExtractionError(str(e)) from e
-    sheet.application_no = number.group(1)
+    sheet.application_no = str(number)
     g702 = _to_g702(sheet)
 
     notes = sheet.notes + parse_notes + check_consistency(lines, sheet.totals) + check_g702(g702, lines)
