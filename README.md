@@ -2,9 +2,18 @@
 
 ## Introduction
 
-An AI accounts-payable clerk for small general contractors. The model can only *propose* a
-payment; a deterministic policy kernel, a calibrated judgment layer, and a hardware-held
-signing key decide whether money moves. Built at Cal Hacks 13.0.
+Draw is an AI accounts-payable clerk for small general contractors. It reads each subcontractor's
+monthly pay application and the paperwork around it, checks it the way a careful office manager
+would, and says whether it's ready to pay, needs the owner's OK, or should be held, with the evidence
+and the next step in plain English.
+
+The AI never decides on its own whether money moves. Claude and Jev read documents and answer judgment
+questions, but their output is only a proposal. Fifteen deterministic rules make the decision, and any
+large or unusual payment also needs a signature from a physical approval key on the owner's desk. Draw
+also ships with its own attacker: a fuzzer that tries thousands of fraud and billing tricks against the
+pipeline and a scorecard that reports how many got through.
+
+Built at Cal Hacks 13.0 (October 23-25, 2026) by a team of four.
 
 ## The problem
 
@@ -29,10 +38,8 @@ rules, and tells the office one of three things in a plain sentence with the evi
 - **On hold**: a rule failed. The screen shows why and what to do next ("Ask the sub for their supplier's
   release").
 
-No AI output can move money. Claude reads documents and Jev (TypeSafe) answers judgment questions, but
-both are treated as untrusted input to a pure-function rule kernel, and every payment above the limit
-needs a hardware signature. Draw also ships with its own attacker: a fuzzer that tries to get wrong
-payments through and a scorecard that reports how often it succeeds.
+Claude's and Jev's (TypeSafe) output is treated as untrusted input to a pure-function rule kernel, and
+every payment above the limit needs a hardware signature.
 
 **Live:** [drawweb.vercel.app](https://drawweb.vercel.app) (dashboard) · [drawapi.vercel.app/docs](https://drawapi.vercel.app/docs) (API).
 The data is one fictional GC with 3 jobs, 15 subs and six months of history.
