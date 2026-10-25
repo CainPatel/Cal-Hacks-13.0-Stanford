@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useEffect, useMemo, useState } from "react";
 import { ChevronDown } from "lucide-react";
+import { CheckExplainer } from "@/components/check-explainer";
 import { MonthOverview, type View } from "@/components/month-overview";
 import { RequestDetailPanel } from "@/components/request-detail";
 import { Waiting } from "@/components/waiting";
@@ -136,9 +137,12 @@ function PayRequests() {
                 ? "These pay requests haven't been checked yet."
                 : `${count("not_checked")} pay ${count("not_checked") === 1 ? "request hasn't" : "requests haven't"} been checked yet.`}
             </p>
-            <Button size="lg" onClick={check} disabled={checking}>
-              {checking ? "Checking…" : `Check ${MONTHS[month - 1]}`}
-            </Button>
+            <div className="flex items-center gap-2">
+              <Button size="lg" onClick={check} disabled={checking}>
+                {checking ? "Checking…" : `Check ${MONTHS[month - 1]}`}
+              </Button>
+              <CheckExplainer month={MONTHS[month - 1]} />
+            </div>
           </div>
         )}
 
