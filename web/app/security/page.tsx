@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Textarea } from "@/components/ui/textarea";
 import { useLive } from "@/hooks/use-live";
-import { api, ApiError, money, type AttackResult, type RequestRow, type Scorecard } from "@/lib/api";
+import { api, ApiError, money, type AttackResult, type AttackTarget, type Scorecard } from "@/lib/api";
 import { attackLabel, humanize, RULE_NAMES } from "@/lib/labels";
 import { cn } from "@/lib/utils";
 
@@ -221,7 +221,7 @@ function LimitDial({ card }: { card: Scorecard }) {
 
 function AttackConsole() {
   const [attacks, setAttacks] = useState<{ name: string; about: string }[]>([]);
-  const [subs, setSubs] = useState<RequestRow[]>([]);
+  const [subs, setSubs] = useState<AttackTarget[]>([]);
   const [name, setName] = useState("");
   const [target, setTarget] = useState("sub_04");
   const [job, setJob] = useState("job_1");
@@ -231,12 +231,12 @@ function AttackConsole() {
 
   useEffect(() => {
     api.attacks().then((a) => (setAttacks(a), setName(a[0]?.name ?? "")), () => {});
-    // one entry per sub: a sub can have two October requests (a resubmission, a new upload)
-    api.requests(6).then((rows) => setSubs([...new Map(rows.map((r) => [r.sub_id, r])).values()]), () => {});
+    // the subs attacks run against: the seeded demo company, not whoever is in the live log
+    api.attackTargets().then(setSubs, () => {});
   }, []);
 
   const jobTarget = name === "new_sub_ein_mismatch"; // a brand-new sub has no history; it needs a job to bill on
-  const jobs = [...new Map(subs.map((s) => [s.job_id, s.job])).entries()];
+  const jobs = [...new Map(subs.map((s) => [s.job, s.job_name])).entries()];
   const run = async (mode: "pick" | "text") => {
     setBusy(mode);
     setResult(null);
@@ -286,8 +286,8 @@ function AttackConsole() {
               <span className={label}>Against</span>
               <select value={target} onChange={(e) => setTarget(e.target.value)} className={FIELD}>
                 {subs.map((s) => (
-                  <option key={s.sub_id} value={s.sub_id}>
-                    {s.sub}
+                  <option key={s.id} value={s.id}>
+                    {s.name}
                   </option>
                 ))}
               </select>

@@ -66,3 +66,23 @@ def test_waived_retainage_story_runs_end_to_end():
     plan = nl_attack.AttackPlan(attack="retainage_slip", target="sub_04", explanation="waived", rate="0%")
     out = fuzzer.attack(plan.attack, plan.target, **nl_attack.settings_for(plan))
     assert out["decision"].action.value == "hold"
+
+
+@pytest.mark.parametrize("attack,target,expected", [
+    ("bank_change_email", "", "sub_01"),           # no sub named: the first one it applies to
+    ("bank_change_email", "Brightline", "sub_01"),  # not an id: same
+    ("duplicate_new_number", "job_2", "sub_06"),   # a job for a sub attack: that job's first sub
+    ("expired_wc", "sub_06", "sub_06"),
+    ("new_sub_ein_mismatch", "", "job_1"),         # a new sub joins a job
+    ("new_sub_ein_mismatch", "sub_06", "job_2"),   # a sub given: its job
+])
+def test_a_missing_or_mismatched_target_still_runs(attack, target, expected):
+    plan = n.AttackPlan(attack=attack, target=target, explanation="x")
+    out = n.run("any description", FakeClient(plan))
+    assert out["plan"]["target"] == expected and out["result"]["decision"] is not None
+
+
+def test_a_date_that_isnt_one_falls_back_to_the_attacks_own():
+    plan = n.AttackPlan(attack="expired_wc", target="sub_01", expiry="last week", explanation="x")
+    assert n.settings_for(plan) == {}
+    assert n.run("the concrete sub's workers comp expired last week", FakeClient(plan))["result"]["label"].anomaly == "expired_wc"

@@ -231,3 +231,10 @@ def test_event_stream_polls_on_vercel(client, monkeypatch):
     monkeypatch.setenv("VERCEL", "1")
     body = client.get("/events", params={"after": 0}).text  # follow defaults to True; returns anyway
     assert body.startswith("retry: 10000\n\n") and "event: fact" in body
+
+
+def test_attack_targets_are_the_seeded_subs_even_after_a_new_sub_arrives(client):
+    """The console's picker: attacks run on the seeded demo company, so a sub that joined later isn't offered."""
+    targets = client.get("/attacks/targets").json()
+    assert len(targets) == 15 and {t["id"] for t in targets} == {f"sub_{i:02d}" for i in range(1, 16)}
+    assert client.post("/attacks", json={"name": "supplier_notice_unreleased", "target": targets[0]["id"]}).status_code == 200

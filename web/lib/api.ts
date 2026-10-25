@@ -238,6 +238,7 @@ export const api = {
   scorecard: () => call<Scorecard>("/scorecard"),
   calibration: () => call<Calibration>("/calibration"),
   attacks: () => call<{ name: string; about: string }[]>("/attacks"),
+  attackTargets: () => call<AttackTarget[]>("/attacks/targets"),
   attack: (name: string, target: string) =>
     call<AttackResult>("/attacks", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ name, target }) }),
   describe: (text: string) =>
@@ -258,3 +259,6 @@ export const monthName = (m: number) => `${MONTHS[m - 1]} 2026`;
 
 // Rule ids are "13_progress_plausible": a person reads the words.
 export const ruleNumber = (rule: string) => rule.slice(0, 2);
+
+/** A sub the attack console can aim at, from the demo company as seeded (GET /attacks/targets). */
+export type AttackTarget = { id: string; name: string; trade: string; job: string; job_name: string };
