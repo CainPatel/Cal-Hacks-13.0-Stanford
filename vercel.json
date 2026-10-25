@@ -6,7 +6,7 @@
   "functions": {
     "app.py": {
       "maxDuration": 300,
-      "excludeFiles": "{web/**,tests/**,docs/**,firmware/**,device/**,data/**,synthetic/**,.impeccable/**,.githooks/**}"
+      "excludeFiles": "{web/**,tests/**,proofs/**,docs/**,firmware/**,device/**,data/**,synthetic/**,.impeccable/**,.githooks/**}"
     }
   }
 }
