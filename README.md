@@ -111,10 +111,23 @@ Vercel (dashboard + API), Neon Postgres for the event log, a private Blob store 
 | `make hooks` | turn on the repo's secret-blocking pre-commit hook (once per clone) |
 | `make demo` | fresh local log, decide May-Oct, score 5,000 attacks, serve the API (never Neon) |
 | `make demo-online` | start the shared Neon log over with the demo company, bank synced, Jev in the loop |
+| `make reset` | start whichever log is configured over (old one renamed, never deleted): seed + demo company, bank synced, May-Oct decided |
 | `make sync` | copy the bank's ledger (Nessie owner draws, sub payments) into the log |
 | `make snapshot` / `make offline` | copy the shared Neon log to `data/events.db` / serve that copy offline |
 | `make smoke` | check every stage of a running Draw over HTTP (`API=… WEB=…` for the deployment; read-only unless `FLAGS="--sync --pay --approve"`) |
 | `make test` | all tests |
+
+## Demo company (first pay application by email)
+
+A subcontractor can be put on file with everything except its pay application, which then arrives by
+email during the demo: vendor, subcontract, insurance, signed conditional release, owner's draw and site
+video (sample numbers). Put the documents and a `company.json` in `data/demo_company/` (gitignored; the
+format is in `seed/demo_company.py`); `make events`, `make demo`, `make demo-online` and `make reset`
+then include it. The sub's `email_domain` must be exactly the sending address's domain, and the pay
+application's period must fall in May-October 2026.
+
+To run the demo again: `make reset`, then send the email. A payment made in the Nessie sandbox stays in
+the bank and comes back into the log on the next sync, so only an unpaid run repeats as new.
 
 ## How a pay request flows
 
