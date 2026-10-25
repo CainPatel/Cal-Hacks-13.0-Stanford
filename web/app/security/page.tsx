@@ -355,11 +355,21 @@ function AttackOutcome({ plan, out, error, assessment, gapSaved }: { plan?: stri
 }
 
 const VERDICT: Record<Assessment["verdict"], { mark?: "pass" | "ok" | "fail"; tone: string; say: string }> = {
+  blocked: { mark: "pass", tone: "text-pass", say: "Draw would catch this before the rules even run." },
   stopped: { mark: "pass", tone: "text-pass", say: "The rules would put this on hold." },
   needs_key: { mark: "ok", tone: "text-hold", say: "No rule would hold it, but it would still need your key." },
+  capped: { mark: "fail", tone: "text-fail", say: "No check would stop it, but the damage is capped." },
   jev: { mark: "ok", tone: "text-hold", say: "Only Jev’s review would likely flag it." },
   gap: { mark: "fail", tone: "text-fail", say: "Nothing in Draw would stop this." },
   out_of_scope: { tone: "text-foreground", say: "This is outside what Draw checks." },
+};
+
+const INTAKE_NAMES: Record<Assessment["intake"][number]["defence"], string> = {
+  visible_text: "Visible text only",
+  exact_sender: "Exact sender",
+  known_forms: "Known forms only",
+  no_guessing: "No guessing",
+  data_not_orders: "Read as data",
 };
 
 const BACKSTOP_NAMES: Record<Assessment["backstops"][number]["backstop"], string> = {
@@ -373,7 +383,7 @@ const BACKSTOP_NAMES: Record<Assessment["backstops"][number]["backstop"], string
 
 /** An attack that isn't one we can run: Claude's read of it against Draw's own checks, labelled as an estimate. */
 function AssessmentOutcome({ a, gapSaved }: { a: Assessment; gapSaved?: boolean }) {
-  const v = VERDICT[a.verdict];
+  const v = VERDICT[a.verdict] ?? VERDICT.out_of_scope; // an answer from a newer API still renders
   const row = "grid grid-cols-[10.5em_1fr] gap-3 border-t py-2 text-body max-sm:grid-cols-1 max-sm:gap-0.5";
   const name = "pt-0.5 text-meta text-muted-foreground";
   return (
@@ -387,6 +397,12 @@ function AssessmentOutcome({ a, gapSaved }: { a: Assessment; gapSaved?: boolean 
         {v.say}
       </p>
       <ul className="mt-3">
+        {(a.intake ?? []).map((h) => (
+          <li key={`intake-${h.defence}`} className={row}>
+            <span className={name}>{INTAKE_NAMES[h.defence] ?? h.defence}</span>
+            <span>{h.why}</span>
+          </li>
+        ))}
         {a.holds.map((h) => (
           <li key={`rule-${h.rule}`} className={row}>
             <span className={cn(name, "font-mono tnum")}>rule {h.rule}</span>
@@ -398,7 +414,7 @@ function AssessmentOutcome({ a, gapSaved }: { a: Assessment; gapSaved?: boolean 
         ))}
         {a.backstops.map((h) => (
           <li key={`backstop-${h.backstop}`} className={row}>
-            <span className={name}>{BACKSTOP_NAMES[h.backstop]}</span>
+            <span className={name}>{BACKSTOP_NAMES[h.backstop] ?? h.backstop}</span>
             <span>{h.why}</span>
           </li>
         ))}
@@ -414,7 +430,7 @@ function AssessmentOutcome({ a, gapSaved }: { a: Assessment; gapSaved?: boolean 
             <span>{a.out_of_scope}</span>
           </li>
         )}
-        {a.gap && a.verdict !== "stopped" && (
+        {a.gap && a.verdict !== "stopped" && a.verdict !== "blocked" && (
           <li className={row}>
             <span className={name}>What gets through</span>
             <span>

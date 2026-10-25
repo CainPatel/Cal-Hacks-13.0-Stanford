@@ -36,7 +36,7 @@ def test_settings_only_for_the_chosen_mutator():
 
 
 def test_none_and_refusal():
-    sandwich = n.Assessment(summary="Not a payment.", holds=[], backstops=[], out_of_scope="it isn't a payment at all")
+    sandwich = n.Assessment(summary="Not a payment.", intake=[], holds=[], backstops=[], out_of_scope="it isn't a payment at all")
     out = n.run("make me a sandwich", QueueClient(n.AttackPlan(attack="none", target="", explanation="no match"), sandwich))
     assert out["result"] is None and out["assessment"]["verdict"] == "out_of_scope"
     with pytest.raises(n.AttackError):
@@ -109,17 +109,25 @@ NOT_ON_MENU = n.AttackPlan(attack="none", target="", explanation="nothing on the
     (dict(holds=[{"rule": "10", "why": "new account"}], backstops=[]), "stopped"),
     (dict(holds=[{"rule": "14", "why": "over the limit"}], backstops=[]), "needs_key"),  # 14 escalates, never holds
     (dict(holds=[], backstops=[{"backstop": "limit", "why": "big"}]), "needs_key"),
+    (dict(holds=[], backstops=[{"backstop": "recompute", "why": "capped at the contract"}]), "capped"),  # not the key
     (dict(holds=[], backstops=[], jev="Jev would see the odd progress"), "jev"),
     (dict(holds=[], backstops=[], out_of_scope="needs the owner's physical key"), "out_of_scope"),
     (dict(holds=[], backstops=[]), "gap"),
 ])
 def test_the_verdict_is_worked_out_in_code_strongest_first(assessment, expected):
-    assert n.verdict(n.Assessment(summary="x", **assessment)) == expected
+    assert n.verdict(n.Assessment(summary="x", intake=[], **assessment)) == expected
+
+
+def test_intake_defences_come_before_backstops_but_after_a_rule_hold():
+    hidden = [{"defence": "visible_text", "why": "invisible text is ignored"}]
+    assert n.verdict(n.Assessment(summary="x", intake=hidden, holds=[], backstops=[{"backstop": "limit", "why": "b"}])) == "blocked"
+    assert n.verdict(n.Assessment(summary="x", intake=hidden, holds=[{"rule": "01", "why": "math"}], backstops=[])) == "stopped"
+    kept_out = [{"defence": "exact_sender", "why": "not the sub's domain"}]  # never filed, so no rule ever runs
+    assert n.verdict(n.Assessment(summary="x", intake=kept_out, holds=[{"rule": "11", "why": "x"}], backstops=[])) == "blocked"
 
 
 def test_an_idea_off_the_menu_gets_claudes_read_against_the_rules():
-    a = n.Assessment(summary="Bills a line twice under two item numbers.",
-                     holds=[{"rule": "02", "why": "past the contract amount"}], backstops=[])
+    a = n.Assessment(summary="Bills a line twice under two item numbers.", intake=[], holds=[{"rule": "02", "why": "past the contract amount"}], backstops=[])
     client = QueueClient(NOT_ON_MENU, a)
     out = n.run("bill the same drywall twice under two different line numbers", client)
     assert out["result"] is None and out["assessment"]["verdict"] == "stopped"
@@ -130,6 +138,11 @@ def test_an_idea_off_the_menu_gets_claudes_read_against_the_rules():
 
 def test_only_real_rules_and_backstops_can_be_named():
     with pytest.raises(Exception):
-        n.Assessment(summary="x", holds=[{"rule": "16", "why": "made up"}], backstops=[])
+        n.Assessment(summary="x", intake=[], holds=[{"rule": "16", "why": "made up"}], backstops=[])
     with pytest.raises(Exception):
-        n.Assessment(summary="x", holds=[], backstops=[{"backstop": "magic", "why": "made up"}])
+        n.Assessment(summary="x", intake=[], holds=[], backstops=[{"backstop": "magic", "why": "made up"}])
+
+
+def test_a_gap_that_says_nothing_gets_through_is_no_gap():
+    a = n.Assessment(summary="x", intake=[], holds=[], backstops=[], out_of_scope="no", gap="Nothing extra gets through.")
+    assert n.assess("bribe the architect", QueueClient(a)).gap is None

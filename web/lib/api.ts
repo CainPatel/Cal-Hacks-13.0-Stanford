@@ -269,10 +269,11 @@ export type AttackTarget = { id: string; name: string; trade: string; job: strin
 /** Claude's read of an attack that isn't on the menu, against Draw's own checks: an estimate, not a run. */
 export type Assessment = {
   summary: string;
+  intake: { defence: "visible_text" | "exact_sender" | "known_forms" | "no_guessing" | "data_not_orders"; why: string }[];
   holds: { rule: string; why: string }[];
   backstops: { backstop: "limit" | "new_payee" | "bank_lock" | "recompute" | "paid_once" | "confidence"; why: string }[];
   jev: string | null;
   gap: string | null;
   out_of_scope: string | null;
-  verdict: "stopped" | "needs_key" | "jev" | "gap" | "out_of_scope";
+  verdict: "blocked" | "stopped" | "out_of_scope" | "needs_key" | "capped" | "jev" | "gap";
 };

@@ -412,7 +412,7 @@ def describe_attack(body: DescribeIn):
         raise HTTPException(422, f"that attack can't run as described: {e or type(e).__name__}")
     if out["result"] is None:
         assessment = out.get("assessment")
-        found_gap = assessment is not None and assessment["verdict"] != "stopped"  # no rule would hold it
+        found_gap = assessment is not None and assessment["verdict"] not in ("stopped", "blocked")  # nothing holds it
         return {"plan": out["plan"], "result": None, "assessment": assessment,
                 "gap_saved": _save_gap(body.text, assessment) if found_gap else False}
     r = out["result"]
