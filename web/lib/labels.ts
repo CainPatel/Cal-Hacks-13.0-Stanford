@@ -19,6 +19,26 @@ export const ATTACK_LABELS: Record<string, string> = {
   inflated_scheduled_value: "Inflates the contract value to hide over-billing",
   inflated_payment_due: "Pads the amount due on the summary page",
   release_amount_short: "Lien release covers less than the payment",
+  // held-out test set types (fuzzer/heldout.py) that aren't one of the fuzzer's own
+  cumulative_billing_jump: "Last month's total jumps without a reason",
+  disguised_duplicate_billing: "Resets earlier billing to zero to bill it again",
+  release_short_date: "Lien release stops short of the period end",
+  unsigned_conditional_waiver: "Lien release isn't signed",
+  wrong_waiver_kind_final: "Final waiver sent for a progress payment",
+  unconditional_waiver_amount_mismatch: "Waiver for last month covers less than we paid",
+  prior_unconditional_short_date: "Last month's waiver stops short of that period",
+  wrong_prior_waiver_kind: "Last month's waiver is the wrong kind",
+  expired_gl_insurance: "General liability insurance has expired",
+  gl_expires_on_period_end: "Liability insurance ends on the last day of the period",
+  missing_additional_insured: "Insurance doesn't name us as additional insured",
+  change_order_scope_duplication: "Change order bills for work already in the contract",
+  billing_unapproved_co: "Bills against a change order nobody approved",
+  post_period_change_order: "Leans on a change order approved after the period",
+  duplicate_scope_double_billing: "Bills the same work on two lines",
+  unverified_stored_materials: "Bills for stored materials nobody has seen",
+  split_billing_threshold_evasion: "Splits one bill in two to stay under the limit",
+  bank_change_on_pay_app: "New bank account slipped onto the pay application",
+  vendor_identity_mismatch: "Sub's identity check doesn't match",
 };
 
 export const attackLabel = (key: string) =>

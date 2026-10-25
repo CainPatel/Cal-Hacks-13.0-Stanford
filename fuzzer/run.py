@@ -15,6 +15,7 @@ from decimal import Decimal
 from pathlib import Path
 
 import pipeline
+from fuzzer import heldout
 from pipeline import KERNEL, decide
 from seed import anomalies as a
 from seed.generate import generate
@@ -196,7 +197,9 @@ def run(n=500, rng_seed=0) -> dict:
             "action": d.action.value, "failed_rules": [x.rule for x in d.results if not x.passed],
             "amount": str(amount(data, label.request_id)),
         })
-    return {**score(rows), **button_load(), "limit_sweep": limit_sweep(cases)}
+    # the held-out set (fuzzer/heldout/) counts as part of the same run; the limit sweep stays fuzzer-only
+    held, invalid = heldout.rows()
+    return {**score(rows + held), **button_load(), "limit_sweep": limit_sweep(cases), "heldout_invalid": invalid}
 
 
 if __name__ == "__main__":
@@ -207,6 +210,8 @@ if __name__ == "__main__":
     out.write_text(json.dumps(card, indent=2))
     print(f"kernel: {card['kernel']}")
     print(f"{card['cases']} cases ({card['mutated']} mutated, {card['clean']} clean) -> {out}")
+    for bad in card["heldout_invalid"]:
+        print(f"  held-out case {bad['case']} didn't validate, not counted: {bad['error']}")
     print(f"rules alone: {card['wrongful_if_every_button_approved']} attacks get through if every button press "
           f"is approved (rule catch rate {card['rule_catch_rate']})")
     print(f"button presses per job per month: {card['button_presses_per_job_month']} | "
