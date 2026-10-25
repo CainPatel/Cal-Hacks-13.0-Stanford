@@ -700,11 +700,12 @@ def setup_demo():
     nobody has to copy the database URL to a laptop. Refuses if the log has anything in it: it can
     never overwrite or mix with real data."""
     from events.replay import load_seed
+    from seed import demo_company
     from seed.anomalies import with_demo
     from seed.generate import generate
     if not events.is_empty(DB):
         raise HTTPException(409, "The event log already has data; the demo company only loads into an empty log.")
-    facts = load_seed(with_demo(generate())[0], path=DB)
+    facts = load_seed(demo_company.add(with_demo(generate())[0]), path=DB)
     bank = _sync_bank()
     model = _judge_model()
     return {"facts_loaded": facts, "bank": bank, "judged": model is not None,

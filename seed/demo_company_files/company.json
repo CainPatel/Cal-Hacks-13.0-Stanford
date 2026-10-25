@@ -1,0 +1,19 @@
+{
+  "sub_id": "sub_16",
+  "legal_name": "Larkspur Construction LLC",
+  "email_domain": "stanford.edu",
+  "ein": "45-1042410",
+  "job": {
+    "id": "job_4",
+    "name": "Harbor Light Hotel",
+    "owner": "Harbor Light Development LP",
+    "lender": "First Pacific Bank",
+    "architect": "Okafor + Lin Architects"
+  },
+  "g703": "g703.pdf",
+  "g702": "g702.pdf",
+  "site_video": {
+    "date": "2026-10-22",
+    "estimates": {"43": 1, "55": 80, "66": 2, "145": 45}
+  }
+}

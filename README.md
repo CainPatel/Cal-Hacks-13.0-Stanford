@@ -119,12 +119,17 @@ Vercel (dashboard + API), Neon Postgres for the event log, a private Blob store 
 
 ## Demo company (first pay application by email)
 
-A subcontractor can be put on file with everything except its pay application, which then arrives by
-email during the demo: vendor, subcontract, insurance, signed conditional release, owner's draw and site
-video (sample numbers). Put the documents and a `company.json` in `data/demo_company/` (gitignored; the
-format is in `seed/demo_company.py`); `make events`, `make demo`, `make demo-online` and `make reset`
-then include it. The sub's `email_domain` must be exactly the sending address's domain, and the pay
-application's period must fall in May-October 2026.
+Larkspur Construction LLC (Harbor Light Hotel, `sub_16` / `job_4`) is on file with everything except its
+first pay application, which arrives by email during the demo: vendor, subcontract, insurance, signed
+conditional release, owner's draw and site video (sample numbers). `make events`, `make demo`,
+`make demo-online` and `make reset` all load it (`seed/demo_company.py`).
+
+Email the two files in `seed/demo_company_files/` (`g703.pdf`, `g702.pdf`) to the inbox from an
+`@stanford.edu` address: attachments are filed under a sub only when the sender's domain is exactly the
+sub's `email_domain` in `company.json`. Then press "Check October": it reads as $595,008.60 due, passes
+rules 01-13, and needs the owner's OK (over the limit, first payment to this sub). The PDFs are a real
+spreadsheet-exported pay application with every name and address made up, 10% retainage on every line
+and the period moved to October 2026.
 
 To run the demo again: `make reset`, then send the email. A payment made in the Nessie sandbox stays in
 the bank and comes back into the log on the next sync, so only an unpaid run repeats as new.

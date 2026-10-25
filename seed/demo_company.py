@@ -5,17 +5,15 @@ a signed conditional release, the owner's draw and the super's site video for th
 pay application itself (G703 and G702): that comes in through the inbox. The contract lines are
 read from the very pay application the sub will send, so the contract and the request agree.
 
-The documents stay out of the repo (data/ is gitignored), so this adds nothing without them:
-
-    data/demo_company/company.json    who the sub is, which files, the site video's estimates
-    data/demo_company/<g703>.pdf      the continuation sheet that will be emailed
-    data/demo_company/<g702>.pdf      its G702, if sent as a separate file
+seed/demo_company_files/ holds it: company.json and the two PDFs to email. The PDFs are a real
+spreadsheet-exported pay application with every name and address replaced by fictional ones,
+retainage set to the demo world's 10% on every line, and the period moved to October 2026.
 
 company.json:
 
     {"sub_id": "sub_16", "legal_name": "...", "email_domain": "...", "ein": "12-3456789",
      "job": {"id": "job_4", "name": "...", "owner": "...", "lender": "...", "architect": "..."},
-     "g703": "G703.pdf", "g702": "G702.pdf",
+     "g703": "g703.pdf", "g702": "g702.pdf",
      "site_video": {"date": "2026-10-22", "estimates": {"145": 45}}}
 
 The sub's email domain must be exactly the one the demo email is sent from: attachments are filed
@@ -30,12 +28,12 @@ from shared.schema import (
     COI, Job, LedgerEntry, LedgerKind, Release, ReleaseKind, SiteEvidence, SOVLine, Subcontract, Vendor,
 )
 
-FOLDER = Path("data/demo_company")
+FOLDER = Path(__file__).parent / "demo_company_files"
 RETAINAGE = Decimal("0.10")
 
 
 def facts(folder: Path = FOLDER) -> dict[str, list] | None:
-    """The sub's records, by state table, or None when there is no company.json."""
+    """The sub's records, by state table, or None when the folder has no company.json."""
     config = folder / "company.json"
     if not config.exists():
         return None
@@ -78,7 +76,7 @@ def facts(folder: Path = FOLDER) -> dict[str, list] | None:
 
 
 def add(data: dict[str, list], folder: Path = FOLDER) -> dict[str, list]:
-    """The seed with the demo company's records added, when data/demo_company/ has them."""
+    """The seed with the demo company's records added."""
     extra = facts(folder)
     for table, rows in (extra or {}).items():
         data[table] = data.get(table, []) + rows

@@ -153,7 +153,8 @@ def test_setup_demo_only_into_an_empty_log(client, tmp_path, monkeypatch):
     assert client.post("/setup/demo").status_code == 409  # fixture already loaded the seed
     monkeypatch.setattr(main, "DB", tmp_path / "fresh.db")
     out = client.post("/setup/demo").json()
-    assert (out["facts_loaded"], out["decisions"], out["judged"]) == (419, 90, False)
+    # 419 seed facts + 7 for the demo company (seed/demo_company.py), whose pay app arrives later by email
+    assert (out["facts_loaded"], out["decisions"], out["judged"]) == (426, 90, False)
     assert len(client.get("/requests").json()) == 15
     assert client.post("/setup/demo").status_code == 409  # once only
 
