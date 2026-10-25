@@ -67,7 +67,7 @@ Order everywhere (top bar, board, list): possible fraud, waiting, needs your OK,
 
 ## Type
 
-Geist Sans for everything people read. Geist Mono only for money, percentages, account endings, item numbers, file names and the raw trace. Mono numbers always use `tabular-nums` (`.tnum`, or the `.mono`/`.num` pattern) so columns line up to the cent.
+Geist Sans for everything people read. Geist Mono only for money, percentages, account endings, item numbers, file names and the raw trace. Mono numbers always use `tabular-nums` (`.tnum`, or the `.mono`/`.num` pattern) so columns line up to the cent. Inside running text (a sentence), numbers stay in Geist Sans with `tabular-nums`: Geist Mono gives a comma a full-width cell, so "$86,268,768.41" reads as if it had spaces around the commas.
 
 | Token | Size / line height | Weight | Used for |
 |---|---|---|---|

@@ -71,7 +71,8 @@ function Section({ id, title, intro, children }: { id: string; title: string; in
 
 function Headline({ card }: { card: Scorecard }) {
   const stopped = card.mutated - card.wrongful_if_every_button_approved;
-  const b = "font-mono font-semibold tnum";
+  // numbers inside a sentence stay in the text face: Geist Mono gives a comma a full-width cell, so "$86,268,768.41" reads as "$86 , 268 , 768"
+  const b = "font-semibold tnum";
   return (
     <>
       <p className="mt-4 max-w-[62ch] text-say leading-[1.55]">
@@ -81,8 +82,8 @@ function Headline({ card }: { card: Scorecard }) {
         at all. Of {n(card.clean)} honest requests, <b className={b}>{pct(card.false_hold_rate)}</b> were held by mistake.
       </p>
       <p className="mt-3 max-w-[64ch] text-body text-muted-foreground">
-        That stopped <span className="font-mono tnum">{money(card.dollars_protected)}</span> in bad payments and held up{" "}
-        <span className="font-mono tnum">{money(card.dollars_delayed)}</span> of good ones.
+        That stopped <span className="tnum">{money(card.dollars_protected)}</span> in bad payments and held up{" "}
+        <span className="tnum">{money(card.dollars_delayed)}</span> of good ones.
         {card.misses.length === 0 && " No attack got through in this run."}
       </p>
     </>
