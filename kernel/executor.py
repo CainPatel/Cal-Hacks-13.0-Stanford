@@ -86,12 +86,33 @@ def verify_signature(body: bytes, sig_hex: str, pubkey_hex: str, rejected: bool 
 
 
 def request_device_approval(device_url: str, payload: dict, timeout: float = 100.0) -> SignedApproval:
-    """POSTs the payment payload to the ESP32 and waits for a button press. This is the
-    only place the server talks to the device; the device never talks to Nessie."""
+    """POSTs the payment payload to the device and waits for a button press. This is the
+    only place the server talks to the device; the device never talks to Nessie.
+
+    The same bytes are sent again until an answer comes back or `timeout` passes: the Pi holds each
+    request for a short round and answers 202 "still waiting", and a dropped connection is retried, so
+    a press is never lost to a proxy or a flaky link (docs/device-api.md). Resending is safe: the
+    device signs these exact bytes, rejoins the same nonce, and repeats an answer it already gave. An
+    ESP32 that holds the request until a press works unchanged. 408 timeout, 409 busy and 400 raise."""
     body = canonical_payload_bytes(payload)
-    resp = requests.post(f"{device_url}/approve", data=body,
-                          headers={"Content-Type": "application/json"}, timeout=timeout)
-    resp.raise_for_status()
+    deadline = time.monotonic() + timeout
+    last_error: Exception | None = None
+    while True:
+        left = deadline - time.monotonic()
+        if left <= 0:
+            raise requests.exceptions.Timeout(f"no answer from the approval key in {timeout:.0f} s"
+                                              + (f" (last error: {type(last_error).__name__})" if last_error else ""))
+        try:
+            resp = requests.post(f"{device_url}/approve", data=body,
+                                 headers={"Content-Type": "application/json"}, timeout=left)  # an ESP32 holds the whole wait
+        except (requests.exceptions.ConnectionError, requests.exceptions.Timeout) as e:
+            last_error = e
+            time.sleep(min(1.0, max(0.0, deadline - time.monotonic())))
+            continue
+        if resp.status_code == 202:  # still waiting for a button: ask again with the same bytes
+            continue
+        resp.raise_for_status()
+        break
     data = resp.json()
     return SignedApproval(payload=payload, sig_hex=data["sig"], nonce=payload["nonce"],
                            rejected=bool(data.get("rejected", False)))

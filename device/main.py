@@ -56,17 +56,23 @@ approve_btn = Button(CFG["approve_pin"], pull_up=True)
 reject_btn = Button(CFG["reject_pin"], pull_up=True)
 green, red = LED(CFG["green_led"]), LED(CFG["red_led"])
 
-lock = threading.Lock()  # held while a payment waits for a decision
-pending: dict | None = None
-decided = threading.Event()
-decision: str | None = None
+# One payment waits for a button at a time. The server asks in short rounds (HOLD seconds each) with
+# the same bytes until it gets an answer, so a dropped connection or a slow proxy never loses a press:
+# the next round picks the payment up, and an answer already given is kept (ANSWERED) for a resend.
+HOLD = 20       # longest one request is held before "still waiting" (202)
+STALE = 45      # no round for this long: the server gave up, so the key frees itself
+KEEP = 600      # how long a signed answer is kept for a resend of the same nonce
+state = threading.Lock()  # guards `current` and ANSWERED; never held while waiting
+current: dict | None = None  # {"p", "body", "decided": Event, "decision", "deadline", "last_seen"}
+ANSWERED: dict[str, tuple[float, int, dict]] = {}  # nonce -> (when, status, response body)
+pending: dict | None = None  # what the page shows: the waiting payment, or None
 
 
 def decide(what: str) -> None:
-    global decision
-    if pending and not decided.is_set():
-        decision = what
-        decided.set()
+    with state:
+        if current and not current["decided"].is_set():
+            current["decision"] = what
+            current["decided"].set()
 
 
 approve_btn.when_pressed = lambda: decide("approve")
@@ -117,34 +123,77 @@ async def approve(req: Request):
         assert isinstance(p, dict) and FIELDS <= p.keys()
     except Exception:
         return JSONResponse({"error": f"body must be JSON with {sorted(FIELDS)}"}, 400)
+    with state:
+        answered = ANSWERED.get(p["nonce"])
+    if answered:  # the answer went out but never arrived: same bytes, same answer
+        return JSONResponse(answered[2], answered[1])
     if float(p["expires_at"]) < time.time():
         return JSONResponse({"error": "expired"}, 400)
-    if not lock.acquire(blocking=False):
+    started = claim(p, body)
+    if started is None:
         return JSONResponse({"error": "busy"}, 409)
-    try:
-        return await anyio.to_thread.run_sync(wait_for_press, p, body)
-    finally:
-        lock.release()
+    if started is False:
+        return JSONResponse({"error": "this nonce is already waiting with different contents"}, 409)
+    return await anyio.to_thread.run_sync(wait_for_press, p["nonce"])
 
 
-def wait_for_press(p: dict, body: bytes) -> JSONResponse:
-    global pending, decision
-    decision = None
-    decided.clear()
-    pending = p
+def claim(p: dict, body: bytes):
+    """Make this payment the one waiting, or rejoin it. None: another payment is waiting; False: the
+    same nonce with different bytes (never re-sign different contents under one nonce); else True."""
+    global current, pending
+    now = time.time()
+    with state:
+        for n in [n for n, (t, _, _) in ANSWERED.items() if now - t > KEEP]:
+            del ANSWERED[n]
+        if current and current["p"]["nonce"] == p["nonce"]:
+            if current["body"] != body:
+                return False
+            current["last_seen"] = now
+            return True
+        if current and now - current["last_seen"] < STALE and now < current["deadline"]:
+            return None
+        if current:
+            print(f"Gave up on {current['p']['request_id']}: the server stopped asking.", flush=True)
+        current = {"p": p, "body": body, "decided": threading.Event(), "decision": None, "last_seen": now,
+                   "deadline": min(float(p["expires_at"]), now + CFG["wait_seconds"])}
+        pending = p
     red.off()
     green.blink(on_time=0.25, off_time=0.25)
     print(f"Waiting for a button: {p['payee']} ${p['amount']} ({p['job']})", flush=True)
-    got = decided.wait(CFG["wait_seconds"])
-    pending = None
-    if not got:
+    return True
+
+
+def wait_for_press(nonce: str) -> JSONResponse:
+    """One round: wait up to HOLD seconds, then answer, time out, or say "still waiting" (202)."""
+    global current, pending
+    with state:
+        mine = current if current and current["p"]["nonce"] == nonce else None
+    if mine is None:  # answered or abandoned between claim() and here
+        with state:
+            answered = ANSWERED.get(nonce)
+        return JSONResponse(answered[2], answered[1]) if answered else JSONResponse({"error": "timeout"}, 408)
+    got = mine["decided"].wait(max(0.0, min(HOLD, mine["deadline"] - time.time())))
+    with state:
+        if nonce in ANSWERED:  # another round for the same nonce already answered
+            _, status, content = ANSWERED[nonce]
+            return JSONResponse(content, status)
+        if not got and time.time() < mine["deadline"]:
+            mine["last_seen"] = time.time()
+            return JSONResponse({"waiting": True, "nonce": nonce}, 202)
+        if got and mine["decision"] == "approve":
+            status, content = 200, {"sig": sign(mine["body"]), "nonce": nonce}
+        elif got:
+            status, content = 200, {"rejected": True, "sig": sign(b"REJECT" + mine["body"])}
+        else:
+            status, content = 408, {"error": "timeout"}
+        ANSWERED[nonce] = (time.time(), status, content)
+        if current is mine:
+            current, pending = None, None
+    if status == 408:
         green.off()
-        return JSONResponse({"error": "timeout"}, 408)
-    if decision == "approve":
-        flash(green)
-        return JSONResponse({"sig": sign(body), "nonce": p["nonce"]})
-    flash(red)
-    return JSONResponse({"rejected": True, "sig": sign(b"REJECT" + body)})
+    else:
+        flash(green if "rejected" not in content else red)
+    return JSONResponse(content, status)
 
 
 @app.get("/pending")

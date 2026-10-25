@@ -38,7 +38,8 @@ def run(dev, press):
     t.start()
     while not client.get("/pending").json():
         time.sleep(0.01)
-    assert client.post("/approve", content=body).status_code == 409  # one at a time
+    other = json.dumps({**payload, "nonce": secrets.token_hex(8)}, sort_keys=True, separators=(",", ":")).encode()
+    assert client.post("/approve", content=other).status_code == 409  # one payment at a time
     press(main)
     t.join(5)
     resp = out["r"].json()
@@ -102,3 +103,65 @@ def test_private_key_is_private(dev):
     path = os.path.join(os.environ["HOME"], ".drawkey", "private.pem")
     assert os.stat(path).st_mode & 0o777 == 0o600
     assert "PRIVATE" not in dev[1].get("/pubkey", params={"format": "pem"}).text
+
+
+def payment(**over):
+    p = {"request_id": "test_round", "payee": "Bayline Steel Co.", "amount": "15644.70", "job": "Harbor Point",
+         "nonce": secrets.token_hex(8), "expires_at": int(time.time()) + 90, **over}
+    return p, json.dumps(p, sort_keys=True, separators=(",", ":")).encode()
+
+
+def test_waits_in_rounds_and_a_press_between_rounds_still_counts(dev, monkeypatch):
+    main, client = dev
+    monkeypatch.setattr(main, "HOLD", 0.2)
+    p, body = payment()
+    assert client.post("/approve", content=body).status_code == 202  # still waiting: ask again
+    physical("approve_btn")(main)  # pressed while no request was open
+    r = client.post("/approve", content=body)
+    assert r.status_code == 200 and r.json()["nonce"] == p["nonce"] and "sig" in r.json()
+
+
+def test_a_lost_answer_comes_back_the_same_on_resend(dev, monkeypatch):
+    main, client = dev
+    monkeypatch.setattr(main, "HOLD", 0.2)
+    _, body = payment()
+    client.post("/approve", content=body)
+    physical("approve_btn")(main)
+    first = client.post("/approve", content=body).json()
+    again = client.post("/approve", content=body)  # the first answer never reached the server
+    assert again.status_code == 200 and again.json() == first
+    assert client.get("/pending").json() == {}
+
+
+def test_same_nonce_with_different_bytes_is_refused(dev, monkeypatch):
+    main, client = dev
+    monkeypatch.setattr(main, "HOLD", 0.2)
+    p, body = payment()
+    assert client.post("/approve", content=body).status_code == 202
+    _, changed = payment(nonce=p["nonce"], amount="99999.00")
+    assert client.post("/approve", content=changed).status_code == 409  # never re-sign other contents
+    physical("reject_btn")(main)
+    assert client.post("/approve", content=body).json()["rejected"] is True
+
+
+def test_an_abandoned_wait_frees_the_key(dev, monkeypatch):
+    main, client = dev
+    monkeypatch.setattr(main, "HOLD", 0.1)
+    monkeypatch.setattr(main, "STALE", 0.3)
+    _, abandoned = payment()
+    assert client.post("/approve", content=abandoned).status_code == 202
+    _, nxt = payment()
+    assert client.post("/approve", content=nxt).status_code == 409  # still asked about recently
+    time.sleep(0.4)  # the server stopped asking about the first one
+    assert client.post("/approve", content=nxt).status_code == 202
+    physical("approve_btn")(main)
+    assert "sig" in client.post("/approve", content=nxt).json()
+
+
+def test_times_out_when_nobody_presses(dev, monkeypatch):
+    main, client = dev
+    monkeypatch.setattr(main, "HOLD", 0.2)
+    monkeypatch.setitem(main.CFG, "wait_seconds", 0.3)
+    _, body = payment()
+    codes = [client.post("/approve", content=body).status_code for _ in range(3)]
+    assert codes[-1] == 408 and client.get("/pending").json() == {}

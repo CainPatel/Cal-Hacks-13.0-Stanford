@@ -449,7 +449,11 @@ def approve(request_id: str):
     try:
         approval = executor.request_device_approval(device, payload)
     except http.exceptions.RequestException as e:  # unreachable, timed out (408), or busy (409): nothing was paid
-        raise HTTPException(502, f"The approval key didn't answer: {type(e).__name__}. Nothing was paid.")
+        code = getattr(e.response, "status_code", None)
+        said = {408: "Nobody pressed a button on the approval key in time.",
+                409: "The approval key is still waiting on another payment. Try again in a minute."}.get(
+            code, f"The approval key didn't answer ({type(e).__name__}).")
+        raise HTTPException(502, f"{said} Nothing was paid.")
     try:
         result = executor.execute(decision, req, auto_release_limit_usd=Decimal(
             str(load_contract()["auto_release_limit_usd"])), pubkey_hex=pubkey, approval=approval, log_path=DB)
