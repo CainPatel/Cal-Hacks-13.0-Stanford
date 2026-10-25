@@ -49,7 +49,7 @@ Two Vercel projects from this repo:
 
 Redeploy both after adding variables (`NEXT_PUBLIC_*` is baked in at build time).
 
-Pushes don't deploy: both projects set `"git": {"deploymentEnabled": false}` (`vercel.json`, `web/vercel.json`) to stay under Vercel's deploy limit. Deploy on purpose from the Vercel dashboard (Deployments → Create Deployment, pick the branch) or with `vercel --prod` from the project's folder.
+Merges to `main` deploy both projects; other branches and PRs don't (`"git": {"deploymentEnabled": {"main": true}}` in `vercel.json` and `web/vercel.json`, to stay under Vercel's deploy limit). Check a deploy with `make smoke API=https://drawapi.vercel.app WEB=https://drawweb.vercel.app`; roll back from Vercel → Deployments → Promote. To deploy a branch on purpose: Deployments → Create Deployment, or `vercel --prod` from the project's folder.
 
 ## 3. Load the demo company into Neon (once)
 
