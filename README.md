@@ -115,6 +115,7 @@ Vercel (dashboard + API), Neon Postgres for the event log, a private Blob store 
 | `make sync` | copy the bank's ledger (Nessie owner draws, sub payments) into the log |
 | `make snapshot` / `make offline` | copy the shared Neon log to `data/events.db` / serve that copy offline |
 | `make smoke` | check every stage of a running Draw over HTTP (`API=… WEB=…` for the deployment; read-only unless `FLAGS="--sync --pay --approve"`) |
+| `python -m fuzzer.describe_eval [N]` | score the attack console's "Or describe it" answers on 39 plain-English ideas, N times each (live Claude calls) |
 | `make test` | all tests |
 
 ## Demo company (first pay application by email)
