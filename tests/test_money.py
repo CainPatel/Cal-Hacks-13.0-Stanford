@@ -37,6 +37,12 @@ class FakeNessie:
             return SimpleNamespace(status_code=self.fail_with, text="bad request", json=lambda: {})
         if method == "GET":
             body = self.deposits if url.endswith("/deposits") else self.bills if url.endswith("/bills") else []
+        elif method == "PUT":  # /bills/{id}: update the fields sent
+            bill = next((b for b in self.bills if url.endswith(f"/bills/{b['_id']}")), None)
+            if bill is None:
+                return SimpleNamespace(status_code=404, text="no such bill", json=lambda: {})
+            bill.update(json or {})
+            body = {"code": 202, "message": "Accepted"}
         else:
             self.n += 1
             record = {**(json or {}), "_id": f"obj{self.n}"}

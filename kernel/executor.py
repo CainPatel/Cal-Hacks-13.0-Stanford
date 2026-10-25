@@ -292,7 +292,8 @@ def resolve_unknown(request: PayRequest, log_path=events.DEFAULT_PATH) -> str:
             raise ExecutionRefused(f"{request.id} has no payment with an unknown outcome to resolve")
         base, key, account = _nessie_config()
         bills = [b for b in _nessie("GET", f"/accounts/{account}/bills", key=key, base=base) or []
-                 if isinstance(b, dict) and str(b.get("nickname", "")).startswith(f"pay|{request.id}|")]
+                 if isinstance(b, dict) and str(b.get("nickname", "")).startswith(f"pay|{request.id}|")
+                 and b.get("status") != "cancelled"]  # a bill a reset cancelled isn't a payment
         if bills:
             b = bills[0]
             amount = Decimal(str(b.get("payment_amount")))
@@ -406,6 +407,23 @@ def _bank_bills(base: str, key: str, account: str) -> tuple[list[LedgerEntry], l
         except (ValueError, KeyError, ArithmeticError) as e:
             skipped.append(f"bill {b.get('_id')}: {e}")
     return out, skipped
+
+
+def void_payments(keep: set[str]) -> list[str]:
+    """Cancel the sub payments this system wrote on the GC's account, except the bills for the request ids
+    in `keep`: `python -m events reset` returns the sandbox bank to the seed's history, so a payment made
+    in an earlier run of the demo can be made again. Nessie keeps a cancelled bill, but it no longer
+    counts as a payment here (_bank_bills reads completed and pending bills only). Returns the request
+    ids of the bills cancelled."""
+    base, key, account = _nessie_config()
+    voided = []
+    for b in _nessie("GET", f"/accounts/{account}/bills", key=key, base=base) or []:
+        parts = str(b.get("nickname", "")).split("|") if isinstance(b, dict) else []
+        if len(parts) < 6 or parts[0] != "pay" or b.get("status") not in ("completed", "pending") or parts[1] in keep:
+            continue
+        _nessie("PUT", f"/bills/{b['_id']}", key=key, base=base, body={"status": "cancelled"})
+        voided.append(parts[1])
+    return voided
 
 
 def nessie_setup(ledger: list[LedgerEntry], gc_name: tuple[str, str] = ("Ridgeline", "Builders")) -> str:

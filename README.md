@@ -131,8 +131,11 @@ rules 01-13, and needs the owner's OK (over the limit, first payment to this sub
 spreadsheet-exported pay application with every name and address made up, 10% retainage on every line
 and the period moved to October 2026.
 
-To run the demo again: `make reset`, then send the email. A payment made in the Nessie sandbox stays in
-the bank and comes back into the log on the next sync, so only an unpaid run repeats as new.
+To run the demo again: `make reset`, then send the email. The reset also cancels, in the Nessie sandbox,
+every payment made since the seed's history (Nessie keeps them, marked cancelled), so a request paid in an
+earlier run comes in unchecked and can be approved and paid again. It works on the bank account in `.env`:
+for the deployment's demo, `NESSIE_API_KEY` and `NESSIE_ACCOUNT_ID` there must be the deployment's (the
+`bank_fingerprint` in `curl localhost:8000/` and `curl https://drawapi.vercel.app/` must match).
 
 ## How a pay request flows
 
