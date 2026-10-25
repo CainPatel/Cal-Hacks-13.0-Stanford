@@ -375,6 +375,14 @@ def list_attacks():
     return [{"name": n, "about": (m.__doc__ or "").strip().splitlines()[0]} for n, m in fuzzer.ATTACKS.items()]
 
 
+@app.get("/attacks/targets")
+def attack_targets():
+    """The subs (and their jobs) the attack console can aim at. Attacks run on the demo company as seeded,
+    not on the live log, so a sub that joined later (an emailed-in pay application) isn't one of them."""
+    from fuzzer.nl_attack import roster
+    return roster()
+
+
 @app.post("/attacks")
 def run_attack(body: AttackIn):
     if body.name not in fuzzer.ATTACKS:
@@ -382,7 +390,7 @@ def run_attack(body: AttackIn):
     try:
         out = fuzzer.attack(body.name, body.target, **body.settings)
     except (ValueError, StopIteration, TypeError) as e:
-        raise HTTPException(422, f"{body.name} can't run on {body.target}: {e}")
+        raise HTTPException(422, f"{body.name} can't run on {body.target}: {e or type(e).__name__}")
     d = out["decision"]
     return {"label": out["label"].model_dump(mode="json"), "decision": d.model_dump(mode="json"),
             "amount": str(out["amount"]), "caught": d.action != Action.release,
@@ -401,7 +409,7 @@ def describe_attack(body: DescribeIn):
     except nl_attack.AttackError as e:
         raise HTTPException(502, str(e))
     except (ValueError, StopIteration, TypeError, ArithmeticError) as e:
-        raise HTTPException(422, f"that attack can't run as described: {e}")
+        raise HTTPException(422, f"that attack can't run as described: {e or type(e).__name__}")
     if out["result"] is None:
         return {"plan": out["plan"], "result": None}
     r = out["result"]
