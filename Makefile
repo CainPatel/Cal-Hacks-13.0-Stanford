@@ -67,7 +67,7 @@ demo-online:
 
 # Start the log over for another run of the demo: whichever log is configured (the shared Neon log with
 # DATABASE_URL in .env, else data/events.db) is set aside (renamed, never deleted), the demo company is
-# loaded (plus data/demo_company/ when present), the bank synced, and May-October decided.
+# loaded (with the demo company, seed/demo_company.py), the bank synced, and May-October decided.
 reset:
 	$(PY) -m events reset --yes
 

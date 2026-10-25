@@ -10,7 +10,7 @@ python -m events snapshot [FILE]    copy the shared Postgres log into a new SQLi
 python -m events archive --yes      set the whole log aside (renamed, never deleted) and start an empty one
 python -m events reset --yes        start over: set the log aside, load the seed, sync the bank, decide May-Oct
 
-`load` and `reset` add the demo company from data/demo_company/ when it is there (seed/demo_company.py).
+`load` and `reset` include the demo company whose pay application arrives by email (seed/demo_company.py).
 
 With DATABASE_URL set (in .env), every command works on the shared Postgres log, the same one the
 deployment uses; without it, on data/events.db.

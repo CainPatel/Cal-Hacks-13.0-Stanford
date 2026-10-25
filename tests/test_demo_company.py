@@ -2,6 +2,7 @@
 arrives by email, is read, passes every check, and needs the owner's OK for being large and first."""
 import base64
 import json
+from decimal import Decimal
 
 import pytest
 from fastapi.testclient import TestClient
@@ -50,6 +51,16 @@ def test_the_company_is_on_file_without_its_pay_application(folder):
     assert not [r for r in data["pay_requests"] if r.sub_id == "sub_16"]
     release = next(r for r in data["releases"] if r.sub_id == "sub_16")
     assert str(release.amount) == "199665.90" and str(release.through_date) == "2026-10-25"
+
+
+def test_the_committed_demo_company_reads_its_own_pay_application():
+    """The PDFs to email (seed/demo_company_files/) and the contract on file agree, and fit the demo month."""
+    data = demo_company.facts()
+    vendor, contract, release = data["vendors"][0], data["subcontracts"][0], data["releases"][0]
+    assert vendor.legal_name == "Larkspur Construction LLC" and vendor.email_domain == "stanford.edu"
+    assert len(contract.sov) == 115 and sum(s.scheduled_value for s in contract.sov) == Decimal("18750487.90")
+    assert release.amount == Decimal("595008.60") and str(release.through_date) == "2026-10-25"
+    assert data["ledger"][0].period_end == release.through_date  # the owner's draw for that period
 
 
 def test_without_its_folder_the_seed_is_unchanged(tmp_path):
