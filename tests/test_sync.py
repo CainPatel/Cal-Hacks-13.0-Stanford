@@ -57,6 +57,25 @@ def posts(bank):
 # --- the bank is asked before paying --------------------------------------------------
 
 
+def test_a_reset_cancels_earlier_runs_payments_so_they_can_be_made_again(bank, world):
+    """`python -m events reset`: a payment from an earlier run of the demo is cancelled in the bank (kept,
+    marked cancelled), the seed's history stays, and the request pays again instead of coming back as paid."""
+    _, req = released_request(world)
+    d, _ = decided(world, req.id)
+    history = next(e for e in events.state(path=world)["ledger"] if e.kind.value == "sub_payment")
+    paid_elsewhere(bank, req, bill_id="demo1")  # paid in an earlier run
+    bank.bills.append({"_id": "seed1", "status": "completed", "payment_amount": float(history.amount),
+                       "payment_date": str(history.date), "recurring_date": 1,
+                       "nickname": "|".join(["pay", history.request_id, history.sub_id, history.job_id,
+                                             str(history.period_end), history.bank_account])})
+    assert ex.void_payments(keep={history.request_id}) == [req.id]
+    assert {b["_id"]: b["status"] for b in bank.bills} == {"demo1": "cancelled", "seed1": "completed"}
+    assert ex.bank_payment(req) is None and [e.request_id for e in ex.nessie_ledger()[0]] == [history.request_id]
+    ex.execute(d, req, auto_release_limit_usd=25000, log_path=world)
+    assert ex.payment_status(req.id, world) == "paid" and len(posts(bank)) == 1
+    assert ex.void_payments(keep={history.request_id}) == [req.id]  # the new payment goes on the next reset
+
+
 def test_a_payment_made_from_another_copy_is_not_made_again(bank, world):
     _, req = released_request(world)
     d, _ = decided(world, req.id)

@@ -8,7 +8,8 @@ python -m events nessie-resolve ID  settle a payment whose outcome is unknown by
 python -m events crs-verify [ID]    check vendors (all, or one) with CRS; record changed statuses
 python -m events snapshot [FILE]    copy the shared Postgres log into a new SQLite file (default data/events.db)
 python -m events archive --yes      set the whole log aside (renamed, never deleted) and start an empty one
-python -m events reset --yes        start over: set the log aside, load the seed, sync the bank, decide May-Oct
+python -m events reset --yes        start over: set the log aside, load the seed, cancel earlier runs' payments
+                                    in the sandbox bank, sync it, decide May-Oct
 
 `load` and `reset` include the demo company whose pay application arrives by email (seed/demo_company.py).
 
@@ -45,11 +46,16 @@ elif cmd == "reset":
     print(f"loaded {load_seed(data, path=PATH)} facts into {events.where(PATH)}")
     if os.environ.get("NESSIE_API_KEY") and os.environ.get("NESSIE_ACCOUNT_ID"):
         from events.replay import sync_ledger
-        from kernel.executor import NessieError, nessie_ledger
+        from kernel.executor import NessieError, nessie_ledger, void_payments
         try:
+            # Payments made in earlier runs are cancelled in the sandbox bank (it keeps them, marked
+            # cancelled), so they don't come back as paid and can be made again; the seed's history stays.
+            voided = void_payments(keep={e.request_id for e in data["ledger"] if e.request_id})
+            print(f"bank: cancelled {len(voided)} payment(s) made since the seed's history"
+                  + (f" ({', '.join(sorted(voided))})" if voided else ""))
             print(f"bank: {sync_ledger(nessie_ledger()[0], path=PATH)} ledger entries new to the log")
         except NessieError as e:
-            print(f"bank: not synced ({e})")
+            print(f"bank: not reset ({e})")
     from judgment.jev import JevError, _config as jev_config
     try:
         jev_config()
