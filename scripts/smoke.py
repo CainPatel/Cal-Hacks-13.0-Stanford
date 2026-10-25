@@ -119,8 +119,9 @@ def log_and_stream(api: Api) -> None:
           and api.get("/log", params={"kind": "kernel_trace", "limit": 1}).ok)
     if seqs:
         body = api.get("/events", params={"after": seqs[0] - 3, "follow": "false"}).text
-        check("live stream (Server-Sent Events)", body.count("\n\n") == 3 and body.startswith("id: "),
-              f"{body.count(chr(10) + chr(10))} events after #{seqs[0] - 3}")
+        # on Vercel a "retry:" block comes first (a 10 s poll, not a held connection), so count only events
+        n = sum(b.startswith("id: ") for b in body.split("\n\n"))
+        check("live stream (Server-Sent Events)", n == 3, f"{n} events after #{seqs[0] - 3}")
 
 
 def security(api: Api) -> None:
